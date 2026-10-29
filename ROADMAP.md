@@ -34,8 +34,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Every validation problem reported at once, with its line and column | ✅ |
 | Paths are slash-separated, relative, confined to their root, and cleaned on load | ✅ |
 | Find `adder.yaml` by walking up from the current directory, like `go` finds `go.mod` (one file name, [design 12](docs/design.md#12-one-configuration-file-at-the-root)) | ✅ |
-| JSON Schema for `adder.yaml`, published to SchemaStore for editor completion and validation | 🔜 v0.2 |
-| `adder validate`: check the configuration and templates without writing anything | 🔜 v0.2 |
+| JSON Schema for `adder.yaml`, published to SchemaStore for editor completion and validation | 🔜 v0.3 |
+| `adder validate`: check the configuration and templates without writing anything | 🔜 v0.3 |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
 | Multiple configurations in one repository, for monorepos and nested modules | 🔜 v0.4 |
 | `adder migrate`: upgrade a configuration to a newer schema version | 🔜 v1.0 |
@@ -50,7 +50,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | `.ImportPath` on every item, so templates stop assembling import paths by hand ([design 20](docs/design.md#20-richer-scans-without-type-checking-planned-v02)) | ✅ |
 | Skip files adder generated, so outputs never feed back into scans; other generators' files are still scanned | ✅ |
 | `exclude` patterns and recursive `**` globs that skip `testdata`, `vendor`, and hidden directories like `./...` | ✅ |
-| Skip files excluded by build constraints such as `//go:build ignore` | 🔜 v0.2 |
+| Skip files excluded by build constraints such as `//go:build ignore` | 🔜 v0.3 |
 | Match on `kind` (functions or methods) and `receiver` | ✅ |
 | `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking-planned-v02)) | ✅ |
 | `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | ✅ |
@@ -79,7 +79,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Remove unused imports from Go output, so templates need not guard each one ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)) | ✅ |
 | Add missing imports from a built-in table of the standard library | 💡 |
 | Shared template partials, such as `templates/partials/license.tmpl` | ✅ |
-| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` | 🔜 v0.2 |
+| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` | 🔜 v0.3 |
 | One output per item, with a templated path, for example a file per interface | 🔜 v0.3 |
 | Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)) | 🔜 v0.3 |
 | Generated-file headers for other languages, using their comment syntax | 🔜 v0.3 |
@@ -127,8 +127,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Documented exit codes for success, error, usage, and stale outputs | ✅ |
 | `adder check`: exit with status 3 when derived files are stale, for CI and repositories that commit them | ✅ |
 | `adder init`: create a starter `adder.yaml` with commented examples of each section | ✅ |
-| Shell completion for commands, generator names, and inputs | 🔜 v0.2 |
-| `--quiet`, `--verbose`, and `NO_COLOR` support | 🔜 v0.2 |
+| Shell completion for commands, generator names, and inputs | 🔜 v0.3 |
+| `--quiet`, `--verbose`, and `NO_COLOR` support | 🔜 v0.3 |
 | `adder derive --watch` for a fast edit loop | 💡 |
 | `adder graph`: a Mermaid diagram of which outputs depend on which scans and templates | 💡 |
 
@@ -137,8 +137,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Feature | Status |
 | --- | --- |
 | `go get -tool` and `go tool adder` | ✅ |
-| Documented `//go:generate go tool adder derive` usage | 🔜 v0.2 |
-| A pre-commit hook definition (`.pre-commit-hooks.yaml`) | 🔜 v0.2 |
+| Documented `//go:generate go tool adder derive` usage | 🔜 v0.3 |
+| A pre-commit hook definition (`.pre-commit-hooks.yaml`) | 🔜 v0.3 |
 | A GitHub Action that runs `adder check` on pull requests | 🔜 v0.3 |
 | A GitLab CI example | 🔜 v0.3 |
 | Generator packs: generators shared across repositories as versioned Go modules | 🔜 v0.5 |
@@ -162,8 +162,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | GitHub Actions pinned to commit SHAs and updated by Dependabot | ✅ |
 | Repository hardening: branch and tag rulesets, required checks, secret scanning, private vulnerability reporting | 🔜 v0.1 |
 | A test that keeps README examples in sync with the test fixtures, once the documentation site has many examples | 💡 |
-| End-to-end CLI tests with `testscript` | 🔜 v0.2 |
-| Fuzz tests for configuration parsing and header detection | 🔜 v0.2 |
+| End-to-end CLI tests with `testscript` | 🔜 v0.3 |
+| Fuzz tests for configuration parsing and header detection | 🔜 v0.3 |
 | Benchmarks on large repositories with a performance budget | 🔜 v0.3 |
 | A symlink policy for scans and outputs | 🔜 v0.3 |
 | OpenSSF Scorecard and CodeQL | 🔜 v0.3 |
@@ -172,9 +172,9 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 
 | Feature | Status |
 | --- | --- |
-| Release automation with GoReleaser and reproducible builds (`-trimpath`), for published binaries | 🔜 v0.2 |
-| Signed checksums, SBOMs, and build provenance | 🔜 v0.2 |
-| Homebrew tap | 🔜 v0.2 |
+| Release automation with GoReleaser and reproducible builds (`-trimpath`), for published binaries | 🔜 v0.3 |
+| Signed checksums, SBOMs, and build provenance | 🔜 v0.3 |
+| Homebrew tap | 🔜 v0.3 |
 | A container image for CI systems without Go | 💡 |
 
 ### Documentation and community
@@ -186,8 +186,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | `CONTRIBUTING.md` with build, test, and code conventions | ✅ |
 | `SECURITY.md` with private vulnerability reporting | ✅ |
 | `CODE_OF_CONDUCT.md` | 🔜 v1.0 |
-| Issue and pull request templates | 🔜 v0.2 |
-| Runnable `examples/` directory, tested in CI | 🔜 v0.2 |
+| Issue and pull request templates | 🔜 v0.3 |
+| Runnable `examples/` directory, tested in CI | 🔜 v0.3 |
 | Documentation site: guides, configuration reference generated from the schema, function reference | 🔜 v0.3 |
 | Recipes: driver and plugin registries, HTTP routes, CLI commands, gRPC wiring, workflow engines | 🔜 v0.3 |
 | Comparison page: adder versus `go generate`, stencil, plop, hygen, and hand-rolled generators | 🔜 v0.3 |
@@ -201,7 +201,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | --- | --- | --- |
 | **v0.1 derive** | Derived files that are safe to rely on in CI | `adder derive` and `adder check` pass end to end on Linux, macOS, and Windows with both supported Go releases, and a hand-rolled registry generator can be reproduced from configuration alone. |
 | **v0.2 new** | Scaffolding with validated inputs | A new component can be added with one `adder new` command, and its registries update automatically. |
-| **v0.3 discover** | People and agents can find and drive generators without reading the configuration | An agent can list generators, read their input schema, preview, and run one, using only adder's JSON output. |
+| **v0.3 discover** | People and agents can find and drive generators without reading the configuration | An agent can list generators, read their input schema, preview, and run one, using only adder's JSON output, and releases publish signed binaries. |
 | **v0.4 types** | Scans that understand Go types, not only names | Registries can be built from "every type that implements this interface". |
 | **v0.5 packs** | Reuse across repositories, plus a public library API | Two unrelated repositories share a generator pack. |
 | **v1.0** | Stability | The configuration schema and library API carry compatibility guarantees. |
