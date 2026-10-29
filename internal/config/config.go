@@ -28,12 +28,16 @@ const FileName = "adder.yaml"
 const Version = 1
 
 // reservedNames are template data keys that scans cannot use.
-var reservedNames = []string{"Module"}
+var reservedNames = []string{"Inputs", "Module", "Vars"}
 
 // Config is a parsed adder configuration file.
 type Config struct {
-	Version int    `yaml:"version"`
-	Derive  Derive `yaml:"derive"`
+	Version int `yaml:"version"`
+	// Vars are string values every template sees as .Vars, such as a license name.
+	Vars map[string]string `yaml:"vars"`
+	// Partials are templates loaded into every template, so their {{ define }} blocks can be used anywhere.
+	Partials []Partial `yaml:"partials"`
+	Derive   Derive    `yaml:"derive"`
 
 	// Dir is the directory holding the configuration file; template paths resolve against it.
 	Dir string `yaml:"-"`
@@ -108,6 +112,19 @@ type Output struct {
 	Pos diag.Pos `yaml:"-"`
 }
 
+// Partial is a slash-separated glob pattern of template files, relative to the configuration file's directory.
+type Partial struct {
+	Pattern string
+
+	// Pos is where the pattern is written, for reporting patterns that match nothing.
+	Pos diag.Pos
+}
+
+// UnmarshalYAML decodes the pattern from a plain string.
+func (p *Partial) UnmarshalYAML(node *yaml.Node) error {
+	return node.Decode(&p.Pattern)
+}
+
 // Pattern is a regular expression compiled when the configuration is decoded.
 type Pattern struct {
 	*regexp.Regexp
@@ -170,6 +187,9 @@ func Parse(file string, data []byte) (*Config, error) {
 
 // normalize cleans paths so that equivalent spellings, such as ./x and x, behave the same.
 func (c *Config) normalize() {
+	for i := range c.Partials {
+		c.Partials[i].Pattern = cleanSlash(c.Partials[i].Pattern)
+	}
 	for name, scan := range c.Derive.Scans {
 		for i, dir := range scan.Dirs {
 			scan.Dirs[i] = cleanSlash(dir)
@@ -194,6 +214,9 @@ func cleanSlash(p string) string {
 }
 
 func (c *Config) recordPositions(pos positions) {
+	for i := range c.Partials {
+		c.Partials[i].Pos = pos.at("partials." + strconv.Itoa(i))
+	}
 	for name, scan := range c.Derive.Scans {
 		scan.Pos = pos.at("derive.scans." + name)
 		c.Derive.Scans[name] = scan
@@ -211,6 +234,24 @@ func (c *Config) validate(pos positions) error {
 		errs = append(errs, diag.Errorf(diag.MissingField, pos.at(""), "version is required"))
 	default:
 		errs = append(errs, diag.Errorf(diag.UnsupportedVersion, pos.at("version"), "unsupported version %d, want %d", c.Version, Version))
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(c.Vars)) {
+		if !token.IsIdentifier(name) {
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.InvalidName,
+				Pos:     pos.at("vars." + name),
+				Message: fmt.Sprintf("var %q: name must be a valid Go identifier", name),
+				Hint:    "templates read vars as .Vars.<name>, such as .Vars.License",
+			})
+		}
+	}
+	for i, p := range c.Partials {
+		if p.Pattern == "" {
+			errs = append(errs, diag.Errorf(diag.MissingField, p.Pos, "partial %d: pattern is empty", i))
+		} else if d := checkGlob(p.Pos, fmt.Sprintf("partial %q", p.Pattern), p.Pattern); d != nil {
+			errs = append(errs, d)
+		}
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(c.Derive.Scans)) {
@@ -338,6 +379,20 @@ func checkPattern(pos diag.Pos, field, pattern string) *diag.Diagnostic {
 		if _, err := path.Match(segment, ""); err != nil {
 			return diag.Errorf(diag.InvalidValue, pos, "%s: %v", field, err)
 		}
+	}
+	return nil
+}
+
+// checkGlob reports file patterns that are unsafe or malformed. Unlike directory patterns, they have no "**".
+func checkGlob(pos diag.Pos, field, pattern string) *diag.Diagnostic {
+	if d := checkPath(pos, field, pattern); d != nil {
+		return d
+	}
+	if strings.Contains(pattern, "**") {
+		return &diag.Diagnostic{Code: diag.InvalidValue, Pos: pos, Message: field + `: "**" is not supported in file patterns`, Hint: "list each directory, such as templates/partials/*.tmpl"}
+	}
+	if _, err := path.Match(pattern, ""); err != nil {
+		return diag.Errorf(diag.InvalidValue, pos, "%s: %v", field, err)
 	}
 	return nil
 }

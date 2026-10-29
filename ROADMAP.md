@@ -36,7 +36,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Find `adder.yaml` by walking up from the current directory, like `go` finds `go.mod` (one file name, [design 12](docs/design.md#12-one-configuration-file-at-the-root)) | 🔜 v0.2 |
 | JSON Schema for `adder.yaml`, published to SchemaStore for editor completion and validation | 🔜 v0.2 |
 | `adder validate`: check the configuration and templates without writing anything | 🔜 v0.2 |
-| Top-level `vars` shared by every template, such as a license header | 🔜 v0.2 |
+| Top-level `vars` shared by every template, such as a license header | ✅ |
 | Multiple configurations in one repository, for monorepos and nested modules | 🔜 v0.4 |
 | `adder migrate`: upgrade a configuration to a newer schema version | 🔜 v1.0 |
 
@@ -77,7 +77,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Outputs confined to the root | ✅ |
 | `--out` to write somewhere else for previews | ✅ |
 | Fix imports automatically, goimports-style, so templates need not manage them | 🔜 v0.2 |
-| Shared template partials, such as `templates/_helpers.tmpl` | 🔜 v0.2 |
+| Shared template partials, such as `templates/partials/license.tmpl` | ✅ |
 | More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` | 🔜 v0.2 |
 | One output per item, with a templated path, for example a file per interface | 🔜 v0.3 |
 | Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)) | 🔜 v0.3 |

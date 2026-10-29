@@ -146,7 +146,7 @@ func TestRun(t *testing.T) {
 				}
 			},
 			wantCodes: []diag.Code{diag.TemplateExec},
-			wantHint:  "available fields: Drivers",
+			wantHint:  "available fields: Drivers, Vars",
 		},
 		{
 			name: "reports every output problem and writes nothing",
@@ -251,6 +251,102 @@ func TestPlan(t *testing.T) {
 			}
 			if got := string(p.Changes[0].New); got != rendered {
 				t.Errorf("content = %q, want %q", got, rendered)
+			}
+		})
+	}
+}
+
+func TestPlanShared(t *testing.T) {
+	repo := fstest.MapFS{
+		"cmds/a/a.go": {Data: []byte("package a\n\nfunc Run() {}\n")},
+	}
+	templates := fstest.MapFS{
+		"list.tmpl":                  {Data: []byte(`{{ template "header" . }}{{ range .Cmds }}{{ .Package }}{{ end }}`)},
+		"vars.tmpl":                  {Data: []byte(`[{{ range $k, $v := .Vars }}{{ $k }}={{ $v }} {{ end }}]`)},
+		"partials/header.tmpl":       {Data: []byte(`{{ define "header" }}// {{ .Vars.License }}{{ "\n" }}{{ end }}`)},
+		"partials/also/header.tmpl":  {Data: []byte(`{{ define "header" }}other{{ end }}`)},
+		"partials/broken/x.tmpl":     {Data: []byte(`{{ define "x" }}`)},
+		"partials/dir.tmpl/x.tmpl":   {Data: []byte(``)},
+		"partials/dironly/sub/x.txt": {Data: []byte(``)},
+	}
+	at := diag.Pos{File: "adder.yaml", Line: 3}
+
+	tests := []struct {
+		name      string
+		vars      map[string]string
+		partials  []string
+		template  string
+		scanDirs  []string // replaces the scan's dirs when set
+		want      string
+		wantCodes []diag.Code
+		wantFiles []string // diagnostic files, matched by suffix
+	}{
+		{name: "vars and partials", vars: map[string]string{"License": "MIT"}, partials: []string{"partials/*.tmpl"}, template: "list.tmpl", want: "// MIT\na"},
+		{name: "vars are empty when none are set", template: "vars.tmpl", want: "[]"},
+		{name: "vars", vars: map[string]string{"B": "2", "A": "1"}, template: "vars.tmpl", want: "[A=1 B=2 ]"},
+		{
+			name:      "a pattern matching only directories matches nothing",
+			partials:  []string{"partials/dironly/*"},
+			template:  "vars.tmpl",
+			wantCodes: []diag.Code{diag.NoMatch},
+			wantFiles: []string{"adder.yaml"},
+		},
+		{
+			name:     "files matched by several patterns load once",
+			vars:     map[string]string{"License": "MIT"},
+			partials: []string{"partials/*.tmpl", "partials/header.tmpl"},
+			template: "list.tmpl",
+			want:     "// MIT\na",
+		},
+		{
+			name:      "partials defining the same template",
+			partials:  []string{"partials/header.tmpl", "partials/also/*.tmpl"},
+			template:  "list.tmpl",
+			wantCodes: []diag.Code{diag.TemplateSyntax},
+			wantFiles: []string{filepath.Join("tmpl", "partials", "header.tmpl")},
+		},
+		{
+			name:      "partial and scan problems are reported together",
+			partials:  []string{"partials/missing/*.tmpl", "partials/broken/*.tmpl"},
+			template:  "list.tmpl",
+			scanDirs:  []string{"missing/*"},
+			wantCodes: []diag.Code{diag.NoMatch, diag.TemplateSyntax, diag.NoMatch},
+			wantFiles: []string{"adder.yaml", filepath.Join("tmpl", "partials", "broken", "x.tmpl"), "adder.yaml"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scan := config.Scan{Dirs: []string{"cmds/*"}, Pos: at}
+			if tt.scanDirs != nil {
+				scan.Dirs = tt.scanDirs
+			}
+			cfg := &config.Config{Version: 1, Vars: tt.vars, Derive: config.Derive{
+				Scans:   map[string]config.Scan{"Cmds": scan},
+				Outputs: []config.Output{{Template: tt.template, Path: "out.txt", Pos: at}},
+			}}
+			for _, pattern := range tt.partials {
+				cfg.Partials = append(cfg.Partials, config.Partial{Pattern: pattern, Pos: at})
+			}
+
+			p, err := Plan(t.Context(), cfg, Sources{Repo: repo, Templates: templates, TemplatesDir: "tmpl"})
+
+			list := diag.From(err)
+			var codes []diag.Code
+			for _, d := range list {
+				codes = append(codes, d.Code)
+			}
+			if !slices.Equal(codes, tt.wantCodes) {
+				t.Fatalf("Plan() problems = %v, want %v\n%v", codes, tt.wantCodes, err)
+			}
+			for i, suffix := range tt.wantFiles {
+				if !strings.HasSuffix(list[i].Pos.File, suffix) {
+					t.Errorf("problem %d is in %q, want a file ending in %q", i, list[i].Pos.File, suffix)
+				}
+			}
+			if tt.wantCodes == nil {
+				if got := string(p.Changes[0].New); got != tt.want {
+					t.Errorf("content = %q, want %q", got, tt.want)
+				}
 			}
 		})
 	}

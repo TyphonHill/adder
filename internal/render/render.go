@@ -8,8 +8,8 @@ import (
 	"go/format"
 	"go/scanner"
 	"io/fs"
-	"maps"
 	"path"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -19,26 +19,70 @@ import (
 	"github.com/TyphonHill/adder/internal/diag"
 )
 
-// File executes the template name from fsys with data. Output for Go files is gofmt-formatted.
-func File(fsys fs.FS, name, outPath string, data any) ([]byte, error) {
-	src, err := fs.ReadFile(fsys, name)
-	if err != nil {
-		return nil, diag.Wrap(diag.IO, diag.Pos{File: name}, err)
-	}
-	// Templates checked out with CRLF endings must render the same as everywhere else.
-	src = bytes.ReplaceAll(src, []byte("\r\n"), []byte("\n"))
+// Set renders templates from a file system, each with the same partials loaded.
+type Set struct {
+	fsys     fs.FS
+	partials *template.Template
+}
 
-	tmpl, err := template.New(name).
-		Funcs(Funcs()).
-		Option("missingkey=error").
-		Parse(string(src))
+// NewSet parses the named partial templates from fsys. Their {{ define }} blocks are available to every
+// template the set renders, and two partials may not define the same name.
+func NewSet(fsys fs.FS, partials []string) (*Set, error) {
+	base := template.New("").Funcs(Funcs()).Option("missingkey=error")
+	definedIn := make(map[string]string)
+	var problems diag.List
+	for _, name := range partials {
+		src, err := readTemplate(fsys, name)
+		if err != nil {
+			problems = append(problems, diag.From(err)...)
+			continue
+		}
+		parsed, err := template.New(name).Funcs(Funcs()).Parse(src)
+		if err != nil {
+			problems = append(problems, templateError(diag.TemplateSyntax, name, err, nil))
+			continue
+		}
+		for _, t := range parsed.Templates() {
+			if t.Name() == name {
+				continue // the text around the definitions is never rendered
+			}
+			if first, dup := definedIn[t.Name()]; dup {
+				problems = append(problems, diag.Errorf(diag.TemplateSyntax, diag.Pos{File: name}, "template %q is already defined in %s", t.Name(), first))
+				continue
+			}
+			definedIn[t.Name()] = name
+			if _, err := base.AddParseTree(t.Name(), t.Tree); err != nil {
+				problems = append(problems, templateError(diag.TemplateSyntax, name, err, nil))
+			}
+		}
+	}
+	if err := problems.Err(); err != nil {
+		return nil, err
+	}
+	return &Set{fsys: fsys, partials: base}, nil
+}
+
+// File executes the template name with data. Output for Go files is gofmt-formatted.
+func (s *Set) File(name, outPath string, data any) ([]byte, error) {
+	src, err := readTemplate(s.fsys, name)
 	if err != nil {
+		return nil, err
+	}
+	tmpl, err := s.partials.Clone()
+	if err != nil {
+		return nil, diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
+	}
+	if tmpl, err = tmpl.New(name).Parse(src); err != nil {
 		return nil, templateError(diag.TemplateSyntax, name, err, data)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return nil, templateError(diag.TemplateExec, name, err, data)
+		d := templateError(diag.TemplateExec, name, err, data)
+		if undefinedTemplate.MatchString(d.Message) {
+			d.Hint = s.definedHint()
+		}
+		return nil, d
 	}
 	if path.Ext(outPath) != ".go" {
 		return buf.Bytes(), nil
@@ -50,29 +94,90 @@ func File(fsys fs.FS, name, outPath string, data any) ([]byte, error) {
 	return formatted, nil
 }
 
+// readTemplate reads a template with its line endings normalized, so CRLF checkouts render the same everywhere.
+func readTemplate(fsys fs.FS, name string) (string, error) {
+	src, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return "", diag.Wrap(diag.IO, diag.Pos{File: name}, err)
+	}
+	return strings.ReplaceAll(string(src), "\r\n", "\n"), nil
+}
+
+// definedHint lists the partials a template can use.
+func (s *Set) definedHint() string {
+	var names []string
+	for _, t := range s.partials.Templates() {
+		if t.Name() != "" {
+			names = append(names, t.Name())
+		}
+	}
+	if len(names) == 0 {
+		return "no partials are defined; list templates with {{ define }} blocks under partials in adder.yaml"
+	}
+	slices.Sort(names)
+	return "defined templates: " + strings.Join(names, ", ")
+}
+
 var (
-	templatePos  = regexp.MustCompile(`^template: .+?:(\d+)(?::(\d+))?: (.*)$`)
-	executingAt  = regexp.MustCompile(`^executing ".*?" at (<.*?>): (.*)$`)
-	missingKeyIn = regexp.MustCompile(`map has no entry for key "(.*)"$`)
+	templatePos       = regexp.MustCompile(`^template: (.+?):(\d+)(?::(\d+))?: (.*)$`)
+	executingAt       = regexp.MustCompile(`^executing ".*?" at (<.*?>): (.*)$`)
+	missingKeyIn      = regexp.MustCompile(`map has no entry for key "(.*)"$`)
+	undefinedTemplate = regexp.MustCompile(`template ".*" not defined$`)
 )
 
-// templateError reports a text/template error at its line and column in the template file.
+// templateError reports a text/template error at its line and column in the template file, which may be a
+// partial rather than the template named name.
 func templateError(code diag.Code, name string, err error, data any) *diag.Diagnostic {
 	d := &diag.Diagnostic{Code: code, Pos: diag.Pos{File: name}, Message: err.Error(), Err: err}
 	if m := templatePos.FindStringSubmatch(err.Error()); m != nil {
-		d.Pos.Line, _ = strconv.Atoi(m[1])
-		d.Pos.Column, _ = strconv.Atoi(m[2])
-		d.Message = m[3]
+		d.Pos.File = m[1]
+		d.Pos.Line, _ = strconv.Atoi(m[2])
+		d.Pos.Column, _ = strconv.Atoi(m[3])
+		d.Message = m[4]
 	}
 	if m := executingAt.FindStringSubmatch(d.Message); m != nil {
 		d.Message = m[1] + ": " + m[2]
-	}
-	if missingKeyIn.MatchString(d.Message) {
-		if fields, ok := data.(map[string]any); ok {
-			d.Hint = "available fields: " + strings.Join(slices.Sorted(maps.Keys(fields)), ", ")
+		if missingKeyIn.MatchString(m[2]) {
+			switch keys, ok := mapKeys(data, m[1]); {
+			case ok && len(keys) == 0:
+				d.Hint = "no fields are available here"
+			case ok:
+				d.Hint = "available fields: " + strings.Join(keys, ", ")
+			}
 		}
 	}
 	return d
+}
+
+// fieldChain matches a field reference such as <.Vars.License> or <$.Vars.License>.
+var fieldChain = regexp.MustCompile(`^<\$?\.([A-Za-z0-9_.]+)>$`)
+
+// mapKeys returns the keys of the map that a missing-key reference such as <.Vars.Licence> looked in, by following
+// the reference from data. It reports false when the reference does not lead to a map with string keys.
+func mapKeys(data any, ref string) ([]string, bool) {
+	m := fieldChain.FindStringSubmatch(ref)
+	if m == nil {
+		return nil, false
+	}
+	fields := strings.Split(m[1], ".")
+	v := reflect.ValueOf(data)
+	for i, field := range fields {
+		if v.Kind() == reflect.Interface {
+			v = v.Elem()
+		}
+		if v.Kind() != reflect.Map || v.Type().Key().Kind() != reflect.String {
+			return nil, false
+		}
+		if i < len(fields)-1 {
+			v = v.MapIndex(reflect.ValueOf(field).Convert(v.Type().Key()))
+		}
+	}
+	keys := make([]string, 0, v.Len())
+	for _, k := range v.MapKeys() {
+		keys = append(keys, k.String())
+	}
+	slices.Sort(keys)
+	return keys, true
 }
 
 // invalidGo reports rendered Go that does not parse, quoting the offending line of the output.

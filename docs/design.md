@@ -67,11 +67,11 @@ Positions follow two rules:
 | `invalid-value` | A value has the wrong type or is malformed, such as an invalid pattern. |
 | `missing-field` | A required setting is absent. |
 | `unsupported-version` | The configuration declares a schema version this release does not understand. |
-| `invalid-name` | A scan name is not a valid Go identifier. |
-| `reserved-name` | A scan name collides with data adder provides, such as `Module`. |
+| `invalid-name` | A scan or var name is not a valid Go identifier. |
+| `reserved-name` | A scan name collides with data adder provides: `Module`, `Vars`, or `Inputs`. |
 | `unsafe-path` | A path is absolute, escapes its root, or uses backslashes. |
 | `duplicate-path` | Two outputs write the same file. |
-| `no-match` | A scan's directory pattern matched no directories. |
+| `no-match` | A scan's directory pattern matched no directories, or a partial pattern matched no files. |
 | `go-syntax` | A scanned Go file does not parse. |
 | `template-syntax` | A template does not parse. |
 | `template-exec` | A template failed while rendering, for example by referencing a missing field. |
@@ -266,8 +266,11 @@ Next, implement New in drivers/gcs/gcs.go.
 
 **Shared configuration.** Two smaller additions serve generators and derived outputs alike:
 
-- `vars` at the top level holds string values available to every template as `.Vars`, such as a license name.
+- `vars` at the top level holds string values available to every template as `.Vars`, such as a license name. Names are Go identifiers. `.Vars` is present even when no vars are set, so templates can always use it.
 - `partials` lists glob patterns of templates loaded into every template, so `{{ template "license" . }}` works anywhere. Partials are defined with `{{ define }}` and never rendered on their own.
+  - Patterns use `path.Match` syntax without `**`, are relative to the configuration file's directory, and must each match a file. Directories they match are ignored.
+  - Two partials defining the same name is an error, since which one wins would depend on file order. A template may redefine a partial's block for itself; each template renders from its own copy of the partials.
+  - Problems inside a partial are reported at the partial's own file and line.
 
 | Considered | Why not |
 | --- | --- |
