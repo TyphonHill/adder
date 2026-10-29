@@ -105,7 +105,7 @@ func unknownGenerator(cmd *cobra.Command, cfg *config.Config, name string) error
 
 func generatorCommand(cfg *config.Config, opts *globalOptions, name string) *cobra.Command {
 	gen := cfg.Generators[name]
-	var dryRun bool
+	var dryRun, showDiff bool
 	var inputsFile string
 	cmd := &cobra.Command{
 		Use:   name,
@@ -127,6 +127,7 @@ func generatorCommand(cfg *config.Config, opts *globalOptions, name string) *cob
 				}
 			}
 
+			dryRun = dryRun || showDiff
 			res, err := scaffold.Run(cmd.Context(), cfg, name, inputs, scaffold.Options{Root: opts.root, DryRun: dryRun})
 			if err != nil {
 				return err
@@ -140,6 +141,11 @@ func generatorCommand(cfg *config.Config, opts *globalOptions, name string) *cob
 					fmt.Fprintf(out, "would be %-9s  %s\n", c.Status, c.Path)
 				default:
 					fmt.Fprintf(out, "%-9s  %s\n", c.Status, c.Path)
+				}
+			}
+			if showDiff {
+				for _, c := range res.Plan.Pending() {
+					fmt.Fprintf(out, "\n%s", c.Diff())
 				}
 			}
 			if msg := strings.TrimSpace(res.Message); msg != "" && !dryRun {
@@ -162,6 +168,7 @@ func generatorCommand(cfg *config.Config, opts *globalOptions, name string) *cob
 		}
 	}
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "show what would change without writing anything")
+	cmd.Flags().BoolVar(&showDiff, "diff", false, "also show each change as a unified diff; implies --dry-run")
 	cmd.Flags().StringVar(&inputsFile, "inputs", "", "read inputs from a JSON object in this file, or - for standard input; flags override it")
 	return cmd
 }

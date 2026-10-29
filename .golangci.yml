@@ -37,6 +37,10 @@ linters:
       - path: _test\.go
         linters:
           - gosec
+      # A copy of Go's internal/diff, kept identical to its source so it can be compared and updated.
+      - path: internal/diff/diff\.go
+        linters:
+          - modernize
 
 formatters:
   enable:

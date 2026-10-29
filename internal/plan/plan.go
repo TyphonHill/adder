@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/diff"
 )
 
 // Status is what applying a change does to its file.
@@ -49,6 +50,17 @@ type Change struct {
 	Status Status `json:"status"`
 	Old    []byte `json:"-"` // current content, nil when the file does not exist
 	New    []byte `json:"-"`
+}
+
+// Diff returns the change as a unified diff that git apply and patch -p1 accept, or nil when it writes nothing.
+func (c Change) Diff() []byte {
+	switch c.Status {
+	case Created:
+		return diff.Diff("/dev/null", nil, "b/"+c.Path, c.New)
+	case Updated:
+		return diff.Diff("a/"+c.Path, c.Old, "b/"+c.Path, c.New)
+	}
+	return nil
 }
 
 // Plan is an ordered set of changes.

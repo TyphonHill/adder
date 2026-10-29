@@ -21,6 +21,7 @@ adder.yaml ──► config ──► scan ──► render ──► plan ─�
 | `internal/derive` | Connect the steps above for `adder derive` and `adder check`. |
 | `internal/scaffold` | Resolve a generator's inputs, plan its new files, and derive outputs over them for `adder new`. |
 | `internal/textcase` | Case conversion, shared by template functions and input flag names. |
+| `internal/diff` | Unified diffs for previews, copied from the Go toolchain. |
 | `internal/diag` | Structured problems shared by every package. |
 | `internal/cli` | Commands, flags, output, and exit codes. |
 | `cmd/adder` | The binary: signal handling and build information only. |
@@ -266,7 +267,7 @@ Next, implement New in drivers/gcs/gcs.go.
 
 **One plan for everything.** `adder new` builds a single plan containing the new files and every derived output that changes because of them. Derived outputs are recomputed against the repository with the new files overlaid in memory, so registries pick up the new code in the same run. Nothing is written unless the whole plan succeeds. `derive: false` on a generator opts out of the derive step.
 
-**Previewing.** `--dry-run` prints the plan without writing. `--diff` also prints a unified diff of every change, with new files shown as additions. The diff code is copied from the Go toolchain's `internal/diff` (BSD-3-Clause, about 250 lines) into `internal/diff`, with its license header, rather than added as a dependency.
+**Previewing.** `--dry-run` prints the plan without writing. `--diff` also prints a unified diff of every change, with new files shown as additions, and implies `--dry-run`, like `gofmt -d`. Paths use `a/` and `b/` prefixes and new files come from `/dev/null`, so the output is a patch that `git apply` and `patch -p1` accept. The diff code is copied from the Go toolchain's `internal/diff` (BSD-3-Clause, about 250 lines) into `internal/diff`, with its license header, rather than added as a dependency.
 
 **Command line.** Generators define their own flags, so `adder new` loads `adder.yaml` before parsing the rest of the command line, and builds a subcommand for each generator. Each one gets its own `--help`, flag parsing, and suggestions for mistyped names from the same library as every other command. Inputs cannot use a flag `adder new` defines itself (`--config`, `--diff`, `--dry-run`, `--help`, `--inputs`, `--root`), and two inputs cannot map to the same flag. In a JSON inputs file, keys are input names, not flags, so `{"packageName": "x"}`.
 

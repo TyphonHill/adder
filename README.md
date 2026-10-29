@@ -136,6 +136,7 @@ Global flags:
 | Flag | Description |
 | --- | --- |
 | `-n`, `--dry-run` | Show what would change without writing anything. |
+| `--diff` | Also show each change as a unified diff, without writing anything. The output is a patch that `git apply` accepts. |
 | `--inputs <file>` | Read inputs from a JSON object keyed by input name, such as `{"name": "gcs", "cache": true}`. Use `-` for standard input. Flags override it. |
 
 ### Errors and exit codes
@@ -358,4 +359,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build and test adder and the c
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](LICENSE). [`internal/diff`](internal/diff) is copied from the Go project and keeps its [BSD-3-Clause license](internal/diff/LICENSE).
