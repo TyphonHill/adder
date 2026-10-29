@@ -1,0 +1,15 @@
+package drivers
+
+import (
+	"{{ .Module }}/driver"
+{{- range .Drivers }}
+	"{{ $.Module }}/drivers/{{ .Package }}"
+{{- end }}
+)
+
+// All maps each driver name to its constructor.
+var All = map[string]driver.Factory{
+{{- range .Drivers }}
+	"{{ .Package }}": {{ .Package }}.New,
+{{- end }}
+}

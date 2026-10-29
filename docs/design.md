@@ -1,0 +1,196 @@
+# Design
+
+This document explains how adder is built and why. It records the decisions that shape the code, so that future features extend the design instead of working around it. The [roadmap](../ROADMAP.md) covers what adder will do; this covers how.
+
+## Architecture
+
+```
+adder.yaml ──► config ──► scan ──► render ──► plan ──► apply
+                │           │         │         │        │
+            validated    items per  file      changes  files
+            settings     scan       content   (no I/O) written
+```
+
+| Package | Responsibility |
+| --- | --- |
+| `internal/config` | Load `adder.yaml`, validate it, and record where every setting is declared. |
+| `internal/scan` | Parse Go source and return the declarations that match a scan. |
+| `internal/render` | Execute a template into file content and format Go output. |
+| `internal/header` | Write and recognize the generated-code header on adder's Go outputs. |
+| `internal/plan` | Describe file changes before they happen, and apply them. |
+| `internal/derive` | Connect the steps above for `adder derive` and `adder check`. |
+| `internal/diag` | Structured problems shared by every package. |
+| `internal/cli` | Commands, flags, output, and exit codes. |
+| `cmd/adder` | The binary: signal handling and build information only. |
+
+Each step only depends on the steps before it. Commands are thin: they load configuration, call one pipeline, and print the result.
+
+## Decisions
+
+### 1. Plan before writing
+
+Computing changes and making them are separate steps. `derive.Plan` returns a `plan.Plan` listing every output with its current and intended content, and does no writing. `Plan.Apply` writes the changes.
+
+**Why:** `--dry-run`, `adder check`, diffs, JSON output, and editor integrations all need to know what *would* change. With one plan, each of them is a few lines on top of it rather than another copy of the pipeline.
+
+**Consequences:** nothing is written unless every output renders. Unchanged files are never rewritten, so their modification times stay put.
+
+### 2. File systems, not paths
+
+The pipeline reads through `fs.FS`: the repository, the template directory, and the existing outputs are three separate file systems. The command line opens them with `os.Root`, which also confines every write to its root.
+
+**Why:** tests run against in-memory file systems (`fstest.MapFS`), an editor integration can supply unsaved buffers, and no path in the configuration can reach outside its root.
+
+**Consequences:** paths inside the pipeline are slash-separated `fs` paths. Operating system paths only appear at the edges, in the command line and in diagnostics.
+
+### 3. Context everywhere
+
+Every step that does I/O takes a `context.Context` and checks it between files.
+
+**Why:** type-aware scans, watch mode, and editor integrations need cancellation. Adding a context parameter after the library API is public would be a breaking change.
+
+### 4. Structured diagnostics
+
+Every problem is a `diag.Diagnostic` with a stable code, a position, a message, and an optional hint. Several problems are reported together as a `diag.List`. The command line prints them as `file:line:column: message [code]`, and the same values serialize to JSON.
+
+Positions follow two rules:
+
+- A problem inside a file carries that file's path, joined to the directory the file system came from, so it opens from wherever adder ran.
+- A problem with a declaration, such as a scan that matches nothing, has no file position of its own and is attributed to where it is declared in `adder.yaml`.
+
+| Code | Meaning |
+| --- | --- |
+| `error` | A problem without a more specific code. |
+| `io` | A file could not be read or written. |
+| `yaml-syntax` | `adder.yaml` is not valid YAML. |
+| `unknown-field` | `adder.yaml` has a key adder does not recognize. |
+| `invalid-value` | A value has the wrong type or is malformed, such as an invalid pattern. |
+| `missing-field` | A required setting is absent. |
+| `unsupported-version` | The configuration declares a schema version this release does not understand. |
+| `invalid-name` | A scan name is not a valid Go identifier. |
+| `reserved-name` | A scan name collides with data adder provides, such as `Module`. |
+| `unsafe-path` | A path is absolute, escapes its root, or uses backslashes. |
+| `duplicate-path` | Two outputs write the same file. |
+| `no-match` | A scan's directory pattern matched no directories. |
+| `go-syntax` | A scanned Go file does not parse. |
+| `template-syntax` | A template does not parse. |
+| `template-exec` | A template failed while rendering, for example by referencing a missing field. |
+| `invalid-output` | A template rendered Go that does not parse. |
+
+**Why:** error text is for people and changes freely, but codes and positions are for tools. Keeping both from the start means JSON output, editor squiggles, and documentation links need no rework later.
+
+### 5. Paths in the configuration
+
+Every path in `adder.yaml` is slash-separated, relative, and confined to its root. Scan directories and output paths are relative to the repository root; template paths are relative to the directory holding `adder.yaml`. Paths are cleaned on load, so `./drivers/*` and `drivers/*` are the same.
+
+**Why:** the same configuration must behave the same on every operating system, and generated headers name the template, so absolute or machine-specific paths would make output differ between machines.
+
+### 6. Item fields mean one thing
+
+`.Package` is the package name from the file's `package` clause. `.Dir` is the directory. They usually match, but not always: directory `go-redis` may hold `package redis`.
+
+**Why:** once templates depend on a field, its meaning cannot change. Getting it right before release avoids a confusing pair such as `.Package` and `.PackageName` forever.
+
+### 7. Deterministic output
+
+The same repository and configuration produce byte-identical output everywhere:
+
+- Scans run in name order, and their items are sorted by name, file, and receiver.
+- Template line endings are normalized to `\n`, so a Windows checkout with CRLF endings renders the same.
+- Output never includes timestamps, user names, or absolute paths.
+
+### 8. The generated-code header is frozen
+
+Go outputs carry `// Code generated by adder from <template>. DO NOT EDIT.`, which satisfies [Go's convention](https://go.dev/s/generatedcode). `header.Format` writes it and `header.Parse` reads it, from the same constants.
+
+**Why:** adder finds its own outputs by their header. Scans already use it to skip adder's outputs, so they never feed back into the next run, and future commands such as `adder explain` and stale-output cleanup will too. Changing the format would orphan every file generated before the change.
+
+### 9. Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success. |
+| 1 | adder ran and found a problem. |
+| 2 | adder was invoked incorrectly, such as an unknown flag or command. |
+| 3 | `adder check` found derived outputs that are out of date. |
+
+Stale outputs get their own code so CI can tell "regenerate and commit" apart from "something is broken".
+
+### 10. Everything is internal until the library API is designed
+
+All packages live under `internal/`, so their APIs can change freely until v0.5, when the public library API is planned.
+
+### 11. Go versions and dependencies
+
+adder supports the two most recent Go releases. `go.mod` declares the older one in its `go` line, the minimum anyone importing adder needs, and the newest in its `toolchain` line for development. CI tests both.
+
+Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml/v3` for configuration, and `golang.org/x/mod` for reading `go.mod`. Anything that shapes generated output, such as template functions and case conversion, is implemented in adder itself, because a dependency upgrade must never change what people's templates produce.
+
+### 12. One configuration file at the root
+
+The configuration is a single, visible `adder.yaml` at the repository root. Only that name is accepted. From v0.1, adder will find it by walking up from the current directory, the way `go` finds `go.mod`. Templates can live anywhere; their paths are relative to the configuration file.
+
+**Why:** a root file is the norm for Go tools (`sqlc.yaml`, `buf.yaml`, `gqlgen.yml`, `.golangci.yml`), and a visible name signals that the file describes the repository's conventions rather than a tool's settings. Accepting other names later is additive; dropping one would break people.
+
+### 13. Our own template functions, with Sprout's names
+
+adder implements its template functions itself, using [Sprout](https://github.com/go-sprout/sprout)'s names wherever Sprout has an equivalent (`toSnakeCase`, `toCamelCase`, `toPascalCase`, `uniq`, `sortAlpha`), plus Go-specific case functions (`toGoPascalCase`, `toGoCamelCase`). Functions that are not deterministic, such as the current time, random values, or environment variables, are never included.
+
+**Why:**
+
+- Sprout's names are descriptive and correct. Sprig, its predecessor, names its PascalCase function `camelcase`, which matters in a Go generator where the first letter decides whether an identifier is exported.
+- Depending on Sprig or Sprout would tie template behavior, and so people's output, to another project's release cycle. Sprout removed deprecated functions in a minor release.
+- Neither library knows Go initialisms such as `ID` and `HTTP`.
+
+Where adder needs a function neither library has, it picks a name that cannot be confused with theirs: `fieldValues` reads a field from a list of structs, unlike Sprig's map-based `pluck`.
+
+### 14. Our own case conversion
+
+Word splitting and case conversion live in `internal/render/textcase.go`:
+
+- Words are separated by any rune that is not a letter or digit, at a lowercase-or-digit to uppercase change (`userID`), and before the last capital of an acronym followed by lowercase (`HTTPServer` is `HTTP` and `Server`).
+- Digits stay with the word they follow (`HTTP2Server` is `HTTP2` and `Server`).
+- The Go variants keep words that are already in capitals and capitalize golint's list of common initialisms.
+
+**Why:** case conversion is part of the output, so it is covered by the compatibility promise either way. Owning roughly a hundred lines with thorough tests is cheaper than pinning and policing a dependency.
+
+### 15. Stale outputs are found by header, within each output's own path (planned, v0.3)
+
+When an output produces one file per item, adder removes files it previously generated that the current plan no longer produces. It looks only at files matching that output's path pattern, and only at files whose adder header names that output's template. Files without adder's header are never touched, and outputs removed from the configuration entirely are reported by `adder check` but not deleted.
+
+| Considered | Why not |
+| --- | --- |
+| A manifest or lockfile | State in the repository that can drift, conflicts in busy repositories, and awkward when outputs are not committed. |
+| Searching the whole repository for headers | Slow, and cannot tell which configuration owns a file in a monorepo. |
+| An owned output directory, deleted before generating | Only works when generated files live apart from handwritten code. |
+
+### 16. Comment directives use Go's directive syntax (planned, v0.4)
+
+Directives look like `//adder:register name=s3 desc="Local disk"`: no space after `//`, a lowercase name, and `key=value` arguments with Go-style quoting when needed.
+
+**Why:** Go's doc comment rules treat `//name:value` lines as directives, which godoc hides and gofmt keeps together, and the tools Go developers use most follow the same form: `//go:generate`, `//go:embed`, `//nolint:`, `//lint:ignore`. The `// +marker:` style from Kubernetes generators appears as text in documentation and is rarely used outside that ecosystem.
+
+### 17. Type-aware scans are an explicit opt-in (planned, v0.4)
+
+A scan uses type information only when it sets `types: true`. Type-based filters on a scan without it fail validation, with a hint to enable it. Type-aware scans run the Go toolchain offline (`GOPROXY=off`, `-mod=readonly`) and report missing dependencies instead of downloading them.
+
+**Why:** type checking is much slower than parsing, needs code that compiles and dependencies in the module cache, and runs the toolchain. Enabling it automatically based on which filters are used would hide a performance and reliability cliff behind an innocent-looking change. Parsing stays the fast default.
+
+### 18. The library API arrives when it has a real consumer (planned)
+
+The module's root package, `github.com/TyphonHill/adder`, is reserved for a small public facade over the internal packages, such as `adder.Load`, `adder.Derive`, and a way to register custom functions and scanners. It ships as an experimental v0.x API once a real consumer needs it, such as a repository that wants a custom scanner or an editor integration. The internal packages stay internal.
+
+**Why:** moving code is easy; committing to an API is not. After v1.0 a breaking change needs a new `/v2` import path, and today's internal APIs are shaped by a single consumer, the command line. They changed completely in one refactoring, which would have broken every user had they been public. `cmd/adder` is already public, because `go get -tool` depends on its path.
+
+## Compatibility
+
+From v1.0, semantic versioning covers:
+
+- The `adder.yaml` schema for a given `version`.
+- Template data: scan item fields, `.Module`, and template function names and behavior.
+- The generated-code header format.
+- Diagnostic codes, exit codes, and JSON output.
+
+It does not cover the wording of messages or the human-readable output of commands, which may improve in any release.
+
+Before v1.0, any of these may change, and the changelog will say so.

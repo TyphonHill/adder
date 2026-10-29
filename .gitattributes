@@ -1,0 +1,2 @@
+# Check out text files with LF endings everywhere, so golden files and fixtures compare byte for byte on Windows.
+* text=auto eol=lf

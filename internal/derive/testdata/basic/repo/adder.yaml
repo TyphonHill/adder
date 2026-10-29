@@ -1,0 +1,11 @@
+version: 1
+derive:
+  scans:
+    Drivers:
+      dirs: ["drivers/*"]
+      funcs:
+        exported: true
+        name: ^New$
+  outputs:
+    - template: templates/drivers.go.tmpl
+      path: drivers/drivers.gen.go

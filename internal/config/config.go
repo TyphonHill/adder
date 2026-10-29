@@ -1,0 +1,271 @@
+// Package config loads and validates adder configuration files.
+package config
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"go/token"
+	"io"
+	"maps"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+
+	"go.yaml.in/yaml/v3"
+
+	"github.com/TyphonHill/adder/internal/diag"
+)
+
+// FileName is the configuration file adder looks for in the repository root.
+const FileName = "adder.yaml"
+
+// Version is the configuration schema version this release understands.
+const Version = 1
+
+// reservedNames are template data keys that scans cannot use.
+var reservedNames = []string{"Module"}
+
+// Config is a parsed adder configuration file.
+type Config struct {
+	Version int    `yaml:"version"`
+	Derive  Derive `yaml:"derive"`
+
+	// Dir is the directory holding the configuration file; template paths resolve against it.
+	Dir string `yaml:"-"`
+}
+
+// Derive describes files rebuilt from scans of the repository's source code.
+type Derive struct {
+	Scans   map[string]Scan `yaml:"scans"`
+	Outputs []Output        `yaml:"outputs"`
+}
+
+// Scan selects function and method declarations from a set of directories.
+type Scan struct {
+	// Dirs are slash-separated glob patterns relative to the repository root.
+	Dirs         []string  `yaml:"dirs"`
+	IncludeTests bool      `yaml:"includeTests"`
+	Funcs        FuncMatch `yaml:"funcs"`
+
+	// Pos is where the scan is declared, for reporting problems found while scanning.
+	Pos diag.Pos `yaml:"-"`
+}
+
+// FuncMatch filters declarations. Unset fields match every declaration.
+type FuncMatch struct {
+	Exported   bool    `yaml:"exported"`
+	FirstParam string  `yaml:"firstParam"`
+	Name       Pattern `yaml:"name"`
+}
+
+// Output is a file rendered from a template with the results of every scan.
+type Output struct {
+	// Template is a slash-separated path relative to the configuration file's directory.
+	Template string `yaml:"template"`
+	// Path is a slash-separated path relative to the output root.
+	Path string `yaml:"path"`
+
+	// Pos is where the output is declared, for reporting problems found while rendering.
+	Pos diag.Pos `yaml:"-"`
+}
+
+// Pattern is a regular expression compiled when the configuration is decoded.
+type Pattern struct {
+	*regexp.Regexp
+}
+
+// UnmarshalYAML compiles the pattern so invalid expressions fail at load time.
+func (p *Pattern) UnmarshalYAML(node *yaml.Node) error {
+	var expr string
+	if err := node.Decode(&expr); err != nil {
+		return err
+	}
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		return &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Message: fmt.Sprintf("invalid pattern %q: %v", expr, err),
+			Pos:     diag.Pos{Line: node.Line, Column: node.Column},
+			Err:     err,
+		}
+	}
+	p.Regexp = re
+	return nil
+}
+
+// Load reads and validates the configuration file at path.
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, diag.Wrap(diag.IO, diag.Pos{File: path}, err)
+	}
+	cfg, err := Parse(path, data)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Dir = filepath.Dir(path)
+	return cfg, nil
+}
+
+// Parse decodes and validates configuration data, rejecting unknown fields. File names the data in diagnostics.
+func Parse(file string, data []byte) (*Config, error) {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+
+	var cfg Config
+	if err := dec.Decode(&cfg); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, diag.Errorf(diag.MissingField, diag.Pos{File: file}, "configuration is empty")
+		}
+		return nil, decodeError(file, err)
+	}
+
+	pos := indexPositions(file, data)
+	cfg.normalize()
+	cfg.recordPositions(pos)
+	if err := cfg.validate(pos); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// normalize cleans paths so that equivalent spellings, such as ./x and x, behave the same.
+func (c *Config) normalize() {
+	for name, scan := range c.Derive.Scans {
+		for i, dir := range scan.Dirs {
+			scan.Dirs[i] = cleanSlash(dir)
+		}
+		c.Derive.Scans[name] = scan
+	}
+	for i := range c.Derive.Outputs {
+		out := &c.Derive.Outputs[i]
+		out.Template = cleanSlash(out.Template)
+		out.Path = cleanSlash(out.Path)
+	}
+}
+
+func cleanSlash(p string) string {
+	if p == "" {
+		return ""
+	}
+	return path.Clean(p)
+}
+
+func (c *Config) recordPositions(pos positions) {
+	for name, scan := range c.Derive.Scans {
+		scan.Pos = pos.at("derive.scans." + name)
+		c.Derive.Scans[name] = scan
+	}
+	for i := range c.Derive.Outputs {
+		c.Derive.Outputs[i].Pos = pos.at("derive.outputs." + strconv.Itoa(i))
+	}
+}
+
+func (c *Config) validate(pos positions) error {
+	var errs diag.List
+	switch c.Version {
+	case Version:
+	case 0:
+		errs = append(errs, diag.Errorf(diag.MissingField, pos.at(""), "version is required"))
+	default:
+		errs = append(errs, diag.Errorf(diag.UnsupportedVersion, pos.at("version"), "unsupported version %d, want %d", c.Version, Version))
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(c.Derive.Scans)) {
+		scan := c.Derive.Scans[name]
+		at := "derive.scans." + name
+		switch {
+		case !token.IsIdentifier(name):
+			errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at), "scan %q: name must be a valid Go identifier", name))
+		case slices.Contains(reservedNames, name):
+			errs = append(errs, diag.Errorf(diag.ReservedName, pos.at(at), "scan %q: name is reserved", name))
+		}
+		if len(scan.Dirs) == 0 {
+			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "scan %q: dirs is required", name))
+		}
+		for i, dir := range scan.Dirs {
+			field := fmt.Sprintf("scan %q: dirs pattern %q", name, dir)
+			if d := checkPath(pos.at(at+".dirs."+strconv.Itoa(i)), field, dir); d != nil {
+				errs = append(errs, d)
+			} else if _, err := path.Match(dir, ""); err != nil {
+				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".dirs."+strconv.Itoa(i)), "%s: %v", field, err))
+			}
+		}
+	}
+
+	seen := make(map[string]bool, len(c.Derive.Outputs))
+	for i, out := range c.Derive.Outputs {
+		at := "derive.outputs." + strconv.Itoa(i)
+		if out.Template == "" {
+			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "output %d: template is required", i))
+		} else if d := checkPath(pos.at(at+".template"), fmt.Sprintf("output %d: template %q", i, out.Template), out.Template); d != nil {
+			errs = append(errs, d)
+		}
+		switch {
+		case out.Path == "":
+			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "output %d: path is required", i))
+		case seen[out.Path]:
+			errs = append(errs, diag.Errorf(diag.DuplicatePath, pos.at(at+".path"), "output %d: path %q is already used by another output", i, out.Path))
+		default:
+			if d := checkPath(pos.at(at+".path"), fmt.Sprintf("output %d: path %q", i, out.Path), out.Path); d != nil {
+				errs = append(errs, d)
+			}
+		}
+		seen[out.Path] = true
+	}
+
+	return errs.Err()
+}
+
+// checkPath reports paths that are not relative, slash-separated, and confined to their root.
+func checkPath(pos diag.Pos, field, p string) *diag.Diagnostic {
+	switch {
+	case strings.Contains(p, `\`):
+		return &diag.Diagnostic{Code: diag.UnsafePath, Pos: pos, Message: field + " must use forward slashes", Hint: "paths in adder.yaml are slash-separated on every operating system"}
+	case !filepath.IsLocal(filepath.FromSlash(p)):
+		return diag.Errorf(diag.UnsafePath, pos, "%s must be relative and stay inside its root", field)
+	}
+	return nil
+}
+
+var (
+	yamlLine     = regexp.MustCompile(`^(?:yaml: )?line (\d+): (.*)$`)
+	unknownField = regexp.MustCompile(`^field (\S+) not found in type (\S+)$`)
+)
+
+// decodeError converts a YAML decoding error into diagnostics with line numbers.
+func decodeError(file string, err error) error {
+	if d, ok := errors.AsType[*diag.Diagnostic](err); ok {
+		d.Pos.File = file
+		return d
+	}
+	if typeErr, ok := errors.AsType[*yaml.TypeError](err); ok {
+		var list diag.List
+		for _, msg := range typeErr.Errors {
+			list = append(list, lineDiagnostic(file, diag.InvalidValue, msg))
+		}
+		return list
+	}
+	return lineDiagnostic(file, diag.YAMLSyntax, err.Error())
+}
+
+func lineDiagnostic(file string, code diag.Code, msg string) *diag.Diagnostic {
+	d := &diag.Diagnostic{Code: code, Pos: diag.Pos{File: file}, Message: strings.TrimPrefix(msg, "yaml: ")}
+	if m := yamlLine.FindStringSubmatch(msg); m != nil {
+		d.Pos.Line, _ = strconv.Atoi(m[1])
+		d.Message = m[2]
+	}
+	if m := unknownField.FindStringSubmatch(d.Message); m != nil {
+		d.Code = diag.UnknownField
+		d.Message = fmt.Sprintf("unknown field %q", m[1])
+		if known := knownFields[m[2]]; len(known) > 0 {
+			d.Hint = "known fields: " + strings.Join(known, ", ")
+		}
+	}
+	return d
+}

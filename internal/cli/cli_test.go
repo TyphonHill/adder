@@ -1,0 +1,300 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func run(ctx context.Context, args ...string) (code int, stdout, stderr string) {
+	var out, errOut bytes.Buffer
+	code = Main(ctx, "v0.0.0-test", args, &out, &errOut)
+	return code, out.String(), errOut.String()
+}
+
+func copyFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	src := filepath.Join("..", "derive", "testdata", "basic", "repo")
+	if err := os.CopyFS(root, os.DirFS(src)); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func exists(t *testing.T, path string) bool {
+	t.Helper()
+	_, err := os.Stat(path)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	return err == nil
+}
+
+func TestCLI(t *testing.T) {
+	output := filepath.Join("drivers", "drivers.gen.go")
+	tests := []struct {
+		name string
+		// setup prepares the copied fixture at root; it may be nil.
+		setup func(t *testing.T, root string)
+		// args returns the command line for the fixture at root.
+		args     func(root string) []string
+		canceled bool
+		wantCode int
+		// wantStdout and wantStderr are exact; the contains fields are used when the output has variable parts.
+		wantStdout     string
+		wantStderr     func(root string) string
+		stderrPrefix   func(root string) string
+		stdoutContains string
+		stderrContains []string
+		// after checks the file system once the command has run; it may be nil.
+		after func(t *testing.T, root string)
+	}{
+		{
+			name:       "derive creates outputs",
+			args:       func(root string) []string { return []string{"--root", root, "derive"} },
+			wantCode:   ExitOK,
+			wantStdout: "created    drivers/drivers.gen.go\n",
+			after: func(t *testing.T, root string) {
+				if !exists(t, filepath.Join(root, output)) {
+					t.Error("output was not written")
+				}
+			},
+		},
+		{
+			name: "derive reports unchanged outputs",
+			setup: func(t *testing.T, root string) {
+				if code, _, errOut := run(t.Context(), "--root", root, "derive"); code != ExitOK {
+					t.Fatal(errOut)
+				}
+			},
+			args:       func(root string) []string { return []string{"--root", root, "derive"} },
+			wantCode:   ExitOK,
+			wantStdout: "unchanged  drivers/drivers.gen.go\n",
+		},
+		{
+			name:       "dry run shows pending changes and writes nothing",
+			args:       func(root string) []string { return []string{"--root", root, "derive", "--dry-run"} },
+			wantCode:   ExitOK,
+			wantStdout: "would be created    drivers/drivers.gen.go\n",
+			after: func(t *testing.T, root string) {
+				if exists(t, filepath.Join(root, output)) {
+					t.Error("dry run wrote the output")
+				}
+			},
+		},
+		{
+			name: "dry run of current outputs",
+			setup: func(t *testing.T, root string) {
+				if code, _, errOut := run(t.Context(), "--root", root, "derive"); code != ExitOK {
+					t.Fatal(errOut)
+				}
+			},
+			args:       func(root string) []string { return []string{"--root", root, "derive", "-n"} },
+			wantCode:   ExitOK,
+			wantStdout: "unchanged  drivers/drivers.gen.go\n",
+		},
+		{
+			name: "explicit config and out directory",
+			setup: func(t *testing.T, root string) {
+				if err := os.CopyFS(filepath.Join(root, "config", "templates"), os.DirFS(filepath.Join(root, "templates"))); err != nil {
+					t.Fatal(err)
+				}
+				data, err := os.ReadFile(filepath.Join(root, "adder.yaml"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, filepath.Join(root, "config", "custom.yaml"), string(data))
+			},
+			args: func(root string) []string {
+				return []string{"--root", root, "--config", filepath.Join(root, "config", "custom.yaml"), "derive", "--out", filepath.Join(root, "out")}
+			},
+			wantCode:   ExitOK,
+			wantStdout: "created    drivers/drivers.gen.go\n",
+			after: func(t *testing.T, root string) {
+				if !exists(t, filepath.Join(root, "out", output)) || exists(t, filepath.Join(root, output)) {
+					t.Error("output was not written to --out only")
+				}
+			},
+		},
+		{
+			name: "configuration problems with hints",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "adder.yaml"), "version: 1\nderive:\n  scanz: {}\n")
+			},
+			args:     func(root string) []string { return []string{"--root", root, "derive"} },
+			wantCode: ExitError,
+			wantStderr: func(root string) string {
+				return filepath.Join(root, "adder.yaml") + ":3: unknown field \"scanz\" [unknown-field]\n\thint: known fields: scans, outputs\n"
+			},
+		},
+		{
+			name: "source problems are reported relative to the current directory",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "drivers", "s3", "s3.go"), "package s3\n\nfunc {")
+			},
+			args:     func(root string) []string { return []string{"--root", root, "derive"} },
+			wantCode: ExitError,
+			stderrPrefix: func(root string) string {
+				return filepath.Join(root, "drivers", "s3", "s3.go") + ":3:6: "
+			},
+			stderrContains: []string{"[go-syntax]"},
+		},
+		{
+			name: "check passes when outputs are current",
+			setup: func(t *testing.T, root string) {
+				if code, _, errOut := run(t.Context(), "--root", root, "derive"); code != ExitOK {
+					t.Fatal(errOut)
+				}
+			},
+			args:     func(root string) []string { return []string{"--root", root, "check"} },
+			wantCode: ExitOK,
+			after: func(t *testing.T, root string) {
+				if !exists(t, filepath.Join(root, output)) {
+					t.Error("check removed the output")
+				}
+			},
+		},
+		{
+			name:       "check reports missing outputs and writes nothing",
+			args:       func(root string) []string { return []string{"--root", root, "check"} },
+			wantCode:   ExitStale,
+			wantStdout: "would be created    drivers/drivers.gen.go\n",
+			wantStderr: func(string) string {
+				return "adder: 1 derived file is out of date; run 'adder derive' to update it\n"
+			},
+			after: func(t *testing.T, root string) {
+				if exists(t, filepath.Join(root, output)) {
+					t.Error("check wrote the output")
+				}
+			},
+		},
+		{
+			name: "check reports outdated outputs",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, output), "package drivers\n")
+			},
+			args:       func(root string) []string { return []string{"--root", root, "check"} },
+			wantCode:   ExitStale,
+			wantStdout: "would be updated    drivers/drivers.gen.go\n",
+		},
+		{
+			name: "check counts every stale output",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "adder.yaml"), "version: 1\nderive:\n  scans:\n    Drivers: {dirs: [\"drivers/*\"], funcs: {name: ^New$}}\n  outputs:\n    - {template: templates/drivers.go.tmpl, path: a.gen.go}\n    - {template: templates/drivers.go.tmpl, path: b.gen.go}\n")
+			},
+			args:           func(root string) []string { return []string{"--root", root, "check"} },
+			wantCode:       ExitStale,
+			stderrContains: []string{"2 derived files are out of date; run 'adder derive' to update them"},
+		},
+		{
+			name: "check reports configuration problems as errors",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "adder.yaml"), "version: 2\n")
+			},
+			args:           func(root string) []string { return []string{"--root", root, "check"} },
+			wantCode:       ExitError,
+			stderrContains: []string{"[unsupported-version]"},
+		},
+		{
+			name:           "missing configuration",
+			args:           func(root string) []string { return []string{"--root", filepath.Join(root, "empty"), "derive"} },
+			wantCode:       ExitError,
+			stderrContains: []string{filepath.Join("empty", "adder.yaml"), "[io]"},
+		},
+		{
+			name:       "interrupted",
+			args:       func(root string) []string { return []string{"--root", root, "derive"} },
+			canceled:   true,
+			wantCode:   ExitError,
+			wantStderr: func(string) string { return "adder: interrupted\n" },
+		},
+		{
+			name:           "unexpected argument",
+			args:           func(string) []string { return []string{"derive", "extra"} },
+			wantCode:       ExitUsage,
+			stderrContains: []string{`unknown command "extra"`, "Run 'adder --help' for usage."},
+		},
+		{
+			name:           "unknown flag",
+			args:           func(string) []string { return []string{"--no-such-flag"} },
+			wantCode:       ExitUsage,
+			stderrContains: []string{"unknown flag: --no-such-flag", "Run 'adder --help' for usage."},
+		},
+		{
+			name:           "unknown command",
+			args:           func(string) []string { return []string{"no-such-command"} },
+			wantCode:       ExitUsage,
+			stderrContains: []string{`unknown command "no-such-command"`, "Run 'adder --help' for usage."},
+		},
+		{
+			name:           "help",
+			args:           func(string) []string { return nil },
+			wantCode:       ExitOK,
+			stdoutContains: "adder generates and maintains the repeated pieces of a Go repository.",
+		},
+		{
+			name:           "version",
+			args:           func(string) []string { return []string{"--version"} },
+			wantCode:       ExitOK,
+			stdoutContains: "v0.0.0-test",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := copyFixture(t)
+			if tt.setup != nil {
+				tt.setup(t, root)
+			}
+			ctx := t.Context()
+			if tt.canceled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+
+			code, stdout, stderr := run(ctx, tt.args(root)...)
+
+			if code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d\nstderr: %s", code, tt.wantCode, stderr)
+			}
+			if tt.wantStdout != "" && stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			if !strings.Contains(stdout, tt.stdoutContains) {
+				t.Errorf("stdout = %q, want it to contain %q", stdout, tt.stdoutContains)
+			}
+			if tt.wantStderr != nil {
+				if want := tt.wantStderr(root); stderr != want {
+					t.Errorf("stderr = %q, want %q", stderr, want)
+				}
+			}
+			if tt.stderrPrefix != nil {
+				if want := tt.stderrPrefix(root); !strings.HasPrefix(stderr, want) {
+					t.Errorf("stderr = %q, want it to start with %q", stderr, want)
+				}
+			}
+			for _, want := range tt.stderrContains {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("stderr = %q, want it to contain %q", stderr, want)
+				}
+			}
+			if tt.after != nil {
+				tt.after(t, root)
+			}
+		})
+	}
+}
