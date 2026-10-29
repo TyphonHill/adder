@@ -22,7 +22,8 @@ func (e *staleError) Error() string {
 }
 
 func newCheckCommand(opts *globalOptions) *cobra.Command {
-	return &cobra.Command{
+	var showDiff bool
+	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Report derived files that are out of date",
 		Long: `check computes what derive would write and reports every output that differs, without writing anything.
@@ -42,10 +43,15 @@ It exits with status 3 when any output is out of date, so it can guard CI and re
 			for _, c := range pending {
 				fmt.Fprintf(cmd.OutOrStdout(), "would be %-9s  %s\n", c.Status, c.Path)
 			}
+			if showDiff {
+				printDiffs(cmd.OutOrStdout(), pending)
+			}
 			if len(pending) > 0 {
 				return &staleError{count: len(pending)}
 			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&showDiff, "diff", false, "also show each out-of-date output as a unified diff")
+	return cmd
 }

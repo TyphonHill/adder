@@ -12,6 +12,7 @@ import (
 
 func newDeriveCommand(opts *globalOptions) *cobra.Command {
 	var derived derive.Options
+	var showDiff bool
 	cmd := &cobra.Command{
 		Use:   "derive",
 		Short: "Rebuild files derived from the repository's source code",
@@ -25,6 +26,7 @@ Files whose content has not changed are left untouched.`,
 				return err
 			}
 			derived.Root = opts.root
+			derived.DryRun = derived.DryRun || showDiff
 			p, err := derive.Run(cmd.Context(), cfg, derived)
 			if err != nil {
 				return err
@@ -36,10 +38,14 @@ Files whose content has not changed are left untouched.`,
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "%s%-9s  %s\n", verb, c.Status, c.Path)
 			}
+			if showDiff {
+				printDiffs(cmd.OutOrStdout(), p.Pending())
+			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&derived.OutDir, "out", "", "write outputs under this directory instead of --root")
 	cmd.Flags().BoolVarP(&derived.DryRun, "dry-run", "n", false, "show what would change without writing anything")
+	cmd.Flags().BoolVar(&showDiff, "diff", false, "also show each change as a unified diff; implies --dry-run")
 	return cmd
 }

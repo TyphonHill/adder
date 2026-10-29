@@ -129,7 +129,14 @@ Global flags:
 | Flag | Description |
 | --- | --- |
 | `-n`, `--dry-run` | Show what would change without writing anything. |
-| `--out <dir>` | Write outputs under another directory instead of the root, for example to diff them. |
+| `--diff` | Also show each change as a unified diff, without writing anything. |
+| `--out <dir>` | Write outputs under another directory instead of the root. |
+
+`check` flags:
+
+| Flag | Description |
+| --- | --- |
+| `--diff` | Also show each out-of-date output as a unified diff, so a CI log says exactly what is stale. |
 
 `new <generator>` flags, besides one for each input:
 

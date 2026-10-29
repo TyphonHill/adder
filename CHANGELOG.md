@@ -13,7 +13,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Type declaration scans with a `types` block, filtering by export, name, kind, and directive, with `.Fields` for structs.
 - Top-level `vars`, available to every template as `.Vars`, and `partials`, templates whose `{{ define }}` blocks every template can use.
 - `adder new <generator>` creates files from generators declared in `adder.yaml`, with string and bool inputs as flags, from a JSON file, or from standard input. Inputs can be restricted with `pattern`, `values`, `valuesFrom`, and `unique`; files have templated paths, `when` and `unless` conditions, and an `ifExists` policy that never overwrites. Derived outputs are updated in the same run, and `--dry-run` previews everything.
-- `adder new --diff` previews every change as a unified diff that `git apply` accepts, using a copy of the Go toolchain's diff code.
+- `--diff` on `adder new`, `adder derive`, and `adder check` shows every change as a unified diff that `git apply` accepts, using a copy of the Go toolchain's diff code. On `new` and `derive` it implies `--dry-run`.
 - Diagnostic codes `unknown-generator`, `missing-input`, `invalid-input`, and `file-exists`, and a `skipped` change status.
 - Hints for missing fields in nested maps, such as `.Vars.Licence`, and for undefined templates, listing the names that exist.
 

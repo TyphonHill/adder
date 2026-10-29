@@ -144,9 +144,7 @@ func generatorCommand(cfg *config.Config, opts *globalOptions, name string) *cob
 				}
 			}
 			if showDiff {
-				for _, c := range res.Plan.Pending() {
-					fmt.Fprintf(out, "\n%s", c.Diff())
-				}
+				printDiffs(out, res.Plan.Pending())
 			}
 			if msg := strings.TrimSpace(res.Message); msg != "" && !dryRun {
 				fmt.Fprintf(out, "\n%s\n", msg)
