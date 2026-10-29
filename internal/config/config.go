@@ -38,6 +38,8 @@ type Config struct {
 	// Partials are templates loaded into every template, so their {{ define }} blocks can be used anywhere.
 	Partials []Partial `yaml:"partials"`
 	Derive   Derive    `yaml:"derive"`
+	// Generators create new files, each run as adder new <name>.
+	Generators map[string]Generator `yaml:"generators"`
 
 	// Dir is the directory holding the configuration file; template paths resolve against it.
 	Dir string `yaml:"-"`
@@ -204,6 +206,7 @@ func (c *Config) normalize() {
 		out.Template = cleanSlash(out.Template)
 		out.Path = cleanSlash(out.Path)
 	}
+	c.normalizeGenerators()
 }
 
 func cleanSlash(p string) string {
@@ -224,6 +227,7 @@ func (c *Config) recordPositions(pos positions) {
 	for i := range c.Derive.Outputs {
 		c.Derive.Outputs[i].Pos = pos.at("derive.outputs." + strconv.Itoa(i))
 	}
+	c.recordGeneratorPositions(pos)
 }
 
 func (c *Config) validate(pos positions) error {
@@ -308,6 +312,7 @@ func (c *Config) validate(pos positions) error {
 		seen[out.Path] = true
 	}
 
+	errs = append(errs, c.validateGenerators(pos)...)
 	return errs.Err()
 }
 
@@ -395,6 +400,11 @@ func checkGlob(pos diag.Pos, field, pattern string) *diag.Diagnostic {
 		return diag.Errorf(diag.InvalidValue, pos, "%s: %v", field, err)
 	}
 	return nil
+}
+
+// CheckPath reports a path that is not relative, slash-separated, and confined to its root, describing it as field.
+func CheckPath(pos diag.Pos, field, p string) *diag.Diagnostic {
+	return checkPath(pos, field, p)
 }
 
 // checkPath reports paths that are not relative, slash-separated, and confined to their root.

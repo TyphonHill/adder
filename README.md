@@ -8,7 +8,7 @@ Write the pattern once. adder adds the rest.
 
 adder generates and maintains the repeated pieces of a Go repository: the registries, wiring, and boilerplate that follow from conventions your team already has. You describe them once in `adder.yaml` with ordinary Go templates, and adder keeps them in step with your code.
 
-> **Status:** early development. `adder derive` and `adder check` work today; the configuration format may still change before v1.0.0.
+> **Status:** early development. `adder derive`, `adder check`, and `adder new` work today; the configuration format may still change before v1.0.0.
 
 ## How it works
 
@@ -18,6 +18,8 @@ adder generates and maintains the repeated pieces of a Go repository: the regist
 2. **Render.** Each list of matches is passed to your templates under the name you gave it, and adder writes the result.
 
 Change your code, run `adder derive` again, and the generated files follow.
+
+`adder new` creates the code people then own, such as a new driver package, from [generators](#generators) with validated inputs. It updates the derived files in the same run, so the new driver is registered as soon as it exists.
 
 ## Install
 
@@ -113,6 +115,7 @@ Running it again reports `unchanged` and leaves the file alone. Add a `drivers/g
 | --- | --- |
 | `adder derive` | Run every scan and rewrite the derived outputs that changed. |
 | `adder check` | Report derived outputs that are out of date, without writing anything. Exits with status 3 when any are, so CI can catch a forgotten `adder derive`. |
+| `adder new <generator>` | Create files with a generator, then update the derived outputs. `adder new` lists the generators, and `adder new <generator> --help` shows its inputs. |
 
 Global flags:
 
@@ -128,6 +131,13 @@ Global flags:
 | `-n`, `--dry-run` | Show what would change without writing anything. |
 | `--out <dir>` | Write outputs under another directory instead of the root, for example to diff them. |
 
+`new <generator>` flags, besides one for each input:
+
+| Flag | Description |
+| --- | --- |
+| `-n`, `--dry-run` | Show what would change without writing anything. |
+| `--inputs <file>` | Read inputs from a JSON object keyed by input name, such as `{"name": "gcs", "cache": true}`. Use `-` for standard input. Flags override it. |
+
 ### Errors and exit codes
 
 Problems are reported with their location and a stable code, and adder reports every problem it finds rather than stopping at the first:
@@ -141,7 +151,7 @@ templates/drivers.go.tmpl:12:4: <.Drivrs>: map has no entry for key "Drivrs" [te
 | --- | --- |
 | `0` | Success. |
 | `1` | adder ran and found a problem. |
-| `2` | adder was invoked incorrectly, such as an unknown flag. |
+| `2` | adder was invoked incorrectly, such as an unknown flag or a missing generator input. |
 | `3` | `adder check` found outputs that are out of date. |
 
 See [docs/design.md](docs/design.md#4-structured-diagnostics) for the full list of codes.
@@ -252,6 +262,71 @@ package drivers
 - Partial patterns are relative to the directory holding `adder.yaml` and use [`path.Match`](https://pkg.go.dev/path#Match) syntax, without `**`. Each pattern must match at least one file.
 - Only the `{{ define }}` blocks in a partial are used; text outside them is ignored. Pass data along with `{{ template "name" . }}`, since a partial sees only what it is given.
 - Two partials cannot define the same name. A template can redefine a partial's block for itself, which leaves other templates unaffected.
+
+### Generators
+
+Each entry under `generators` is a command, `adder new <name>`, that renders new files from templates. Generator names are lowercase words joined by hyphens.
+
+```yaml
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name:
+        help: Driver name, used as the package name
+        pattern: "[a-z][a-z0-9]*"
+        unique: Drivers.Package
+      summary:
+        help: One-line description for the package documentation
+        default: stores objects
+      cache:
+        type: bool
+        help: Add an in-memory cache in front of the driver
+    files:
+      - template: templates/new/driver.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go
+      - template: templates/new/cache.go.tmpl
+        path: drivers/{{ .Inputs.name }}/cache.go
+        when: cache
+    message: |
+      Next, implement New in drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
+```
+
+```console
+$ adder new driver --name gcs --cache
+created    drivers/gcs/gcs.go
+created    drivers/gcs/cache.go
+updated    drivers/drivers.gen.go
+
+Next, implement New in drivers/gcs/gcs.go.
+```
+
+Input names are lowerCamelCase. Each one is a flag in kebab-case (`packageName` is `--package-name`) and a template field (`.Inputs.packageName`). Every problem with the inputs is reported at once, and nothing is written unless the whole run succeeds.
+
+| Input field | Description |
+| --- | --- |
+| `type` | `string`, the default, or `bool`. Bool inputs are `false` unless their flag is given. |
+| `help` | Shown in `--help` and with problems. |
+| `default` | Makes a string input optional. A string input without one is required. |
+| `pattern` | A regular expression the whole value must match. |
+| `values` | The allowed values. |
+| `valuesFrom` | Takes the allowed values from a scan, written as `Scan.Field`, such as `Drivers.Package`. |
+| `unique` | Rejects values a scan already has, written as `Scan.Field`, so two drivers cannot share a name. |
+
+| File field | Description |
+| --- | --- |
+| `template` | The template, relative to the directory holding `adder.yaml`. |
+| `path` | Where to create the file, relative to the root. It is a template, rendered with the same data, and must stay inside the root. |
+| `when`, `unless` | Name a bool input that includes or excludes the file. |
+| `ifExists` | `fail`, the default, or `skip` for files that may already exist, such as a shared README. adder never overwrites a file. |
+
+| Generator field | Description |
+| --- | --- |
+| `description` | Shown in `adder new`. |
+| `message` | A template printed after the files are created, such as next steps. |
+| `derive` | Set to `false` to skip updating derived outputs. |
+
+Generator templates see `.Inputs`, `.Vars`, `.Module`, and every scan. Scans see the new files before they are written, which is how derived outputs pick them up in the same run. Go files are formatted with `gofmt` but get no generated-code header, because they are meant to be edited. A complete example is the test fixture in [`internal/scaffold/testdata/drivers`](internal/scaffold/testdata/drivers).
 
 ### Template functions
 

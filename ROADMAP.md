@@ -88,16 +88,17 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 
 | Feature | Status |
 | --- | --- |
-| Generators that create new files from templates, as `adder new <generator>` ([design 19](docs/design.md#19-scaffolding-with-adder-new-planned-v02)) | 🔜 v0.2 |
-| String and bool inputs with `help`, `default`, `pattern`, and `values`; a string without a default is required | 🔜 v0.2 |
-| `valuesFrom`: choices taken from a scan, such as "package must be an existing directory under `drivers/`" | 🔜 v0.2 |
-| `unique`: reject values a scan already has, such as "no driver with this name already exists" | 🔜 v0.2 |
-| Templated file paths, and files included with `when` or `unless` on a bool input | 🔜 v0.2 |
-| Existing-file policy: `fail` or `skip`, never overwrite | 🔜 v0.2 |
-| `--dry-run` with the planned changes, and `--diff` for a unified diff of each one | 🔜 v0.2 |
-| New files and the derived outputs they change computed as one plan, so registries update in the same run | 🔜 v0.2 |
-| A message after generating, with next steps for the person who ran it | 🔜 v0.2 |
-| Inputs from flags, from a JSON file, or from standard input | 🔜 v0.2 |
+| Generators that create new files from templates, as `adder new <generator>` ([design 19](docs/design.md#19-scaffolding-with-adder-new-planned-v02)) | ✅ |
+| String and bool inputs with `help`, `default`, `pattern`, and `values`; a string without a default is required | ✅ |
+| `valuesFrom`: choices taken from a scan, such as "package must be an existing directory under `drivers/`" | ✅ |
+| `unique`: reject values a scan already has, such as "no driver with this name already exists" | ✅ |
+| Templated file paths, and files included with `when` or `unless` on a bool input | ✅ |
+| Existing-file policy: `fail` or `skip`, never overwrite | ✅ |
+| `--dry-run` with the planned changes | ✅ |
+| `--diff` for a unified diff of each change | 🔜 v0.2 |
+| New files and the derived outputs they change computed as one plan, so registries update in the same run | ✅ |
+| A message after generating, with next steps for the person who ran it | ✅ |
+| Inputs from flags, from a JSON file, or from standard input | ✅ |
 | Interactive prompts for missing inputs when running in a terminal | 🔜 v0.3 |
 | Generator tests: render a generator with sample inputs and compare to golden files | 🔜 v0.3 |
 | Composing generators, where one generator runs another | 💡 |

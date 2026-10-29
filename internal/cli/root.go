@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ const (
 // usageError marks mistakes in how adder was invoked, such as an unknown flag.
 type usageError struct {
 	err error
+	cmd string // the command whose help explains the usage, such as "adder new driver"
 }
 
 func (e *usageError) Error() string { return e.err.Error() }
@@ -34,7 +36,7 @@ func (e *usageError) Unwrap() error { return e.err }
 func usageArgs(validate cobra.PositionalArgs) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if err := validate(cmd, args); err != nil {
-			return &usageError{err}
+			return &usageError{err, cmd.CommandPath()}
 		}
 		return nil
 	}
@@ -53,10 +55,11 @@ func (o *globalOptions) configPath() string {
 	return filepath.Join(o.root, config.FileName)
 }
 
-// Main runs adder with args, writing to stdout and stderr, and returns the process exit code.
-func Main(ctx context.Context, version string, args []string, stdout, stderr io.Writer) int {
+// Main runs adder with args, reading stdin and writing to stdout and stderr, and returns the process exit code.
+func Main(ctx context.Context, version string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cmd := New(version)
 	cmd.SetArgs(args)
+	cmd.SetIn(stdin)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 
@@ -65,13 +68,25 @@ func Main(ctx context.Context, version string, args []string, stdout, stderr io.
 		return ExitOK
 	}
 	printError(stderr, err)
-	if _, ok := errors.AsType[*usageError](err); ok {
+	if _, ok := errors.AsType[*usageError](err); ok || invocationProblem(err) {
 		return ExitUsage
 	}
 	if _, ok := errors.AsType[*staleError](err); ok {
 		return ExitStale
 	}
 	return ExitError
+}
+
+// invocationProblem reports whether every problem in err is a mistake in how a generator was invoked.
+func invocationProblem(err error) bool {
+	for _, d := range diag.From(err) {
+		switch d.Code {
+		case diag.UnknownGenerator, diag.MissingInput, diag.InvalidInput:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // New returns the root adder command.
@@ -91,20 +106,24 @@ Generators and derived files are declared in adder.yaml at the repository root.`
 			return cmd.Help()
 		},
 	}
-	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return &usageError{err}
+	addGlobalFlags(cmd, opts)
+	cmd.AddCommand(newDeriveCommand(opts), newCheckCommand(opts), newNewCommand(opts))
+	return cmd
+}
+
+// addGlobalFlags defines the flags every subcommand shares and reports flag mistakes as usage errors.
+func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
+	cmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		return &usageError{err, c.CommandPath()}
 	})
 	cmd.PersistentFlags().StringVar(&opts.root, "root", ".", "repository root that scans and outputs are relative to")
 	cmd.PersistentFlags().StringVarP(&opts.config, "config", "c", "", "configuration file (default <root>/"+config.FileName+")")
-
-	cmd.AddCommand(newDeriveCommand(opts), newCheckCommand(opts))
-	return cmd
 }
 
 // printError writes err for a person to read, one line per problem.
 func printError(w io.Writer, err error) {
 	if usage, ok := errors.AsType[*usageError](err); ok {
-		fmt.Fprintf(w, "adder: %v\nRun 'adder --help' for usage.\n", usage.err)
+		fmt.Fprintf(w, "adder: %v\nRun '%s --help' for usage.\n", usage.err, cmp.Or(usage.cmd, "adder"))
 		return
 	}
 	if errors.Is(err, context.Canceled) {

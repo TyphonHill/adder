@@ -153,6 +153,102 @@ func TestParseShared(t *testing.T) {
 	}
 }
 
+const generatorConfig = `version: 1
+derive:
+  scans:
+    Drivers: {dirs: [drivers/*]}
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name: {pattern: "[a-z]+", unique: Drivers.Package}
+      summary: {default: A driver.}
+      cache: {type: bool}
+    files:
+      - template: ./templates/driver.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go
+      - template: templates/cache.go.tmpl
+        path: drivers/{{ .Inputs.name }}/cache.go
+        when: cache
+        ifExists: skip
+`
+
+func TestParseGenerators(t *testing.T) {
+	cfg, err := Parse("adder.yaml", []byte(generatorConfig))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	gen := cfg.Generators["driver"]
+	if gen.Pos != (diag.Pos{File: "adder.yaml", Line: 6, Column: 3}) {
+		t.Errorf("generator Pos = %v", gen.Pos)
+	}
+	if gen.Derive != nil {
+		t.Errorf("Derive = %v, want unset", *gen.Derive)
+	}
+
+	inputs := []struct {
+		name         string
+		wantType     string
+		wantRequired bool
+		match        []string
+		noMatch      []string
+	}{
+		{name: "name", wantType: InputString, wantRequired: true, match: []string{"gcs"}, noMatch: []string{"gcs2", "GCS", ""}},
+		{name: "summary", wantType: InputString, match: []string{"", "Anything at all"}},
+		{name: "cache", wantType: InputBool},
+	}
+	for _, tt := range inputs {
+		t.Run("input "+tt.name, func(t *testing.T) {
+			in := gen.Inputs[tt.name]
+			if in.Type != tt.wantType || in.Required() != tt.wantRequired {
+				t.Errorf("type %q, required %v, want %q, %v", in.Type, in.Required(), tt.wantType, tt.wantRequired)
+			}
+			if in.Pos.Line == 0 {
+				t.Error("input has no position")
+			}
+			for _, v := range tt.match {
+				if !in.MatchesPattern(v) {
+					t.Errorf("MatchesPattern(%q) = false", v)
+				}
+			}
+			for _, v := range tt.noMatch {
+				if in.MatchesPattern(v) {
+					t.Errorf("MatchesPattern(%q) = true", v)
+				}
+			}
+		})
+	}
+
+	files := []struct {
+		wantTemplate string
+		wantIfExists string
+		wantPos      diag.Pos
+	}{
+		{wantTemplate: "templates/driver.go.tmpl", wantIfExists: IfExistsFail, wantPos: diag.Pos{File: "adder.yaml", Line: 13, Column: 9}},
+		{wantTemplate: "templates/cache.go.tmpl", wantIfExists: IfExistsSkip, wantPos: diag.Pos{File: "adder.yaml", Line: 15, Column: 9}},
+	}
+	for i, tt := range files {
+		f := gen.Files[i]
+		if f.Template != tt.wantTemplate || f.IfExists != tt.wantIfExists || f.Pos != tt.wantPos {
+			t.Errorf("file %d = %q, %q at %v, want %q, %q at %v", i, f.Template, f.IfExists, f.Pos, tt.wantTemplate, tt.wantIfExists, tt.wantPos)
+		}
+	}
+}
+
+func TestFlag(t *testing.T) {
+	tests := []struct{ input, want string }{
+		{"name", "name"},
+		{"packageName", "package-name"},
+		{"userID", "user-id"},
+		{"http2Server", "http2-server"},
+	}
+	for _, tt := range tests {
+		if got := Flag(tt.input); got != tt.want {
+			t.Errorf("Flag(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 // want is the code and position expected for one diagnostic.
 type want struct {
 	code   diag.Code
@@ -202,6 +298,24 @@ func TestParseErrors(t *testing.T) {
 		},
 		{name: "partial bad glob", input: "version: 1\npartials: ['templates/[']", want: []want{{diag.InvalidValue, 2, 12}}},
 		{name: "partial not a string", input: "version: 1\npartials: [{a: b}]", want: []want{{diag.InvalidValue, 2, 0}}},
+		{name: "generator name not kebab-case", input: "version: 1\ngenerators:\n  addDriver: {files: [{template: t, path: p}]}", want: []want{{diag.InvalidName, 3, 3}}, wantHint: "generator names are commands, such as adder new http-handler"},
+		{name: "generator without files", input: "version: 1\ngenerators:\n  g: {description: x}", want: []want{{diag.MissingField, 3, 3}}},
+		{name: "input name not lowerCamel", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {PackageName: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 14}}, wantHint: "input names become template fields and flags: packageName is .Inputs.packageName and --package-name"},
+		{name: "input uses a reserved flag", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {dryRun: {type: bool}}\n    files: [{template: t, path: p}]", want: []want{{diag.ReservedName, 5, 14}}},
+		{name: "inputs share a flag", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {userID: {}, userId: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 26}}},
+		{name: "unknown input type", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {type: int}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}, wantHint: "type is string or bool"},
+		{name: "bool input with string settings", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {c: {type: bool, default: \"true\", pattern: x}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 30}, {diag.InvalidValue, 5, 47}}, wantHint: "bool inputs are false unless their flag is given"},
+		{name: "values and valuesFrom", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {values: [a], valuesFrom: S.Dir}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 31}}},
+		{name: "default fails the pattern", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {default: X, pattern: \"[a-z]+\"}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
+		{name: "default not among values", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {default: c, values: [a, b]}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
+		{name: "malformed scan reference", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {unique: Drivers}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}, wantHint: "write Scan.Field, such as Drivers.Package"},
+		{name: "unknown scan reference", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {valuesFrom: Nope.Dir}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
+		{name: "file without template or path", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{when: x}]", want: []want{{diag.MissingField, 5, 13}, {diag.MissingField, 5, 13}, {diag.InvalidValue, 5, 14}}},
+		{name: "file template escapes root", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{template: ../t, path: p}]", want: []want{{diag.UnsafePath, 5, 14}}},
+		{name: "when and unless", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {type: bool}}\n    files: [{template: t, path: p, when: a, unless: a}]", want: []want{{diag.InvalidValue, 6, 45}}},
+		{name: "when names a string input", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {}}\n    files: [{template: t, path: p, when: a}]", want: []want{{diag.InvalidValue, 6, 36}}, wantHint: "when and unless take an input name, such as when: cache"},
+		{name: "unknown ifExists", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{template: t, path: p, ifExists: overwrite}]", want: []want{{diag.InvalidValue, 5, 36}}, wantHint: "ifExists is fail or skip; adder never overwrites a file people own"},
+		{name: "unknown generator field", input: "version: 1\ngenerators:\n  g: {fils: []}", want: []want{{diag.UnknownField, 3, 0}}, wantHint: "known fields: description, inputs, files, message, derive"},
 		{name: "scan without dirs", input: "version: 1\nderive:\n  scans:\n    A: {}", want: []want{{diag.MissingField, 4, 5}}},
 		{name: "dirs escape root", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [../a]}", want: []want{{diag.UnsafePath, 4, 16}}},
 		{

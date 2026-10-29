@@ -22,9 +22,11 @@ const (
 	Unchanged Status = iota
 	Created
 	Updated
+	// Skipped is a new file that already exists and is left alone.
+	Skipped
 )
 
-var statusNames = map[Status]string{Unchanged: "unchanged", Created: "created", Updated: "updated"}
+var statusNames = map[Status]string{Unchanged: "unchanged", Created: "created", Updated: "updated", Skipped: "skipped"}
 
 func (s Status) String() string {
 	if name, ok := statusNames[s]; ok {
@@ -73,11 +75,11 @@ func (p *Plan) Add(existing fs.FS, name string, content []byte) error {
 	return nil
 }
 
-// Pending returns the changes that would modify a file.
+// Pending returns the changes that would write a file.
 func (p *Plan) Pending() []Change {
 	var pending []Change
 	for _, c := range p.Changes {
-		if c.Status != Unchanged {
+		if c.Status == Created || c.Status == Updated {
 			pending = append(pending, c)
 		}
 	}
@@ -96,9 +98,24 @@ func (p *Plan) Apply(ctx context.Context, root *os.Root) error {
 				return diag.Wrap(diag.IO, diag.Pos{File: c.Path}, err)
 			}
 		}
-		if err := root.WriteFile(name, c.New, 0o644); err != nil {
+		if err := write(root, name, c); err != nil {
 			return diag.Wrap(diag.IO, diag.Pos{File: c.Path}, err)
 		}
 	}
 	return nil
+}
+
+// write writes a change's content. A created file must still not exist, so a file made since planning is never
+// overwritten.
+func write(root *os.Root, name string, c Change) error {
+	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	if c.Status == Created {
+		flag = os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	}
+	f, err := root.OpenFile(name, flag, 0o644)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(c.New)
+	return errors.Join(err, f.Close())
 }

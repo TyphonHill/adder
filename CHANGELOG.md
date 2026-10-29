@@ -12,11 +12,15 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - `//adder:` directives in doc comments, a `directive` filter, and `.Directives` on items.
 - Type declaration scans with a `types` block, filtering by export, name, kind, and directive, with `.Fields` for structs.
 - Top-level `vars`, available to every template as `.Vars`, and `partials`, templates whose `{{ define }}` blocks every template can use.
+- `adder new <generator>` creates files from generators declared in `adder.yaml`, with string and bool inputs as flags, from a JSON file, or from standard input. Inputs can be restricted with `pattern`, `values`, `valuesFrom`, and `unique`; files have templated paths, `when` and `unless` conditions, and an `ifExists` policy that never overwrites. Derived outputs are updated in the same run, and `--dry-run` previews everything.
+- Diagnostic codes `unknown-generator`, `missing-input`, `invalid-input`, and `file-exists`, and a `skipped` change status.
 - Hints for missing fields in nested maps, such as `.Vars.Licence`, and for undefined templates, listing the names that exist.
 
 ### Changed
 
 - `Vars` and `Inputs` are reserved and can no longer be used as scan names.
+- Usage errors point at the help of the command that was run, such as `adder derive --help`.
+- Files that did not exist when the plan was made are created exclusively, so one that appears before writing is never overwritten.
 
 ## [0.1.0] - 2026-10-29
 

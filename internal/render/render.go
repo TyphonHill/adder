@@ -94,6 +94,24 @@ func (s *Set) File(name, outPath string, data any) ([]byte, error) {
 	return formatted, nil
 }
 
+// Text executes a template written inline, such as a path in adder.yaml. Its problems have no position.
+func Text(text string, data any) (string, error) {
+	const name = "inline"
+	tmpl, err := template.New(name).Funcs(Funcs()).Option("missingkey=error").Parse(text)
+	if err != nil {
+		d := templateError(diag.TemplateSyntax, name, err, data)
+		d.Pos = diag.Pos{}
+		return "", d
+	}
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, data); err != nil {
+		d := templateError(diag.TemplateExec, name, err, data)
+		d.Pos = diag.Pos{}
+		return "", d
+	}
+	return buf.String(), nil
+}
+
 // readTemplate reads a template with its line endings normalized, so CRLF checkouts render the same everywhere.
 func readTemplate(fsys fs.FS, name string) (string, error) {
 	src, err := fs.ReadFile(fsys, name)

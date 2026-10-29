@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"testing"
 )
 
@@ -126,6 +127,38 @@ func TestFrom(t *testing.T) {
 				t.Errorf("first diagnostic does not wrap %v", tt.wantIs)
 			}
 		})
+	}
+}
+
+func TestLocate(t *testing.T) {
+	decl := Pos{File: "adder.yaml", Line: 3, Column: 5}
+	dir := filepath.Join("repo", "root")
+	tests := []struct {
+		name string
+		pos  Pos
+		want Pos
+	}{
+		{name: "no position goes to the declaration", pos: Pos{}, want: decl},
+		{name: "relative files are joined to the directory", pos: Pos{File: "a/b.go", Line: 2}, want: Pos{File: filepath.Join(dir, "a", "b.go"), Line: 2}},
+		{name: "a line without a file is kept", pos: Pos{Line: 2}, want: Pos{Line: 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Locate(Errorf(Other, tt.pos, "x"), dir, decl)
+			if len(got) != 1 || got[0].Pos != tt.want {
+				t.Errorf("Locate() = %v, want one diagnostic at %v", got, tt.want)
+			}
+		})
+	}
+	abs, err := filepath.Abs("x.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Locate(Errorf(Other, Pos{File: abs}, "x"), dir, decl); got[0].Pos.File != abs {
+		t.Errorf("absolute file = %q, want it unchanged", got[0].Pos.File)
+	}
+	if got := Locate(nil, dir, decl); got != nil {
+		t.Errorf("Locate(nil) = %v, want nil", got)
 	}
 }
 

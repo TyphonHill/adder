@@ -65,6 +65,7 @@ func TestPending(t *testing.T) {
 	}{
 		{name: "empty", changes: nil, want: nil},
 		{name: "only unchanged", changes: []Change{{Path: "a", Status: Unchanged}}, want: nil},
+		{name: "skipped files are not written", changes: []Change{{Path: "a", Status: Skipped}}, want: nil},
 		{
 			name:    "mixed, in order",
 			changes: []Change{{Path: "a", Status: Updated}, {Path: "b", Status: Unchanged}, {Path: "c", Status: Created}},
@@ -111,6 +112,20 @@ func TestApply(t *testing.T) {
 			initial: map[string]string{"a.go": "on disk"},
 			changes: []Change{{Path: "a.go", Status: Unchanged, New: []byte("not written")}},
 			want:    map[string]string{"a.go": "on disk"},
+		},
+		{
+			name:    "leaves skipped files alone",
+			initial: map[string]string{"a.go": "on disk"},
+			changes: []Change{{Path: "a.go", Status: Skipped, New: []byte("not written")}},
+			want:    map[string]string{"a.go": "on disk"},
+		},
+		{
+			name:      "never overwrites a file created since planning",
+			initial:   map[string]string{"a.go": "on disk"},
+			changes:   []Change{{Path: "a.go", Status: Created, New: []byte("new")}},
+			want:      map[string]string{"a.go": "on disk"},
+			wantErr:   true,
+			wantErrIs: fs.ErrExist,
 		},
 		{
 			name:    "stays inside the root",
@@ -175,6 +190,7 @@ func TestStatus(t *testing.T) {
 		{name: "unchanged", status: Unchanged, wantString: "unchanged", wantText: "unchanged"},
 		{name: "created", status: Created, wantString: "created", wantText: "created"},
 		{name: "updated", status: Updated, wantString: "updated", wantText: "updated"},
+		{name: "skipped", status: Skipped, wantString: "skipped", wantText: "skipped"},
 		{name: "unknown", status: Status(9), wantString: "Status(9)", wantErr: true},
 	}
 	for _, tt := range tests {

@@ -145,6 +145,37 @@ func TestFileErrors(t *testing.T) {
 	}
 }
 
+func TestText(t *testing.T) {
+	data := map[string]any{"Inputs": map[string]any{"name": "gcs"}}
+	tests := []struct {
+		name     string
+		text     string
+		want     string
+		wantCode diag.Code
+		wantHint string
+	}{
+		{name: "plain", text: "drivers/x.go", want: "drivers/x.go"},
+		{name: "fields and functions", text: "drivers/{{ .Inputs.name }}/{{ toUpper .Inputs.name }}.go", want: "drivers/gcs/GCS.go"},
+		{name: "syntax", text: "{{ .Inputs.name", wantCode: diag.TemplateSyntax},
+		{name: "missing key", text: "{{ .Inputs.nam }}", wantCode: diag.TemplateExec, wantHint: "available fields: name"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Text(tt.text, data)
+			if tt.wantCode == "" {
+				if err != nil || got != tt.want {
+					t.Errorf("Text() = %q, %v, want %q", got, err, tt.want)
+				}
+				return
+			}
+			list := diag.From(err)
+			if len(list) != 1 || list[0].Code != tt.wantCode || list[0].Pos != (diag.Pos{}) || list[0].Hint != tt.wantHint {
+				t.Errorf("Text() error = %#v, want one %s problem without a position and hint %q", list, tt.wantCode, tt.wantHint)
+			}
+		})
+	}
+}
+
 func TestMapKeys(t *testing.T) {
 	type names map[string]string
 	data := map[string]any{
@@ -305,12 +336,12 @@ func TestFieldValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := fieldValues(tt.field, tt.list)
+			got, err := FieldValues(tt.field, tt.list)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("fieldValues() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("FieldValues() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !tt.wantErr && !slices.Equal(got, tt.want) {
-				t.Errorf("fieldValues() = %v, want %v", got, tt.want)
+				t.Errorf("FieldValues() = %v, want %v", got, tt.want)
 			}
 		})
 	}
