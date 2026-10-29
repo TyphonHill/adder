@@ -54,15 +54,20 @@ type Scan struct {
 	Exclude      []string  `yaml:"exclude"`
 	IncludeTests bool      `yaml:"includeTests"`
 	Funcs        FuncMatch `yaml:"funcs"`
+	// Types selects type declarations instead of functions when set.
+	Types *TypeMatch `yaml:"types"`
 
 	// Pos is where the scan is declared, for reporting problems found while scanning.
 	Pos diag.Pos `yaml:"-"`
 }
 
-// Declaration kinds a function scan can select.
+// Declaration kinds, as reported on scan items and selected by kind filters.
 const (
-	KindFunc   = "func"
-	KindMethod = "method"
+	KindFunc      = "func"
+	KindMethod    = "method"
+	KindStruct    = "struct"
+	KindInterface = "interface"
+	KindType      = "type" // any other type declaration, such as `type Status int`
 )
 
 // FuncMatch filters declarations. Unset fields match every declaration.
@@ -76,7 +81,21 @@ type FuncMatch struct {
 	Receiver string `yaml:"receiver"`
 	// FirstParamType matches the first parameter's type, written with full import paths. Whitespace is ignored.
 	FirstParamType string `yaml:"firstParamType"`
+	// Directive matches declarations whose doc comment has //adder:<Directive>.
+	Directive string `yaml:"directive"`
 }
+
+// TypeMatch filters type declarations. Unset fields match every declaration.
+type TypeMatch struct {
+	Exported bool    `yaml:"exported"`
+	Name     Pattern `yaml:"name"`
+	// Kind limits the scan to structs, interfaces, or other types.
+	Kind      string `yaml:"kind"`
+	Directive string `yaml:"directive"`
+}
+
+// directiveName matches the names adder directives may use, which Go also recognizes as directives.
+var directiveName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // Output is a file rendered from a template with the results of every scan.
 type Output struct {
@@ -217,7 +236,14 @@ func (c *Config) validate(pos positions) error {
 				}
 			}
 		}
-		errs = append(errs, validateFuncs(name, scan.Funcs, at+".funcs", pos)...)
+		if scan.Types != nil {
+			if pos.has(at + ".funcs") {
+				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".types"), "scan %q: use funcs or types, not both", name))
+			}
+			errs = append(errs, validateTypes(name, *scan.Types, at+".types", pos)...)
+		} else {
+			errs = append(errs, validateFuncs(name, scan.Funcs, at+".funcs", pos)...)
+		}
 	}
 
 	seen := make(map[string]bool, len(c.Derive.Outputs))
@@ -257,6 +283,7 @@ func validateFuncs(name string, m FuncMatch, at string, pos positions) diag.List
 			Hint:    "kind is func or method",
 		})
 	}
+	errs = append(errs, validateDirective(name, m.Directive, at, pos)...)
 	if m.Receiver != "" {
 		if !token.IsIdentifier(m.Receiver) {
 			errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".receiver"), "scan %q: receiver %q must be a type name", name, m.Receiver))
@@ -266,6 +293,34 @@ func validateFuncs(name string, m FuncMatch, at string, pos positions) diag.List
 		}
 	}
 	return errs
+}
+
+// validateTypes checks the type filters of the scan called name.
+func validateTypes(name string, m TypeMatch, at string, pos positions) diag.List {
+	var errs diag.List
+	switch m.Kind {
+	case "", KindStruct, KindInterface, KindType:
+	default:
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at + ".kind"),
+			Message: fmt.Sprintf("scan %q: unknown type kind %q", name, m.Kind),
+			Hint:    "kind is struct, interface, or type",
+		})
+	}
+	return append(errs, validateDirective(name, m.Directive, at, pos)...)
+}
+
+func validateDirective(name, directive, at string, pos positions) diag.List {
+	if directive == "" || directiveName.MatchString(directive) {
+		return nil
+	}
+	return diag.List{{
+		Code:    diag.InvalidValue,
+		Pos:     pos.at(at + ".directive"),
+		Message: fmt.Sprintf("scan %q: directive %q is not a valid directive name", name, directive),
+		Hint:    "directive names are lowercase letters, digits, and hyphens, starting with a letter",
+	}}
 }
 
 // checkPattern reports directory patterns that are unsafe or malformed. "**" may only appear as a whole segment.
