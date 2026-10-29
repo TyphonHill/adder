@@ -4,6 +4,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-29
+
 ### Added
 
 - `adder derive` rebuilds files from scans of the repository's Go source, with `--dry-run` to preview and `--out` to write elsewhere.
@@ -14,3 +16,6 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Template functions with Sprout's names, including case conversion that understands acronyms and Go-style variants such as `toGoPascalCase`.
 - Diagnostics with stable codes, file positions, and hints; every problem is reported at once.
 - Exit codes: 0 for success, 1 for problems, 2 for usage mistakes, and 3 for stale outputs.
+
+[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/TyphonHill/adder/releases/tag/v0.1.0
