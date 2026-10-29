@@ -289,7 +289,7 @@ Go source alone says far more than names, so these additions parse files rather 
 
 - `kind: func` or `kind: method` limits a scan to plain functions or to methods.
 - `receiver: Worker` matches methods on `Worker` or `*Worker`.
-- `firstParamType: context.Context` matches the first parameter's type as written, with its package resolved through the file's imports, so `ctx context.Context` and `c context.Context` both match. Types are written with their full import path, such as `go.temporal.io/sdk/workflow.Context`. An import without an alias is assumed to use the last element of its path as its package name, ignoring a major version suffix such as `/v2`; packages that break that convention need type checking.
+- `firstParamType: context.Context` matches the first parameter's type as written, with its package resolved through the file's imports, so `ctx context.Context` and `c context.Context` both match. Types are written as Go writes them, with each package replaced by its full import path: `go.temporal.io/sdk/workflow.Context`, `*example.com/m/config.Config`, `[]string`. An import without an alias is assumed to use the package name goimports assumes: the last element of its path, without a major version suffix such as `/v2` or `.v3` and without a `go-` prefix. Packages that break that convention need type checking.
 - `directive: register` matches declarations whose doc comment has `//adder:register`.
 
 **Type declarations.** A scan can select types instead of functions, with a `types` block in place of `funcs`. It supports `exported`, `name`, `directive`, and `kind` (`struct`, `interface`, or any other type). Each scan selects exactly one kind of declaration.

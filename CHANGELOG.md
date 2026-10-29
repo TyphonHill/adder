@@ -4,6 +4,12 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- Directory patterns with `**`, which skip `testdata`, `vendor`, and hidden directories like `./...`, and `exclude` patterns.
+- Function filters `kind`, `receiver`, and `firstParamType`, which matches the first parameter's type through the file's imports.
+- Scan item fields `.Kind`, `.ImportPath`, `.Line`, `.Doc`, `.Signature`, `.Params`, and `.Results`.
+
 ## [0.1.0] - 2026-10-29
 
 ### Added

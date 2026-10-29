@@ -60,7 +60,7 @@ derive:
       path: drivers/drivers.gen.go
 ```
 
-The template reads the matches through `.Drivers`, the name of the scan. Each match has fields such as `.Name` and `.Package`, the directory it was found in:
+The template reads the matches through `.Drivers`, the name of the scan. Each match has fields such as `.Name`, `.Package`, and `.ImportPath`:
 
 ```gotemplate
 package drivers
@@ -68,7 +68,7 @@ package drivers
 import (
 	"{{ .Module }}/driver"
 {{- range .Drivers }}
-	"{{ $.Module }}/drivers/{{ .Package }}"
+	"{{ .ImportPath }}"
 {{- end }}
 )
 
@@ -154,21 +154,31 @@ Each entry under `derive.scans` selects function and method declarations. Its na
 
 | Field | Description |
 | --- | --- |
-| `dirs` | Directories to scan, relative to the repository root and written with forward slashes. Glob patterns such as `drivers/*` are allowed. Subdirectories are not scanned. |
+| `dirs` | Directories to scan, relative to the repository root and written with forward slashes. Glob patterns such as `drivers/*` are allowed, and `**` matches any number of directories, as in `internal/**/handlers`. Like `go`'s `./...`, wildcards skip `testdata`, `vendor`, and directories starting with `.` or `_`. Files adder generated are never scanned. |
+| `exclude` | Directories to leave out, in the same syntax as `dirs`. `internal/legacy/**` excludes a directory and everything below it. |
 | `includeTests` | Also scan `_test.go` files. Defaults to `false`. |
 | `funcs.exported` | Only match exported names. |
-| `funcs.firstParam` | Only match declarations whose first parameter has this name. |
 | `funcs.name` | Only match names containing a match for this regular expression. |
+| `funcs.kind` | `func` for plain functions only, or `method` for methods only. |
+| `funcs.receiver` | Only match methods on this type, with a value or pointer receiver. |
+| `funcs.firstParam` | Only match declarations whose first parameter has this name. |
+| `funcs.firstParamType` | Only match declarations whose first parameter has this type, written as Go writes it but with full import paths: `context.Context`, `go.temporal.io/sdk/workflow.Context`, `*Config`. |
 
 Every match is an item with these fields, sorted by name:
 
 | Field | Description |
 | --- | --- |
 | `.Name` | Declared name. |
+| `.Kind` | `func` or `method`. |
 | `.Receiver` | Receiver type for methods, empty for functions. |
 | `.Package` | Package name from the file's `package` clause. |
+| `.ImportPath` | The package's import path, empty when the repository has no `go.mod`. |
 | `.Dir` | Directory relative to the root. |
 | `.File` | File path relative to the root. |
+| `.Line` | Line of the declaration. |
+| `.Doc` | Doc comment, without directives. |
+| `.Signature` | Parameters and results as written, such as `(ctx context.Context) error`. |
+| `.Params`, `.Results` | Each parameter and result, with `.Name` and `.Type` as written. |
 
 ### Outputs
 
