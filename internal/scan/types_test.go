@@ -8,30 +8,6 @@ import (
 	"testing"
 )
 
-func TestAssumedName(t *testing.T) {
-	tests := []struct {
-		name       string
-		importPath string
-		want       string
-	}{
-		{name: "standard library", importPath: "context", want: "context"},
-		{name: "last element", importPath: "go.temporal.io/sdk/workflow", want: "workflow"},
-		{name: "major version suffix", importPath: "example.com/client/v2", want: "client"},
-		{name: "gopkg.in version", importPath: "gopkg.in/yaml.v3", want: "yaml"},
-		{name: "go- prefix", importPath: "github.com/mattn/go-sqlite3", want: "sqlite3"},
-		{name: "hyphenated name", importPath: "example.com/my-lib", want: "my"},
-		{name: "v without digits", importPath: "example.com/vault", want: "vault"},
-		{name: "version alone", importPath: "v2", want: "v2"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := assumedName(tt.importPath); got != tt.want {
-				t.Errorf("assumedName(%q) = %q, want %q", tt.importPath, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestFileImports(t *testing.T) {
 	tests := []struct {
 		name string

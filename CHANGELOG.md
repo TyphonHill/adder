@@ -15,6 +15,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - `adder new <generator>` creates files from generators declared in `adder.yaml`, with string and bool inputs as flags, from a JSON file, or from standard input. Inputs can be restricted with `pattern`, `values`, `valuesFrom`, and `unique`; files have templated paths, `when` and `unless` conditions, and an `ifExists` policy that never overwrites. Derived outputs are updated in the same run, and `--dry-run` previews everything.
 - `adder init` writes a starter `adder.yaml` with commented examples, never overwriting an existing one.
 - Commands find `adder.yaml` by walking up from the current directory, like `go` finds `go.mod`, so they work from anywhere in the repository.
+- Go files adder renders, both derived outputs and files from generators, lose the imports they never use, so templates can import everything a file might need.
 - `--diff` on `adder new`, `adder derive`, and `adder check` shows every change as a unified diff that `git apply` accepts, using a copy of the Go toolchain's diff code. On `new` and `derive` it implies `--dry-run`.
 - Diagnostic codes `unknown-generator`, `missing-input`, `invalid-input`, and `file-exists`, and a `skipped` change status.
 - Hints for missing fields in nested maps, such as `.Vars.Licence`, and for undefined templates, listing the names that exist.

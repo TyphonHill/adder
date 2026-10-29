@@ -21,6 +21,7 @@ adder.yaml ──► config ──► scan ──► render ──► plan ─�
 | `internal/derive` | Connect the steps above for `adder derive` and `adder check`. |
 | `internal/scaffold` | Resolve a generator's inputs, plan its new files, and derive outputs over them for `adder new`. |
 | `internal/textcase` | Case conversion, shared by template functions and input flag names. |
+| `internal/imports` | Package names for import paths, and removing unused imports from rendered Go. |
 | `internal/diff` | Unified diffs for previews, copied from the Go toolchain. |
 | `internal/diag` | Structured problems shared by every package. |
 | `internal/cli` | Commands, flags, output, and exit codes. |
@@ -323,6 +324,19 @@ Go source alone says far more than names, so these additions parse files rather 
 | `.Fields` | For structs, each field with `.Name`, `.Type`, and `.Tag`. |
 
 Items are a single type whose fields are empty when they do not apply, so templates and `fieldValues` work the same for every kind of declaration.
+
+### 21. Unused imports are removed, missing ones are not added
+
+Rendered Go files lose the imports they never refer to, after `gofmt`. Templates can list every import a file might need instead of wrapping each in `{{ if }}`. A package is referred to by its explicit name, or by the name goimports assumes from its path: the last element, skipping a major version such as `v2` and a `go-` prefix. Blank, dot, and cgo imports are always kept, and a name that might be a local variable keeps its import.
+
+Missing imports are not added. That needs to know which package a name like `rand` or `template` means, and goimports answers it by searching the module cache, so the output would depend on the machine. A built-in table of the standard library would make it deterministic, at the cost of output that can change between adder releases.
+
+| Considered | Why not |
+| --- | --- |
+| `golang.org/x/tools/imports` | Output would depend on the machine's module cache and the dependency's version ([decision 11](#11-go-versions-and-dependencies)). |
+| Pruning by type checking | Needs the packages to build, which generated code often cannot do before it exists. |
+
+**Why:** an unused import is a compile error, so removing one only changes output that was already broken, which makes it safe as a default.
 
 ## Compatibility
 

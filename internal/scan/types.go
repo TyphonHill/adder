@@ -5,52 +5,29 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
-	"path"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/TyphonHill/adder/internal/imports"
 )
 
 // fileImports maps the names a file refers to its imports by to their import paths.
 func fileImports(f *ast.File) map[string]string {
-	imports := make(map[string]string, len(f.Imports))
+	byName := make(map[string]string, len(f.Imports))
 	for _, spec := range f.Imports {
 		importPath, err := strconv.Unquote(spec.Path.Value)
 		if err != nil {
 			continue
 		}
-		name := assumedName(importPath)
+		name := imports.Name(importPath)
 		if spec.Name != nil {
 			name = spec.Name.Name
 		}
 		if name != "_" && name != "." {
-			imports[name] = importPath
+			byName[name] = importPath
 		}
 	}
-	return imports
-}
-
-// assumedName is the package name goimports assumes for an import path without an alias.
-func assumedName(importPath string) string {
-	base := path.Base(importPath)
-	if strings.HasPrefix(base, "v") {
-		if _, err := strconv.Atoi(base[1:]); err == nil {
-			if dir := path.Dir(importPath); dir != "." {
-				base = path.Base(dir)
-			}
-		}
-	}
-	base = strings.TrimPrefix(base, "go-")
-	if i := strings.IndexFunc(base, func(r rune) bool { return !identifierRune(r) }); i >= 0 {
-		base = base[:i]
-	}
-	return base
-}
-
-func identifierRune(r rune) bool {
-	return 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' || r == '_' ||
-		r >= utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r))
+	return byName
 }
 
 // qualifiedType writes a type expression the way Go does, with each package name replaced by its import path.

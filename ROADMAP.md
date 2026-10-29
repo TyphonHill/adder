@@ -76,7 +76,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Template line endings normalized, so output is identical on every operating system | ✅ |
 | Outputs confined to the root | ✅ |
 | `--out` to write somewhere else for previews | ✅ |
-| Fix imports automatically, goimports-style, so templates need not manage them | 🔜 v0.2 |
+| Remove unused imports from Go output, so templates need not guard each one ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)) | ✅ |
+| Add missing imports from a built-in table of the standard library | 💡 |
 | Shared template partials, such as `templates/partials/license.tmpl` | ✅ |
 | More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` | 🔜 v0.2 |
 | One output per item, with a templated path, for example a file per interface | 🔜 v0.3 |
