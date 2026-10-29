@@ -113,6 +113,7 @@ Running it again reports `unchanged` and leaves the file alone. Add a `drivers/g
 
 | Command | Description |
 | --- | --- |
+| `adder init` | Write a starter `adder.yaml` with commented examples of each section. |
 | `adder derive` | Run every scan and rewrite the derived outputs that changed. |
 | `adder check` | Report derived outputs that are out of date, without writing anything. Exits with status 3 when any are, so CI can catch a forgotten `adder derive`. |
 | `adder new <generator>` | Create files with a generator, then update the derived outputs. `adder new` lists the generators, and `adder new <generator> --help` shows its inputs. |
@@ -121,8 +122,10 @@ Global flags:
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--root` | `.` | Repository root that scans and outputs are relative to. |
+| `--root` | the directory holding `adder.yaml` | Repository root that scans and outputs are relative to. |
 | `-c`, `--config` | `<root>/adder.yaml` | Configuration file. Template paths resolve against its directory. |
+
+Without either flag, adder finds `adder.yaml` in the current directory or the nearest parent that has one, the way `go` finds `go.mod`, so commands work from anywhere in the repository. With only `--config`, the root is that file's directory.
 
 `derive` flags:
 

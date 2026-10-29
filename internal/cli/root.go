@@ -43,17 +43,31 @@ func usageArgs(validate cobra.PositionalArgs) cobra.PositionalArgs {
 	}
 }
 
-// globalOptions holds the flags shared by every subcommand.
+// globalOptions holds the flags shared by every subcommand. Empty means the flag was not given.
 type globalOptions struct {
 	root   string
 	config string
 }
 
-func (o *globalOptions) configPath() string {
-	if o.config != "" {
-		return o.config
+// load finds and loads the configuration, returning it with the repository root. The configuration is
+// <root>/adder.yaml with --root, the root is the configuration's directory with --config, and without either
+// adder.yaml is found by walking up from the current directory.
+func (o *globalOptions) load() (*config.Config, string, error) {
+	root, path := o.root, o.config
+	switch {
+	case path == "" && root == "":
+		found, err := config.Find(".")
+		if err != nil {
+			return nil, "", err
+		}
+		root, path = filepath.Dir(found), found
+	case path == "":
+		path = filepath.Join(root, config.FileName)
+	case root == "":
+		root = filepath.Dir(path)
 	}
-	return filepath.Join(o.root, config.FileName)
+	cfg, err := config.Load(path)
+	return cfg, root, err
 }
 
 // Main runs adder with args, reading stdin and writing to stdout and stderr, and returns the process exit code.
@@ -108,7 +122,7 @@ Generators and derived files are declared in adder.yaml at the repository root.`
 		},
 	}
 	addGlobalFlags(cmd, opts)
-	cmd.AddCommand(newDeriveCommand(opts), newCheckCommand(opts), newNewCommand(opts))
+	cmd.AddCommand(newInitCommand(opts), newDeriveCommand(opts), newCheckCommand(opts), newNewCommand(opts))
 	return cmd
 }
 
@@ -117,7 +131,7 @@ func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
 	cmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return &usageError{err, c.CommandPath()}
 	})
-	cmd.PersistentFlags().StringVar(&opts.root, "root", ".", "repository root that scans and outputs are relative to")
+	cmd.PersistentFlags().StringVar(&opts.root, "root", "", "repository root that scans and outputs are relative to (default: the directory holding "+config.FileName+", found from the current directory)")
 	cmd.PersistentFlags().StringVarP(&opts.config, "config", "c", "", "configuration file (default <root>/"+config.FileName+")")
 }
 

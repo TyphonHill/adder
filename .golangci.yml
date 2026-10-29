@@ -20,6 +20,7 @@ linters:
         - G304
         # Generated sources get normal source tree permissions (0755 dirs, 0644 files).
         - G301
+        - G302
         - G306
     revive:
       rules:

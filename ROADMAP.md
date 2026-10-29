@@ -33,7 +33,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Strict decoding: unknown keys and invalid patterns fail at load time | ✅ |
 | Every validation problem reported at once, with its line and column | ✅ |
 | Paths are slash-separated, relative, confined to their root, and cleaned on load | ✅ |
-| Find `adder.yaml` by walking up from the current directory, like `go` finds `go.mod` (one file name, [design 12](docs/design.md#12-one-configuration-file-at-the-root)) | 🔜 v0.2 |
+| Find `adder.yaml` by walking up from the current directory, like `go` finds `go.mod` (one file name, [design 12](docs/design.md#12-one-configuration-file-at-the-root)) | ✅ |
 | JSON Schema for `adder.yaml`, published to SchemaStore for editor completion and validation | 🔜 v0.2 |
 | `adder validate`: check the configuration and templates without writing anything | 🔜 v0.2 |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
@@ -125,7 +125,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | `adder derive --dry-run` | ✅ |
 | Documented exit codes for success, error, usage, and stale outputs | ✅ |
 | `adder check`: exit with status 3 when derived files are stale, for CI and repositories that commit them | ✅ |
-| `adder init`: create a starter `adder.yaml` and example template | 🔜 v0.2 |
+| `adder init`: create a starter `adder.yaml` with commented examples of each section | ✅ |
 | Shell completion for commands, generator names, and inputs | 🔜 v0.2 |
 | `--quiet`, `--verbose`, and `NO_COLOR` support | 🔜 v0.2 |
 | `adder derive --watch` for a fast edit loop | 💡 |

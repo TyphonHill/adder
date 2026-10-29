@@ -136,7 +136,7 @@ Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml
 
 ### 12. One configuration file at the root
 
-The configuration is a single, visible `adder.yaml` at the repository root. Only that name is accepted. From v0.1, adder will find it by walking up from the current directory, the way `go` finds `go.mod`. Templates can live anywhere; their paths are relative to the configuration file.
+The configuration is a single, visible `adder.yaml` at the repository root. Only that name is accepted. adder finds it by walking up from the current directory, the way `go` finds `go.mod`, and its directory is the root. `--root` looks only in that directory, and `--config` names the file, making its directory the root unless `--root` is also given. Templates can live anywhere; their paths are relative to the configuration file.
 
 **Why:** a root file is the norm for Go tools (`sqlc.yaml`, `buf.yaml`, `gqlgen.yml`, `.golangci.yml`), and a visible name signals that the file describes the repository's conventions rather than a tool's settings. Accepting other names later is additive; dropping one would break people.
 

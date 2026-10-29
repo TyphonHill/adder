@@ -395,6 +395,51 @@ func TestParseErrors(t *testing.T) {
 	}
 }
 
+func TestFind(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"a/b/c", "nested/adder.yaml"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, file := range []string{"adder.yaml", "a/b/adder.yaml"} {
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(file)), []byte("version: 1\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tests := []struct {
+		name string
+		cwd  string // relative to root
+		dir  string
+		want string // relative to cwd, or absolute when dir is
+	}{
+		{name: "in the directory", cwd: ".", dir: ".", want: "adder.yaml"},
+		{name: "in a parent", cwd: "a", dir: ".", want: filepath.Join("..", "adder.yaml")},
+		{name: "the nearest one wins", cwd: "a/b/c", dir: ".", want: filepath.Join("..", "adder.yaml")},
+		{name: "a relative directory", cwd: ".", dir: filepath.Join("a", "b", "c"), want: filepath.Join("a", "b", "adder.yaml")},
+		{name: "directories with the name are skipped", cwd: "nested", dir: ".", want: filepath.Join("..", "adder.yaml")},
+		{name: "an absolute directory", cwd: ".", dir: filepath.Join(root, "a"), want: filepath.Join(root, "adder.yaml")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Chdir(filepath.Join(root, filepath.FromSlash(tt.cwd)))
+			got, err := Find(tt.dir)
+			if err != nil || got != tt.want {
+				t.Errorf("Find(%q) = %q, %v, want %q", tt.dir, got, err, tt.want)
+			}
+		})
+	}
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := Find(t.TempDir())
+		list := diag.From(err)
+		if len(list) != 1 || list[0].Code != diag.IO || !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("Find() error = %v, want an io problem wrapping fs.ErrNotExist", err)
+		}
+	})
+}
+
 func TestLoad(t *testing.T) {
 	tests := []struct {
 		name     string

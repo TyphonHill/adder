@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/derive"
 	"github.com/TyphonHill/adder/internal/plan"
 )
@@ -21,11 +20,11 @@ func newDeriveCommand(opts *globalOptions) *cobra.Command {
 Files whose content has not changed are left untouched.`,
 		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(opts.configPath())
+			cfg, root, err := opts.load()
 			if err != nil {
 				return err
 			}
-			derived.Root = opts.root
+			derived.Root = root
 			derived.DryRun = derived.DryRun || showDiff
 			p, err := derive.Run(cmd.Context(), cfg, derived)
 			if err != nil {
