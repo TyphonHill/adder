@@ -37,6 +37,7 @@ const (
 	FileExists         Code = "file-exists"
 	Usage              Code = "usage"
 	GoldenMismatch     Code = "golden-mismatch"
+	TypeCheck          Code = "type-check"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.

@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"flag"
+	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
@@ -17,8 +19,16 @@ func TestMain(m *testing.M) {
 }
 
 func TestScripts(t *testing.T) {
+	goEnv := goEnvironment(t)
 	testscript.Run(t, testscript.Params{
-		Dir:                 "testdata/script",
+		Dir: "testdata/script",
+		// Type-aware scans run the go command, which needs the caches of the go running the tests.
+		Setup: func(env *testscript.Env) error {
+			for key, value := range goEnv {
+				env.Setenv(key, value)
+			}
+			return nil
+		},
 		UpdateScripts:       *update,
 		RequireExplicitExec: true,
 		RequireUniqueNames:  true,
@@ -49,4 +59,19 @@ func exits(ts *testscript.TestScript, neg bool, args []string) {
 	if got != want {
 		ts.Fatalf("%s exited with status %d, want %d", args[1], got, want)
 	}
+}
+
+// goEnvironment returns the go command's cache and path settings, which scripts inherit.
+func goEnvironment(t *testing.T) map[string]string {
+	t.Helper()
+	keys := []string{"GOCACHE", "GOMODCACHE", "GOPATH", "GOROOT"}
+	out, err := exec.Command("go", append([]string{"env"}, keys...)...).Output()
+	if err != nil {
+		t.Fatalf("go env: %v", err)
+	}
+	env := map[string]string{"PATH": os.Getenv("PATH")}
+	for i, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
+		env[keys[i]] = strings.TrimSpace(line)
+	}
+	return env
 }

@@ -243,6 +243,9 @@ Each entry under `derive.scans` selects declarations: functions and methods by d
 | `values.name` | Regular expression the name must match. |
 | `values.type` | The type as written, such as `Color`. In a `const` group, a name without its own type and value repeats the one before it, as Go does, so every member of an `iota` enum has its type. |
 | `values.directive` | Only match names with this directive, in their own doc comment or in their group's. A name's own directive replaces the group's directive of the same name. |
+| `typeCheck` | Load type information, for the filters below that compare types. Runs the `go` command offline; see [type-aware scans](#type-aware-scans). |
+| `platform` | With `typeCheck`, the `GOOS/GOARCH` to check, such as `windows/arm64`. Defaults to `linux/amd64`. |
+| `types.implements` | With `typeCheck`, only types whose values or pointers implement this interface, written with its import path, such as `io.Writer` or `example.com/m/driver.Driver`, or `error`. Interfaces and generic types are never selected. |
 | `files.name` | Regular expression the file name, with its extension, must match, such as `^[0-9]+_.*\.sql$` for migrations. Without it, every file is listed. Hidden files, symbolic links, and files adder generated are skipped, and contents are not read. |
 
 Files that no platform can build are skipped, such as those marked `//go:build ignore` or with a custom tag that `buildTags` does not list. Platform tags such as `linux` or `amd64` may take any value, so results are the same on every machine, and file name suffixes such as `_windows.go` never exclude a file.
@@ -266,9 +269,36 @@ Every match is an item with these fields, sorted by name:
 | `.Type` | For constants and variables, the type as written, repeated through a `const` group. |
 | `.Value` | For constants and variables, the value as written. Empty for a constant that repeats the one before it, and when several names share one value, as in `a, b = f()`. |
 | `.Iota` | For constants, the position in their `const` group, which is their value of `iota`. |
+| `.Pointer` | For types selected by `implements`, true when only a pointer to the type implements the interface, so a registry can write `&{{ .Name }}{}`. |
 | `.Directives` | The arguments of each [directive](#directives), by directive name. |
 
 Fields that do not apply to a declaration are empty.
+
+### Type-aware scans
+
+A scan with `typeCheck: true` loads the scanned packages' types with the Go toolchain, so filters compare types rather than how they are written:
+
+```yaml
+scans:
+  Drivers:
+    dirs: ["drivers/*"]
+    typeCheck: true
+    types: {implements: example.com/store/driver.Driver}
+```
+
+```gotemplate
+var All = []driver.Driver{
+{{- range .Drivers }}
+	{{ if .Pointer }}&{{ end }}{{ .Package }}.{{ .Name }}{},
+{{- end }}
+}
+```
+
+- `implements` selects every type that implements the interface, whatever it is called.
+- `funcs.firstParamType` matches through import aliases, dot imports, and type aliases.
+- `values.type` matches a constant's or variable's type, even when it is inferred, as in `const Red = Color(1)`. A type in the scanned package can be written without its import path.
+
+Type-aware scans are slower than parsing, and need the `go` command on `PATH`, code that compiles, and its dependencies already downloaded: adder never downloads anything, and reports a missing dependency as a `type-check` problem. Every run checks the same platform, `linux/amd64` unless `platform` says otherwise, with cgo off and nothing from your environment that changes which files are built, so output is the same on every machine. `adder new` type checks the files it is about to create, so registries pick up a new type in the same run.
 
 ### Directives
 

@@ -32,9 +32,13 @@ type Sources struct {
 	// Existing holds the current outputs. Nil means none exist yet.
 	Existing fs.FS
 
-	// RepoDir, TemplatesDir, and ExistingDir name the directories behind each file system.
-	// They only affect the file paths reported in diagnostics and may be empty.
+	// RepoDir, TemplatesDir, and ExistingDir name the directories behind each file system. They affect the file
+	// paths reported in diagnostics, and type-aware scans read the repository from RepoDir, so it must be set
+	// for them.
 	RepoDir, TemplatesDir, ExistingDir string
+
+	// Overlay holds files Repo has that are not on disk yet, by slash-separated path, for type-aware scans.
+	Overlay map[string][]byte
 }
 
 // Plan computes every derived output and how it differs from the existing files, without writing anything.
@@ -287,7 +291,12 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 	var problems diag.List
 	for _, name := range slices.Sorted(maps.Keys(cfg.Derive.Scans)) {
 		s := cfg.Derive.Scans[name]
-		items, err := scan.Run(ctx, src.Repo, module, s)
+		var items []scan.Item
+		if s.TypeCheck {
+			items, err = scan.RunTyped(ctx, scan.TypedSource{FS: src.Repo, Dir: src.RepoDir, Overlay: src.Overlay}, s)
+		} else {
+			items, err = scan.Run(ctx, src.Repo, module, s)
+		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}

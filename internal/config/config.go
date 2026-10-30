@@ -74,6 +74,10 @@ type Scan struct {
 	Values *ValueMatch `yaml:"values"`
 	// Files lists files instead of Go declarations when set.
 	Files *FileMatch `yaml:"files"`
+	// TypeCheck loads type information, for filters that compare types rather than spelling.
+	TypeCheck bool `yaml:"typeCheck"`
+	// Platform is the GOOS/GOARCH a type-aware scan checks, linux/amd64 by default.
+	Platform string `yaml:"platform"`
 
 	// Pos is where the scan is declared, for reporting problems found while scanning.
 	Pos diag.Pos `yaml:"-"`
@@ -113,6 +117,9 @@ type TypeMatch struct {
 	// Kind limits the scan to structs, interfaces, or other types.
 	Kind      string `yaml:"kind"`
 	Directive string `yaml:"directive"`
+	// Implements selects types whose values or pointers implement this interface, written with its full import
+	// path, such as io.Writer or example.com/m/driver.Driver. It needs TypeCheck.
+	Implements string `yaml:"implements"`
 }
 
 // ValueMatch filters constant and variable declarations. Unset fields match every declaration.
@@ -132,6 +139,13 @@ type FileMatch struct {
 	// Name matches the file name, including its extension.
 	Name Pattern `yaml:"name"`
 }
+
+var (
+	// platform is a GOOS/GOARCH pair, such as windows/arm64.
+	platform = regexp.MustCompile(`^[a-z0-9]+/[a-z0-9]+$`)
+	// interfaceName is an interface written with its full import path, or error.
+	interfaceName = regexp.MustCompile(`^(error|\S+\.[A-Za-z_][A-Za-z0-9_]*)$`)
+)
 
 // directiveName matches the names adder directives may use, which Go also recognizes as directives.
 var directiveName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -380,6 +394,7 @@ func (c *Config) validate(pos positions) error {
 				Hint:    "a scan selects functions, types, or values, or lists files, with one of funcs, types, values, or files",
 			})
 		}
+		errs = append(errs, validateTypeCheck(name, scan, at, pos)...)
 		switch {
 		case scan.Types != nil:
 			errs = append(errs, validateTypes(name, *scan.Types, at+".types", pos)...)
@@ -503,6 +518,49 @@ func validateFuncs(name string, m FuncMatch, at string, pos positions) diag.List
 }
 
 // validateTypes checks the type filters of the scan called name.
+// validateTypeCheck checks the settings that only type-aware scans use.
+func validateTypeCheck(name string, scan Scan, at string, pos positions) diag.List {
+	var errs diag.List
+	needs := func(key string) {
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at + "." + key),
+			Message: fmt.Sprintf("scan %q: %s needs type information", name, key),
+			Hint:    "add typeCheck: true to the scan, which runs the Go toolchain offline to load types",
+		})
+	}
+	if scan.Types != nil && scan.Types.Implements != "" {
+		if !scan.TypeCheck {
+			needs("types.implements")
+		}
+		if !interfaceName.MatchString(scan.Types.Implements) {
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.InvalidValue,
+				Pos:     pos.at(at + ".types.implements"),
+				Message: fmt.Sprintf("scan %q: implements %q must name an interface with its import path", name, scan.Types.Implements),
+				Hint:    "such as io.Writer or example.com/m/driver.Driver",
+			})
+		}
+	}
+	if scan.Platform != "" {
+		if !scan.TypeCheck {
+			needs("platform")
+		}
+		if !platform.MatchString(scan.Platform) {
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.InvalidValue,
+				Pos:     pos.at(at + ".platform"),
+				Message: fmt.Sprintf("scan %q: platform %q must be GOOS/GOARCH", name, scan.Platform),
+				Hint:    "such as windows/arm64",
+			})
+		}
+	}
+	if scan.TypeCheck && scan.Files != nil {
+		errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".typeCheck"), "scan %q: typeCheck does not apply to a file scan", name))
+	}
+	return errs
+}
+
 func validateValues(name string, m ValueMatch, at string, pos positions) diag.List {
 	var errs diag.List
 	switch m.Kind {

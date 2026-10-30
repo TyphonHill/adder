@@ -86,6 +86,7 @@ Positions follow two rules:
 | `file-exists` | A generator would create a file that already exists. |
 | `usage` | With `--json`, adder was invoked incorrectly, such as with an unknown flag. |
 | `golden-mismatch` | A generator test's files differ from its golden files. |
+| `type-check` | A type-aware scan could not load its packages: code that does not type check, a missing dependency, or no `go` command. |
 
 **Why:** error text is for people and changes freely, but codes and positions are for tools. Keeping both from the start means JSON output, editor squiggles, and documentation links need no rework later.
 
@@ -624,10 +625,11 @@ Scans with `typeCheck: true` load their packages with `golang.org/x/tools/go/pac
 | `GOOS`, `GOARCH` | `linux`, `amd64`, or the scan's `platform`, such as `platform: windows/arm64` | Files for different platforms cannot be checked together, so one platform is chosen, the same on every machine. |
 | `CGO_ENABLED` | `0` | cgo runs a C compiler with flags from the source, and its results depend on the machine. |
 | `GOFLAGS` | `-mod=readonly`, plus `-tags` from the scan's `buildTags` | Nothing from the environment changes which files are checked. |
-| `GOPROXY`, `GOTOOLCHAIN` | `off`, `local` | Nothing is downloaded: a missing dependency or a newer toolchain is reported, not fetched. |
+| `GOPROXY` | `off` | Nothing is downloaded: a missing dependency is reported, not fetched. |
+| `GOTOOLCHAIN` | `auto` | The toolchain `go.mod` asks for is used when the `go` on `PATH` is older, as `go` does, but only from the module cache, since `GOPROXY` is off. Forcing `local` would break every repository that relies on toolchain switching. |
 | `GOWORK` | the root's `go.work` if it has one, otherwise `off` | A committed workspace is honored; a local one above the repository is not. |
 
-The parse-based rule for build constraints ([decision 27](#27-build-constraints-in-scans)) does not apply to these scans, since the platform decides. Running `go list` and the compiler never executes the repository's code, and with cgo off no C compiler runs either ([principle 7](../ROADMAP.md#principles)).
+The parse-based rule for build constraints ([decision 27](#27-build-constraints-in-scans)) does not apply to these scans, since the platform decides; a directory whose files are all for other platforms is scanned and has nothing to find. With `includeTests`, each package's test variant is loaded, so its `_test.go` files and its external test package are scanned too. Running `go list` and the compiler never executes the repository's code, and with cgo off no C compiler runs either ([principle 7](../ROADMAP.md#principles)).
 
 **Filters.** On a scan with `typeCheck: true`:
 
@@ -637,7 +639,7 @@ The parse-based rule for build constraints ([decision 27](#27-build-constraints-
 
 **Generators.** `adder new` passes the files it is about to create to the loader as an overlay, so type-aware scans see them before they are written, as parse-based scans do.
 
-**Problems.** Code that does not type check, a missing dependency, and a missing `go` command are `type-check` problems, at the position the toolchain reports. adder's own outputs are type checked with their package, since the code needs them, but never become items.
+**Problems.** Code that does not type check, a missing dependency, and a missing `go` command are `type-check` problems, at the position the toolchain reports. Each is reported once: the compiler's copy of a type error is dropped, and so is the "could not import" error in a package that imports one that failed, whose own problem says why. adder's own outputs are type checked with their package, since the code needs them, but never become items.
 
 | Considered | Why not |
 | --- | --- |

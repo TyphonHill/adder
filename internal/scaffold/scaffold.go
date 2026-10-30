@@ -38,6 +38,7 @@ func Plan(ctx context.Context, cfg *config.Config, src derive.Sources, name stri
 	if gen := cfg.Generators[name]; gen.Derive == nil || *gen.Derive {
 		withNew := src
 		withNew.Repo = overlay{base: src.Repo, files: created}
+		withNew.Overlay = created
 		derived, err := derive.Plan(ctx, cfg, withNew)
 		if err != nil {
 			return nil, err
