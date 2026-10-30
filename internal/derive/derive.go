@@ -197,7 +197,7 @@ func staleFiles(ctx context.Context, existing fs.FS, out config.Output, produced
 		case ctx.Err() != nil:
 			return ctx.Err()
 		case entry.IsDir():
-			if name != dir && scan.Ignored(entry.Name()) {
+			if name != dir && (scan.Ignored(entry.Name()) || scan.Boundary(existing, name)) {
 				return fs.SkipDir
 			}
 			return nil

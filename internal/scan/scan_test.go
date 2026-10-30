@@ -781,3 +781,40 @@ func diagCode(err error) diag.Code {
 	}
 	return ""
 }
+
+func TestRunBoundaries(t *testing.T) {
+	fsys := fstest.MapFS{
+		"services/core/c.go":      file("package core\n\nfunc F() {}\n"),
+		"services/api/adder.yaml": file("version: 1\n"),
+		"services/api/h/h.go":     file("package h\n\nfunc F() {}\n"),
+		"services/web/go.mod":     file("module example.com/web\n"),
+		"services/web/main.go":    file("package web\n\nfunc F() {}\n"),
+		"services/web/w/w.go":     file("package w\n\nfunc F() {}\n"),
+	}
+	tests := []struct {
+		name string
+		dirs []string
+		want []string // "dir import-path"
+	}{
+		{name: "double star stops at nested configurations and modules", dirs: []string{"services/**"}, want: []string{"services/core example.com/m/services/core"}},
+		{name: "a wildcard stops there too", dirs: []string{"services/*"}, want: []string{"services/core example.com/m/services/core"}},
+		{name: "a nested module named outright", dirs: []string{"services/web"}, want: []string{"services/web example.com/web"}},
+		{name: "a package in a nested module", dirs: []string{"services/web/w"}, want: []string{"services/web/w example.com/web/w"}},
+		{name: "a nested configuration named outright", dirs: []string{"services/api/h"}, want: []string{"services/api/h example.com/m/services/api/h"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			items, err := Run(t.Context(), fsys, "example.com/m", config.Scan{Dirs: tt.dirs})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, it := range items {
+				got = append(got, it.Dir+" "+it.ImportPath)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("items = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

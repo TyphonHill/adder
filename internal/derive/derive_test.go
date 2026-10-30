@@ -404,6 +404,8 @@ func TestPlanEach(t *testing.T) {
 				"elsewhere/new_store_mock.gen.go":  generated("mock.go.tmpl", "elsewhere"),
 				"stores/testdata/x_mock.gen.go":    generated("mock.go.tmpl", "x"),
 				"stores/.hidden/x_mock.gen.go":     generated("mock.go.tmpl", "x"),
+				"stores/nested/go.mod":             {Data: []byte("module example.com/nested\n")},
+				"stores/nested/x_mock.gen.go":      generated("mock.go.tmpl", "x"),
 				"stores/link_mock.gen.go":          {Data: []byte("a/new_store_mock.gen.go"), Mode: fs.ModeSymlink},
 			},
 			path:        "stores/{{ .Item.Dir }}_mock.gen.go",

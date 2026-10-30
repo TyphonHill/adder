@@ -61,10 +61,15 @@ type globalOptions struct {
 // <root>/adder.yaml with --root, the root is the configuration's directory with --config, and without either
 // adder.yaml is found by walking up from the current directory.
 func (o *globalOptions) load() (*config.Config, string, error) {
+	return o.loadFrom(".")
+}
+
+// loadFrom is load, finding adder.yaml from dir rather than the current directory.
+func (o *globalOptions) loadFrom(dir string) (*config.Config, string, error) {
 	root, path := o.root, o.config
 	switch {
 	case path == "" && root == "":
-		found, err := config.Find(".")
+		found, err := config.Find(dir)
 		if err != nil {
 			return nil, "", err
 		}
@@ -95,6 +100,15 @@ func Main(ctx context.Context, version string, args []string, stdin io.Reader, s
 	}
 	if err == nil {
 		return ExitOK
+	}
+	if many, ok := errors.AsType[*configsError](err); ok {
+		switch {
+		case many.usage:
+			return ExitUsage
+		case many.failed:
+			return ExitError
+		}
+		return ExitStale
 	}
 	if _, ok := errors.AsType[*usageError](err); ok || invocationProblem(err) {
 		return ExitUsage
@@ -173,6 +187,15 @@ func printError(w io.Writer, err error, color bool) {
 	}
 	if stale, ok := errors.AsType[*staleError](err); ok {
 		fmt.Fprintf(w, "adder: %v\n", stale)
+		return
+	}
+	if many, ok := errors.AsType[*configsError](err); ok {
+		if len(many.problems) > 0 {
+			printError(w, many.problems, color)
+		}
+		if many.stale > 0 {
+			printError(w, &staleError{count: many.stale}, color)
+		}
 		return
 	}
 	for _, d := range diag.From(err) {

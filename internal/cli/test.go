@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path"
 	"slices"
 
 	"github.com/spf13/cobra"
@@ -39,72 +40,99 @@ named, and compares the files each generator creates with the files under its wa
 against the repository like --dry-run and writes nothing, unless --update rewrites the want directories.`,
 		ValidArgsFunction: completeGenerators(opts, 0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rep := &testReport{Tests: []testResultReport{}}
-			opts.report = rep
-			cfg, root, err := opts.load()
-			if err != nil {
-				return err
-			}
-			for _, name := range args {
-				if _, ok := cfg.Generators[name]; !ok {
-					return unknownGenerator(generatorsCommand(opts, cfg, root), cfg, name)
+			var names, patterns []string
+			for _, arg := range args {
+				if isPattern(arg) {
+					patterns = append(patterns, arg)
+				} else {
+					names = append(names, arg)
 				}
 			}
-			names := args
-			if len(names) == 0 {
-				names = slices.Sorted(maps.Keys(cfg.Generators))
-			}
-
-			src, closeSources, err := derive.Open(cfg, root)
-			if err != nil {
-				return err
-			}
-			defer closeSources()
-			var results []*scaffold.TestResult
-			for _, name := range slices.Compact(slices.Sorted(slices.Values(names))) {
-				for _, test := range cfg.Generators[name].Tests {
-					res, err := scaffold.Test(cmd.Context(), cfg, src, name, test)
-					if err != nil {
-						return err
+			found := make(map[string]bool)
+			newReport := func() report { return &testReport{Tests: []testResultReport{}} }
+			err := runConfigs(cmd, opts, patterns, newReport, func(run configRun, r report) error {
+				return runTests(cmd, opts, run, r.(*testReport), names, len(patterns) > 0, found, update)
+			})
+			if len(patterns) > 0 && err == nil {
+				for _, name := range names {
+					if !found[name] {
+						return diag.Errorf(diag.UnknownGenerator, diag.Pos{}, "unknown generator %q: no configuration matched by the patterns has it", name)
 					}
-					results = append(results, res)
-					rep.Tests = append(rep.Tests, testResultReport{
-						Generator: name,
-						Name:      test.Name,
-						Passed:    res.Passed(),
-						Changes:   changesReport(res.Changes, true),
-					})
 				}
 			}
-
-			if update {
-				if err := updateGolden(cmd.Context(), cfg, results); err != nil {
-					return err
-				}
-				if !opts.json {
-					printUpdates(opts.printer(cmd.OutOrStdout()), results)
-				}
-				return nil
-			}
-			if !opts.json {
-				printTests(opts.printer(cmd.OutOrStdout()), results)
-			}
-			var failures diag.List
-			for _, res := range results {
-				if !res.Passed() {
-					failures = append(failures, &diag.Diagnostic{
-						Code:    diag.GoldenMismatch,
-						Pos:     res.Test.Pos,
-						Message: fmt.Sprintf("test %s/%s: the generator's files differ from %s", res.Generator, res.Test.Name, res.Test.Want),
-						Hint:    "run adder test --update to accept what the generator creates now, then review the diff",
-					})
-				}
-			}
-			return failures.Err()
+			return err
 		},
 	}
 	cmd.Flags().BoolVar(&update, "update", false, "rewrite the want directories with what the generators create now")
 	return cmd
+}
+
+// runTests runs the tests of the named generators, or of every generator, in one configuration. With several
+// configurations, a named generator a configuration lacks is skipped there, and found records the ones seen.
+func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testReport, names []string, several bool, found map[string]bool, update bool) error {
+	cfg := run.cfg
+	var selected []string
+	for _, name := range names {
+		switch _, ok := cfg.Generators[name]; {
+		case ok:
+			selected = append(selected, name)
+			found[name] = true
+		case !several:
+			return unknownGenerator(generatorsCommand(opts, cfg, run.root), cfg, name)
+		}
+	}
+	if len(names) == 0 {
+		selected = slices.Sorted(maps.Keys(cfg.Generators))
+	}
+
+	src, closeSources, err := derive.Open(cfg, run.root)
+	if err != nil {
+		return err
+	}
+	defer closeSources()
+	var results []*scaffold.TestResult
+	for _, name := range slices.Compact(slices.Sorted(slices.Values(selected))) {
+		for _, test := range cfg.Generators[name].Tests {
+			res, err := scaffold.Test(cmd.Context(), cfg, src, name, test)
+			if err != nil {
+				return err
+			}
+			results = append(results, res)
+			rep.Tests = append(rep.Tests, testResultReport{
+				Generator: name,
+				Name:      test.Name,
+				Passed:    res.Passed(),
+				Changes:   changesReport(res.Changes, true),
+			})
+		}
+	}
+
+	out := opts.printer(cmd.OutOrStdout())
+	out.prefix = run.prefix
+	if update {
+		if err := updateGolden(cmd.Context(), cfg, results); err != nil {
+			return err
+		}
+		if !opts.json {
+			printUpdates(out, results)
+		}
+		return nil
+	}
+	if !opts.json {
+		printTests(out, results)
+	}
+	var failures diag.List
+	for _, res := range results {
+		if !res.Passed() {
+			failures = append(failures, &diag.Diagnostic{
+				Code:    diag.GoldenMismatch,
+				Pos:     res.Test.Pos,
+				Message: fmt.Sprintf("test %s/%s: the generator's files differ from %s", res.Generator, res.Test.Name, res.Test.Want),
+				Hint:    "run adder test --update to accept what the generator creates now, then review the diff",
+			})
+		}
+	}
+	return failures.Err()
 }
 
 func printTests(p *printer, results []*scaffold.TestResult) {
@@ -117,7 +145,7 @@ func printTests(p *printer, results []*scaffold.TestResult) {
 		if !res.Passed() {
 			status, color = "FAIL", red
 		}
-		p.printf("%s  %s/%s\n", p.paint(color, status), res.Generator, res.Test.Name)
+		p.printf("%s  %s\n", p.paint(color, status), path.Join(p.prefix, res.Generator, res.Test.Name))
 	}
 	if !p.quiet {
 		for _, res := range results {

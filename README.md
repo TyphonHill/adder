@@ -160,6 +160,24 @@ In a terminal, statuses and problem codes are in color. Set `NO_COLOR` to turn c
 | `--diff` | Also show each change as a unified diff, without writing anything. The output is a patch that `git apply` accepts. |
 | `--inputs <file>` | Read inputs from a JSON object keyed by input name, such as `{"name": "gcs", "cache": true}`. Use `-` for standard input. Flags override it. |
 
+### Monorepos
+
+A repository can hold several `adder.yaml` files, such as one per service. Each is independent, with its own directory as its root. Wildcards in scan directories, and the search for stale files, stop at directories with their own `adder.yaml` or `go.mod`, and `.ImportPath` follows the nearest `go.mod`, so a nested module's items get its own module path.
+
+`derive`, `check`, `list`, and `test` take directory patterns, as `go` does:
+
+```console
+$ adder check ./...
+would be updated    services/api/drivers/drivers.gen.go
+adder: 1 derived file is out of date; run 'adder derive' to update it
+```
+
+- `./...` runs every `adder.yaml` at or below the current directory, skipping `testdata`, `vendor`, and hidden directories, and `services/api` runs one. Without arguments, commands use the nearest `adder.yaml`, as before.
+- Paths are shown from the current directory, a problem in one configuration does not stop the others, and the exit status is the most serious: 2, then 1, then 3.
+- With `--json`, the object has `configs`, one entry per configuration with its `config` path and the command's usual fields, and `problems` for anything that concerns no one configuration.
+- `adder test ./... driver` runs the `driver` tests of every configuration that has the generator.
+- `adder explain <file>` uses the `adder.yaml` nearest the file.
+
 ### Errors and exit codes
 
 Problems are reported with their location and a stable code, and adder reports every problem it finds rather than stopping at the first:

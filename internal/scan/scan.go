@@ -64,7 +64,8 @@ type Field struct {
 // Files adder generated are skipped, so outputs never feed back into scans; files from other generators are scanned.
 // Problems with the scan itself carry no position; problems in a file carry that file's path within fsys.
 func Run(ctx context.Context, fsys fs.FS, module string, s config.Scan) ([]Item, error) {
-	dirs, err := expandDirs(fsys, s)
+	l := newListing(fsys)
+	dirs, err := expandDirs(l, s)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func Run(ctx context.Context, fsys fs.FS, module string, s config.Scan) ([]Item,
 	fset := token.NewFileSet()
 	var items []Item
 	for _, dir := range dirs {
-		found, err := scanDir(ctx, fsys, fset, module, dir, s)
+		found, err := scanDir(ctx, l, fset, module, dir, s)
 		if err != nil {
 			return nil, err
 		}
@@ -94,14 +95,16 @@ func sortItems(items []Item) {
 	})
 }
 
-func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir string, s config.Scan) ([]Item, error) {
-	entries, err := fs.ReadDir(fsys, dir)
+func scanDir(ctx context.Context, l *listing, fset *token.FileSet, module, dir string, s config.Scan) ([]Item, error) {
+	fsys := l.fsys
+	entries, err := l.read(dir)
 	if err != nil {
 		return nil, diag.Wrap(diag.IO, diag.Pos{File: dir}, err)
 	}
 	if s.Files != nil {
 		return fileItems(ctx, fsys, dir, entries, *s.Files)
 	}
+	pkgPath := l.importPath(module, dir)
 
 	var items []Item
 	for _, entry := range entries {
@@ -136,7 +139,7 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir s
 			continue
 		}
 
-		base := Item{Package: parsed.Name.Name, ImportPath: importPath(module, dir), Dir: dir, File: file}
+		base := Item{Package: parsed.Name.Name, ImportPath: pkgPath, Dir: dir, File: file}
 		found, err := declItems(fset, parsed, s, base, nil)
 		if err != nil {
 			return nil, err
