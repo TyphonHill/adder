@@ -1,8 +1,9 @@
 # A repository's own build of adder adds its packs' template functions to every template.
+# The module requires what adder does, so the build needs only the modules adder's own build downloaded.
 env GOPROXY=off
-exec go mod edit -replace=github.com/TyphonHill/adder=$ADDER_ROOT
+cp $ADDER_ROOT/go.mod go.mod
 cp $ADDER_ROOT/go.sum go.sum
-exec go mod tidy
+exec go mod edit -module=example.com/app -toolchain=none -require=github.com/TyphonHill/adder@v0.0.0 -replace=github.com/TyphonHill/adder=$ADDER_ROOT -tool=example.com/app/tools/adder
 exec go tool adder derive
 stdout '^created    greeting.txt$'
 cmp greeting.txt want/greeting.txt
@@ -17,14 +18,6 @@ stderr '^adder: pack "broken": function "join" is built in \[invalid-pack\]$'
 exits 1 go run ./tools/broken list --json
 stdout '"code": "invalid-pack"'
 
--- go.mod --
-module example.com/app
-
-go 1.26.0
-
-require github.com/TyphonHill/adder v0.0.0
-
-tool example.com/app/tools/adder
 -- tools/adder/main.go --
 package main
 
