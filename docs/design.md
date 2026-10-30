@@ -489,15 +489,19 @@ Functions Sprout also has keep its names and argument order, with the value last
 
 `quote` takes exactly one value, where Sprout's joins several, so a template written for Sprout fails rather than renders differently.
 
+| `plural` | `plural "driver" "drivers" (len .Drivers)` | `driver` for exactly one, `drivers` for zero or more |
+
 Functions Sprout lacks get names that do not collide with it:
 
 | Function | Example | Result |
 | --- | --- | --- |
-| `pluralize`, `singularize` | `pluralize .Name` | `Drivers` for `Driver`, `IDs` for `ID` |
 | `groupBy` | `groupBy "Dir" .Handlers` | a list of `.Key` and `.Items`, sorted by key |
 
-- `pluralize` and `singularize` use English rules with a built-in list of irregular words, and keep the case of the word: an all-capitals word gets a lowercase suffix, as Go writes `IDs`. Sprout's `plural` instead picks one of two given words by a count, and is not included.
-- `groupBy` takes a string field, like `fieldValues`, and returns a list rather than a map, so groups keep a stable order and work with `range` and `fieldValues`.
+`groupBy` takes a string field, like `fieldValues`, and returns a list rather than a map, so groups keep a stable order and work with `range` and `fieldValues`.
+
+| Considered | Why not |
+| --- | --- |
+| `pluralize` and `singularize`, working out plurals from English rules | Correct plurals need a list of irregular and uncountable words that is never finished, and every addition changes people's output. Templates write plurals instead, such as `{{ .Name }}s`, or take irregular ones from a directive argument such as `//adder:register plural=people`. |
 
 ### 29. Prompts for missing inputs (planned, v0.3)
 

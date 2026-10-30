@@ -218,6 +218,7 @@ Each entry under `derive.scans` selects declarations: functions and methods by d
 | `dirs` | Directories to scan, relative to the repository root and written with forward slashes. Glob patterns such as `drivers/*` are allowed, and `**` matches any number of directories, as in `internal/**/handlers`. Like `go`'s `./...`, wildcards skip `testdata`, `vendor`, and directories starting with `.` or `_`. Files adder generated are never scanned. |
 | `exclude` | Directories to leave out, in the same syntax as `dirs`. `internal/legacy/**` excludes a directory and everything below it. |
 | `includeTests` | Also scan `_test.go` files. Defaults to `false`. |
+| `buildTags` | Custom build tags to treat as set, such as `[integration]`. |
 | `funcs.exported` | Only match exported names. |
 | `funcs.name` | Only match names containing a match for this regular expression. |
 | `funcs.kind` | `func` for plain functions only, or `method` for methods only. |
@@ -229,6 +230,8 @@ Each entry under `derive.scans` selects declarations: functions and methods by d
 | `types.name` | Only match type names containing a match for this regular expression. |
 | `types.kind` | `struct`, `interface`, or `type` for any other type declaration. |
 | `types.directive` | Only match types with this [directive](#directives) in their doc comment. |
+
+Files that no platform can build are skipped, such as those marked `//go:build ignore` or with a custom tag that `buildTags` does not list. Platform tags such as `linux` or `amd64` may take any value, so results are the same on every machine, and file name suffixes such as `_windows.go` never exclude a file.
 
 Every match is an item with these fields, sorted by name:
 
@@ -423,6 +426,15 @@ adder provides a small set of deterministic functions alongside Go's [built-in t
 | `fieldValues` | `fieldValues "Package" .Drivers` | the `Package` field of every item |
 | `uniq` | `uniq (list)` | values with repeats removed, in first-seen order |
 | `sortAlpha` | `sortAlpha (list)` | values sorted alphabetically |
+| `groupBy` | `groupBy "Dir" .Handlers` | a list of groups, each with `.Key` and `.Items`, sorted by key |
+| `join` | `fieldValues "Name" .Drivers \| join ", "` | `local, s3` |
+| `trimPrefix`, `trimSuffix` | `trimPrefix "Handle" .Name` | `Users` for `HandleUsers` |
+| `replace` | `replace "-" "_" .Dir` | `go_redis` for `go-redis` |
+| `quote` | `quote .Name` | `"s3"`, quoted as Go writes strings |
+| `indent`, `nindent` | `nindent 4 .Doc` | every line indented by four spaces, after a newline with `nindent` |
+| `plural` | `plural "driver" "drivers" (len .Drivers)` | `driver` for exactly one, `drivers` otherwise |
+
+Functions that Sprout also has take the value last, so they work at the end of a pipeline. adder has no function that works out plurals by itself, since English needs a list of exceptions that would never be finished; write the plural, as in `{{ .Name }}s`, or take it from a directive argument for irregular words.
 
 Case functions split words at separators such as `_`, `-`, and spaces, at lowercase-to-uppercase changes, and at the end of an acronym: `HTTPServer` is `HTTP` and `Server`. The Go variants produce identifiers that follow Go naming style: they keep words already in capitals, such as `BMC`, and capitalize common initialisms such as `ID`, `HTTP`, and `URL`.
 

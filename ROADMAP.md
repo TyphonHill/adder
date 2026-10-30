@@ -51,7 +51,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | `.ImportPath` on every item, so templates stop assembling import paths by hand ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | Skip files adder generated, so outputs never feed back into scans; other generators' files are still scanned | ✅ |
 | `exclude` patterns and recursive `**` globs that skip `testdata`, `vendor`, and hidden directories like `./...` | ✅ |
-| Skip files excluded by build constraints such as `//go:build ignore` ([design 27](docs/design.md#27-build-constraints-in-scans-planned-v03)) | 🔜 v0.3 |
+| Skip files excluded by build constraints such as `//go:build ignore` ([design 27](docs/design.md#27-build-constraints-in-scans-planned-v03)) | ✅ |
 | Match on `kind` (functions or methods) and `receiver` | ✅ |
 | `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | ✅ |
@@ -80,7 +80,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Remove unused imports from Go output, so templates need not guard each one ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)) | ✅ |
 | Add missing imports from a built-in table of the standard library | 💡 |
 | Shared template partials, such as `templates/partials/license.tmpl` | ✅ |
-| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` ([design 28](docs/design.md#28-more-template-functions-planned-v03)) | 🔜 v0.3 |
+| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `nindent`, `plural`, `groupBy` ([design 28](docs/design.md#28-more-template-functions-planned-v03)) | ✅ |
 | One output per item, with a templated path, for example a file per interface ([design 24](docs/design.md#24-one-output-per-item-planned-v03)) | ✅ |
 | Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)) | ✅ |
 | Generated-file headers for other languages, using their comment syntax ([design 25](docs/design.md#25-generated-file-headers-for-other-languages-planned-v03)) | ✅ |

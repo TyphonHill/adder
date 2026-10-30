@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -24,31 +25,118 @@ func Funcs() template.FuncMap {
 		"toGoCamelCase":  textcase.GoCamel,
 		"toGoPascalCase": textcase.GoPascal,
 		"fieldValues":    FieldValues,
+		"groupBy":        groupBy,
 		"uniq":           uniq,
 		"sortAlpha":      sortAlpha,
+		"join":           join,
+		"trimPrefix":     func(prefix, s string) string { return strings.TrimPrefix(s, prefix) },
+		"trimSuffix":     func(suffix, s string) string { return strings.TrimSuffix(s, suffix) },
+		"replace":        func(old, replacement, s string) string { return strings.ReplaceAll(s, old, replacement) },
+		"quote":          quote,
+		"indent":         indent,
+		"nindent":        nindent,
+		"plural":         plural,
 	}
 }
 
 // FieldValues returns the named string field of every struct in list.
 func FieldValues(field string, list any) ([]string, error) {
+	return stringFields("fieldValues", field, list)
+}
+
+// stringFields returns the named string field of every struct in list, for the template function fn.
+func stringFields(fn, field string, list any) ([]string, error) {
 	v := reflect.ValueOf(list)
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
-		return nil, fmt.Errorf("fieldValues: want a list, got %T", list)
+		return nil, fmt.Errorf("%s: want a list, got %T", fn, list)
 	}
 
 	out := make([]string, 0, v.Len())
 	for i := range v.Len() {
 		elem := reflect.Indirect(v.Index(i))
 		if elem.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("fieldValues: element %d is %s, want a struct", i, elem.Kind())
+			return nil, fmt.Errorf("%s: element %d is %s, want a struct", fn, i, elem.Kind())
 		}
 		f := elem.FieldByName(field)
 		if !f.IsValid() || f.Kind() != reflect.String {
-			return nil, fmt.Errorf("fieldValues: %s has no string field %q", elem.Type(), field)
+			return nil, fmt.Errorf("%s: %s has no string field %q", fn, elem.Type(), field)
 		}
 		out = append(out, f.String())
 	}
 	return out, nil
+}
+
+// Group is the items of a list that share a key, as groupBy returns them.
+type Group struct {
+	Key   string
+	Items []any
+}
+
+// groupBy groups the structs in list by their string field, sorted by key. Items keep their order in list.
+func groupBy(field string, list any) ([]Group, error) {
+	keys, err := stringFields("groupBy", field, list)
+	if err != nil {
+		return nil, err
+	}
+	v := reflect.ValueOf(list)
+	groups := make([]Group, 0)
+	index := make(map[string]int)
+	for i, key := range keys {
+		j, ok := index[key]
+		if !ok {
+			j = len(groups)
+			index[key] = j
+			groups = append(groups, Group{Key: key})
+		}
+		groups[j].Items = append(groups[j].Items, v.Index(i).Interface())
+	}
+	slices.SortStableFunc(groups, func(a, b Group) int { return strings.Compare(a.Key, b.Key) })
+	return groups, nil
+}
+
+// join joins the elements of list with sep, writing each as fmt.Sprint does.
+func join(sep string, list any) (string, error) {
+	v := reflect.ValueOf(list)
+	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
+		return "", fmt.Errorf("join: want a list, got %T", list)
+	}
+	parts := make([]string, v.Len())
+	for i := range v.Len() {
+		parts[i] = fmt.Sprint(v.Index(i).Interface())
+	}
+	return strings.Join(parts, sep), nil
+}
+
+// quote returns v as a quoted Go string. Unlike Sprout's quote it takes exactly one value, so a template written
+// for Sprout fails rather than renders differently.
+func quote(v any) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.Quote(fmt.Sprint(v))
+}
+
+// indent indents every line of s by n spaces.
+func indent(n int, s string) (string, error) {
+	if n < 0 {
+		return "", fmt.Errorf("indent: want a number of spaces, got %d", n)
+	}
+	pad := strings.Repeat(" ", n)
+	return pad + strings.ReplaceAll(s, "\n", "\n"+pad), nil
+}
+
+// nindent is indent after a newline, so a block can start on its own line.
+func nindent(n int, s string) (string, error) {
+	indented, err := indent(n, s)
+	return "\n" + indented, err
+}
+
+// plural returns one when count is 1 and many otherwise.
+func plural(one, many string, count int) string {
+	if count == 1 {
+		return one
+	}
+	return many
 }
 
 // uniq drops repeated values, keeping the first occurrence of each.

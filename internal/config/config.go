@@ -29,6 +29,9 @@ const FileName = "adder.yaml"
 // Version is the configuration schema version this release understands.
 const Version = 1
 
+// buildTag is the syntax of a build tag in a //go:build line.
+var buildTag = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
+
 // reservedNames are template data keys that scans cannot use.
 var reservedNames = []string{"Inputs", "Item", "Module", "Vars"}
 
@@ -59,9 +62,12 @@ type Scan struct {
 	// number of directories.
 	Dirs []string `yaml:"dirs"`
 	// Exclude lists directory patterns, in the same syntax as Dirs, to leave out.
-	Exclude      []string  `yaml:"exclude"`
-	IncludeTests bool      `yaml:"includeTests"`
-	Funcs        FuncMatch `yaml:"funcs"`
+	Exclude      []string `yaml:"exclude"`
+	IncludeTests bool     `yaml:"includeTests"`
+	// BuildTags are custom build tags treated as set, such as integration. Files whose build constraints no
+	// platform can satisfy are skipped.
+	BuildTags []string  `yaml:"buildTags"`
+	Funcs     FuncMatch `yaml:"funcs"`
 	// Types selects type declarations instead of functions when set.
 	Types *TypeMatch `yaml:"types"`
 
@@ -320,6 +326,16 @@ func (c *Config) validate(pos positions) error {
 				if d := checkPattern(pos.at(at+"."+list.key+"."+strconv.Itoa(i)), field, dir); d != nil {
 					errs = append(errs, d)
 				}
+			}
+		}
+		for i, tag := range scan.BuildTags {
+			if !buildTag.MatchString(tag) {
+				errs = append(errs, &diag.Diagnostic{
+					Code:    diag.InvalidValue,
+					Pos:     pos.at(at + ".buildTags." + strconv.Itoa(i)),
+					Message: fmt.Sprintf("scan %q: build tag %q must be letters, digits, underscores, and dots", name, tag),
+					Hint:    "list tags as //go:build lines name them, such as integration",
+				})
 			}
 		}
 		if scan.Types != nil {
