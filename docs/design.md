@@ -164,7 +164,7 @@ When an output produces one file per item, adder removes files it previously gen
 | Searching the whole repository for headers | Slow, and cannot tell which configuration owns a file in a monorepo. |
 | An owned output directory, deleted before generating | Only works when generated files live apart from handwritten code. |
 
-### 16. Comment directives use Go's directive syntax (planned, v0.4)
+### 16. Comment directives use Go's directive syntax (planned, v0.2)
 
 Directives look like `//adder:register name=s3 desc="Local disk"`: no space after `//`, a lowercase name, and `key=value` arguments with Go-style quoting when needed.
 
@@ -172,7 +172,7 @@ Directives look like `//adder:register name=s3 desc="Local disk"`: no space afte
 
 ### 17. Type-aware scans are an explicit opt-in (planned, v0.4)
 
-A scan uses type information only when it sets `types: true`. Type-based filters on a scan without it fail validation, with a hint to enable it. Type-aware scans run the Go toolchain offline (`GOPROXY=off`, `-mod=readonly`) and report missing dependencies instead of downloading them.
+A scan uses type information only when it sets `typeCheck: true`. Filters that need it, such as "implements this interface", fail validation on a scan without it, with a hint to enable it. Type-aware scans run the Go toolchain offline (`GOPROXY=off`, `-mod=readonly`) and report missing dependencies instead of downloading them.
 
 **Why:** type checking is much slower than parsing, needs code that compiles and dependencies in the module cache, and runs the toolchain. Enabling it automatically based on which filters are used would hide a performance and reliability cliff behind an innocent-looking change. Parsing stays the fast default.
 
@@ -181,6 +181,133 @@ A scan uses type information only when it sets `types: true`. Type-based filters
 The module's root package, `github.com/TyphonHill/adder`, is reserved for a small public facade over the internal packages, such as `adder.Load`, `adder.Derive`, and a way to register custom functions and scanners. It ships as an experimental v0.x API once a real consumer needs it, such as a repository that wants a custom scanner or an editor integration. The internal packages stay internal.
 
 **Why:** moving code is easy; committing to an API is not. After v1.0 a breaking change needs a new `/v2` import path, and today's internal APIs are shaped by a single consumer, the command line. They changed completely in one refactoring, which would have broken every user had they been public. `cmd/adder` is already public, because `go get -tool` depends on its path.
+
+### 19. Scaffolding with `adder new` (planned, v0.2)
+
+Generators create new files that people then own. They live next to `derive` in `adder.yaml`:
+
+```yaml
+version: 1
+
+vars:
+  License: Apache-2.0
+
+derive:
+  scans:
+    Drivers:
+      dirs: ["drivers/*"]
+      funcs: {exported: true, name: ^New$}
+  outputs:
+    - template: templates/drivers.go.tmpl
+      path: drivers/drivers.gen.go
+
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name:
+        help: Driver name, used as the package name
+        pattern: ^[a-z][a-z0-9]*$
+        unique: Drivers.Package
+      summary:
+        help: One-line description for the package documentation
+        default: A storage driver.
+      cache:
+        type: bool
+        help: Add an in-memory cache in front of the driver
+    files:
+      - template: templates/new/driver.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go
+      - template: templates/new/driver_test.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}_test.go
+      - template: templates/new/cache.go.tmpl
+        path: drivers/{{ .Inputs.name }}/cache.go
+        when: cache
+    message: |
+      Next, implement New in drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
+```
+
+```console
+$ adder new driver --name gcs --cache
+created    drivers/gcs/gcs.go
+created    drivers/gcs/gcs_test.go
+created    drivers/gcs/cache.go
+updated    drivers/drivers.gen.go
+
+Next, implement New in drivers/gcs/gcs.go.
+```
+
+**Generators.** Each entry under `generators` is a command: `adder new <name>`. Names are lowercase words joined by hyphens, like command names.
+
+**Inputs.**
+
+- Input names are Go identifiers in lowerCamelCase. Each one becomes a flag in kebab-case (`packageName` becomes `--package-name`) and the template field `.Inputs.packageName`.
+- `type` is `string`, the default, or `bool`. Numbers and lists are left out until a real generator needs them; a string with a `pattern` covers most cases.
+- A string input without a `default` is required. Bool inputs default to `false` and are never required, so there is no `required` setting.
+- `pattern` must match the whole value. `values` lists the allowed values, and `valuesFrom: Drivers.Package` takes them from a scan. `unique: Drivers.Package` rejects values a scan already has, so two drivers cannot share a name.
+- Values are validated, never transformed. A `transform` setting would hide what was typed; templates have case functions for that.
+- Values come from flags, from a JSON object with `--inputs file.json`, or from standard input with `--inputs -`. Flags override the file. Unknown keys are errors.
+
+**Files.**
+
+- `template` is relative to the configuration file's directory. `path` is a template rendered with the same data and must stay inside the root after rendering.
+- `when: cache` and `unless: cache` include a file depending on a bool input. They take an input name, not an expression, so the configuration never becomes a programming language.
+- `ifExists` is `fail`, the default, or `skip`. There is no `overwrite`: once a file exists, people own it ([principle 4](../ROADMAP.md#principles)).
+- Go files are gofmt-formatted but do not get a generated-code header, because they are meant to be edited.
+
+**Template data.** Generator templates see `.Inputs`, `.Vars`, `.Module`, and every scan by name. Derive templates see `.Vars`, `.Module`, and the scans. `Inputs` and `Vars` join `Module` as reserved scan names.
+
+**One plan for everything.** `adder new` builds a single plan containing the new files and every derived output that changes because of them. Derived outputs are recomputed against the repository with the new files overlaid in memory, so registries pick up the new code in the same run. Nothing is written unless the whole plan succeeds. `derive: false` on a generator opts out of the derive step.
+
+**Previewing.** `--dry-run` prints the plan without writing. `--diff` also prints a unified diff of every change, with new files shown as additions. The diff code is copied from the Go toolchain's `internal/diff` (BSD-3-Clause, about 250 lines) into `internal/diff`, with its license header, rather than added as a dependency.
+
+**Problems.** New diagnostic codes are `unknown-generator`, `missing-input`, `invalid-input`, and `file-exists`. Mistakes in how a generator was invoked, such as a missing or invalid input, exit with status 2. A file that already exists exits with status 1. The plan gains a `skipped` status for files left alone by `ifExists: skip`.
+
+**Shared configuration.** Two smaller additions serve generators and derived outputs alike:
+
+- `vars` at the top level holds string values available to every template as `.Vars`, such as a license name.
+- `partials` lists glob patterns of templates loaded into every template, so `{{ template "license" . }}` works anywhere. Partials are defined with `{{ define }}` and never rendered on their own.
+
+| Considered | Why not |
+| --- | --- |
+| Inputs at the top level of template data (`.name`) | Collides with scan names and leaves no room for new data; `.Inputs.name` is explicit. |
+| A `required` setting | Redundant: a string without a default is required. |
+| Conditions written as template expressions | Turns `adder.yaml` into a programming language. |
+| An `overwrite` file policy | Breaks the promise that files people own are never rewritten. |
+| A diff library | A small, stable algorithm is better copied than depended on. |
+
+### 20. Richer scans without type checking (planned, v0.2)
+
+Go source alone says far more than names, so these additions parse files rather than type-check them.
+
+**Directories.**
+
+- `**` matches any number of directories: `internal/**/handlers`. Like `go`'s `./...`, it skips `testdata`, `vendor`, and directories whose names start with `.` or `_`.
+- `exclude` lists patterns of directories to leave out, in the same syntax as `dirs`.
+
+**Function filters.** These join `exported`, `firstParam`, and `name`:
+
+- `kind: func` or `kind: method` limits a scan to plain functions or to methods.
+- `receiver: Worker` matches methods on `Worker` or `*Worker`.
+- `firstParamType: context.Context` matches the first parameter's type as written, with its package resolved through the file's imports, so `ctx context.Context` and `c context.Context` both match. Types are written with their full import path, such as `go.temporal.io/sdk/workflow.Context`. An import without an alias is assumed to use the last element of its path as its package name, ignoring a major version suffix such as `/v2`; packages that break that convention need type checking.
+- `directive: register` matches declarations whose doc comment has `//adder:register`.
+
+**Type declarations.** A scan can select types instead of functions, with a `types` block in place of `funcs`. It supports `exported`, `name`, `directive`, and `kind` (`struct`, `interface`, or any other type). Each scan selects exactly one kind of declaration.
+
+**Item fields.** Items gain:
+
+| Field | Description |
+| --- | --- |
+| `.ImportPath` | The package's import path: the module path joined with `.Dir`. Empty when the repository has no `go.mod`. |
+| `.Kind` | `func`, `method`, `struct`, `interface`, or `type`. |
+| `.Doc` | The doc comment, without directives. |
+| `.Line` | The line of the declaration. |
+| `.Directives` | Arguments of each `//adder:` directive, by name: `{{ index .Directives.register "name" }}`. A directive repeated on one declaration is an error. |
+| `.Signature` | Parameters and results as written, such as `(ctx context.Context, name string) error`. |
+| `.Params`, `.Results` | Each parameter and result, with `.Name` and `.Type` as written. |
+| `.Fields` | For structs, each field with `.Name`, `.Type`, and `.Tag`. |
+
+Items are a single type whose fields are empty when they do not apply, so templates and `fieldValues` work the same for every kind of declaration.
 
 ## Compatibility
 

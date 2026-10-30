@@ -47,16 +47,17 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Directory globs, exported names, first parameter name, name pattern | ✅ |
 | Optional `_test.go` files | ✅ |
 | Items with `.Name`, `.Receiver`, `.Package` (from the `package` clause), `.Dir`, `.File` | ✅ |
-| `.ImportPath` on every item, so templates stop assembling import paths by hand | 🔜 v0.2 |
+| `.ImportPath` on every item, so templates stop assembling import paths by hand ([design 20](docs/design.md#20-richer-scans-without-type-checking-planned-v02)) | 🔜 v0.2 |
 | Skip files adder generated, so outputs never feed back into scans; other generators' files are still scanned | ✅ |
-| `exclude` patterns and recursive `**` globs | 🔜 v0.2 |
+| `exclude` patterns and recursive `**` globs that skip `testdata`, `vendor`, and hidden directories like `./...` | 🔜 v0.2 |
 | Skip files excluded by build constraints such as `//go:build ignore` | 🔜 v0.2 |
-| Match on receiver type and on functions versus methods | 🔜 v0.2 |
-| `.Doc` (the doc comment) and `.Line` on every item | 🔜 v0.2 |
-| Type-aware matching, opted into per scan with `types: true`: parameter and result types, such as "first parameter is a `context.Context`" ([design 17](docs/design.md#17-type-aware-scans-are-an-explicit-opt-in-planned-v04)) | 🔜 v0.4 |
-| Scan types, not only functions: structs, interfaces, and types that implement an interface | 🔜 v0.4 |
+| Match on `kind` (functions or methods) and `receiver` | 🔜 v0.2 |
+| `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking-planned-v02)) | 🔜 v0.2 |
+| `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | 🔜 v0.2 |
+| Comment directives in Go's directive syntax, such as `//adder:register name=s3`: a `directive` filter and `.Directives` on items ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax-planned-v02)) | 🔜 v0.2 |
+| Scan type declarations with a `types` block: structs, interfaces, and other types, with `.Fields` for structs | 🔜 v0.2 |
+| Type-aware matching, opted into per scan with `typeCheck: true`: types that implement an interface, and type matches that survive any import alias ([design 17](docs/design.md#17-type-aware-scans-are-an-explicit-opt-in-planned-v04)) | 🔜 v0.4 |
 | Scan constants and variables, for enums and lookup tables | 🔜 v0.4 |
-| Comment directives in Go's directive syntax, such as `//adder:register name=s3`, exposed as `.Directives` ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax-planned-v04)) | 🔜 v0.4 |
 | File scans: list non-Go files such as SQL migrations or JSON fixtures | 🔜 v0.4 |
 | Parallel parsing and caching for very large repositories | 💡 |
 
@@ -87,14 +88,14 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 
 | Feature | Status |
 | --- | --- |
-| Generators that create new files from templates | 🔜 v0.2 |
-| Typed inputs (string, bool, enum) with `pattern`, `default`, `required`, `help`, and `transform` | 🔜 v0.2 |
-| Choices filled in from a scan, such as "package must be an existing directory under `drivers/`" | 🔜 v0.2 |
-| Uniqueness checks against a scan, such as "no driver with this name already exists" | 🔜 v0.2 |
-| Templated file paths and conditional files | 🔜 v0.2 |
+| Generators that create new files from templates, as `adder new <generator>` ([design 19](docs/design.md#19-scaffolding-with-adder-new-planned-v02)) | 🔜 v0.2 |
+| String and bool inputs with `help`, `default`, `pattern`, and `values`; a string without a default is required | 🔜 v0.2 |
+| `valuesFrom`: choices taken from a scan, such as "package must be an existing directory under `drivers/`" | 🔜 v0.2 |
+| `unique`: reject values a scan already has, such as "no driver with this name already exists" | 🔜 v0.2 |
+| Templated file paths, and files included with `when` or `unless` on a bool input | 🔜 v0.2 |
 | Existing-file policy: `fail` or `skip`, never overwrite | 🔜 v0.2 |
-| `--dry-run` with the planned changes and a diff | 🔜 v0.2 |
-| Run `derive` afterwards so registries pick up the new code immediately | 🔜 v0.2 |
+| `--dry-run` with the planned changes, and `--diff` for a unified diff of each one | 🔜 v0.2 |
+| New files and the derived outputs they change computed as one plan, so registries update in the same run | 🔜 v0.2 |
 | A message after generating, with next steps for the person who ran it | 🔜 v0.2 |
 | Inputs from flags, from a JSON file, or from standard input | 🔜 v0.2 |
 | Interactive prompts for missing inputs when running in a terminal | 🔜 v0.3 |
