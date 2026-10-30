@@ -437,9 +437,7 @@ func templateData(ctx context.Context, u unit, src Sources) (map[string]any, err
 		return nil, diag.Locate(diag.Wrap(diag.IO, diag.Pos{File: "go.mod"}, err), src.RepoDir, diag.Pos{})
 	}
 	module := modfile.ModulePath(gomod)
-	if module != "" {
-		data["Module"] = module
-	}
+	data["Module"] = module // empty without a go.mod, like .ImportPath
 
 	var problems diag.List
 	for _, name := range slices.Sorted(maps.Keys(cfg.Derive.Scans)) {

@@ -118,13 +118,13 @@ packs:
   drivers:
     pack: store
     with: {dirs: ["drivers/*"]}
-    generators: {impl: driver}
+    rename: {impl: driver}
     tests:
       driver: [{name: plain, inputs: {name: example}, want: testdata/driver}]
   caches:
     pack: store
     with: {dirs: ["caches/*"]}
-    generators: {impl: cache}
+    rename: {impl: cache}
 -- testdata/driver/drivers/example/example.go --
 package example
 

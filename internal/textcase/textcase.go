@@ -43,14 +43,16 @@ func words(s string) []string {
 	return out
 }
 
-// goInitialisms are the initialisms Go style keeps in a single case, from golint's list.
+// goInitialisms are the initialisms Go style keeps in a single case: staticcheck's ST1003 default list as of
+// adder v1.0, frozen so that upgrading adder never renames a generated identifier. Words already in capitals stay
+// in capitals whatever the list says.
 var goInitialisms = map[string]bool{
-	"ACL": true, "API": true, "ASCII": true, "CPU": true, "CSS": true, "DNS": true, "EOF": true,
-	"GUID": true, "HTML": true, "HTTP": true, "HTTPS": true, "ID": true, "IP": true, "JSON": true,
-	"LHS": true, "QPS": true, "RAM": true, "RHS": true, "RPC": true, "SLA": true, "SMTP": true,
-	"SQL": true, "SSH": true, "TCP": true, "TLS": true, "TTL": true, "UDP": true, "UI": true,
-	"UID": true, "UUID": true, "URI": true, "URL": true, "UTF8": true, "VM": true, "XML": true,
-	"XMPP": true, "XSRF": true, "XSS": true,
+	"ACL": true, "API": true, "ASCII": true, "CPU": true, "CSS": true, "DNS": true, "EOF": true, "GUID": true,
+	"HTML": true, "HTTP": true, "HTTPS": true, "ID": true, "IP": true, "JSON": true, "QPS": true, "RAM": true,
+	"RPC": true, "SLA": true, "SMTP": true, "SQL": true, "SSH": true, "TCP": true, "TLS": true, "TTL": true,
+	"UDP": true, "UI": true, "GID": true, "UID": true, "UUID": true, "URI": true, "URL": true, "UTF8": true,
+	"VM": true, "XML": true, "XMPP": true, "XSRF": true, "XSS": true, "SIP": true, "RTP": true, "AMQP": true,
+	"DB": true, "TS": true,
 }
 
 func capitalize(word string) string {

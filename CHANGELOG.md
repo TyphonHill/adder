@@ -4,6 +4,17 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+These changes settle names before v1.0 freezes them. Configurations that use an old name fail to load with `unknown-field` or `invalid-value`, naming the new one.
+
+- `funcs.firstParam` is now `funcs.firstParamName`, to tell it apart from `firstParamType`.
+- The type kind `type` is now `other`, in `types.kind` and in `.Kind`.
+- A pack use renames its generators with `rename`, which was `generators`.
+- `.Module` is always present, empty when the repository has no `go.mod`, as `.ImportPath` already was.
+- `adder explain --json` names the header's text `source`, which was `template`, since it names the pack and the use too and `output.template` is the template's path.
+- The Go case functions use staticcheck's ST1003 list of initialisms instead of golint's, so `toGoPascalCase "user_db"` is `UserDB`. It adds `DB`, `GID`, `SIP`, `RTP`, `AMQP`, and `TS`, and drops `LHS` and `RHS`. The list is frozen from v1.0.
+
 ## [0.6.0] - 2026-10-30
 
 ### Changed

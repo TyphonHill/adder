@@ -141,7 +141,7 @@ packs:
   backends:
     pack: store
     with: {dirs: ["internal/backends/*"], out: internal/registry, package: backends}
-    generators: {store: backend}
+    rename: {store: backend}
 -- repo-b/internal/backends/s3/s3.go --
 package s3
 

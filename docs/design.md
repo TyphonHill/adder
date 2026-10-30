@@ -175,7 +175,7 @@ Word splitting and case conversion live in `internal/textcase`:
 
 - Words are separated by any rune that is not a letter or digit, at a lowercase-or-digit to uppercase change (`userID`), and before the last capital of an acronym followed by lowercase (`HTTPServer` is `HTTP` and `Server`).
 - Digits stay with the word they follow (`HTTP2Server` is `HTTP2` and `Server`).
-- The Go variants keep words that are already in capitals and capitalize golint's list of common initialisms.
+- The Go variants keep words that are already in capitals and capitalize the initialisms of staticcheck's ST1003 default list, the naming check Go teams most often run. adder's copy is frozen as of v1.0: a new initialism would rename identifiers in regenerated code, so other initialisms are written in capitals in the input, or handled by a repository's own function.
 
 **Why:** case conversion is part of the output, so it is covered by the compatibility promise either way. Owning roughly a hundred lines with thorough tests is cheaper than pinning and policing a dependency.
 
@@ -348,21 +348,21 @@ Go source alone says far more than names, so these additions parse files rather 
 - `**` matches any number of directories: `internal/**/handlers`. Like `go`'s `./...`, it skips `testdata`, `vendor`, and directories whose names start with `.` or `_`.
 - `exclude` lists patterns of directories to leave out, in the same syntax as `dirs`.
 
-**Function filters.** These join `exported`, `firstParam`, and `name`:
+**Function filters.** These join `exported`, `firstParamName`, and `name`:
 
 - `kind: func` or `kind: method` limits a scan to plain functions or to methods.
 - `receiver: Worker` matches methods on `Worker` or `*Worker`.
 - `firstParamType: context.Context` matches the first parameter's type as written, with its package resolved through the file's imports, so `ctx context.Context` and `c context.Context` both match. Types are written as Go writes them, with each package replaced by its full import path: `go.temporal.io/sdk/workflow.Context`, `*example.com/m/config.Config`, `[]string`. An import without an alias is assumed to use the package name goimports assumes: the last element of its path, without a major version suffix such as `/v2` or `.v3` and without a `go-` prefix. Packages that break that convention need type checking.
 - `directive: register` matches declarations whose doc comment has `//adder:register`.
 
-**Type declarations.** A scan can select types instead of functions, with a `types` block in place of `funcs`. It supports `exported`, `name`, `directive`, and `kind` (`struct`, `interface`, or any other type). Each scan selects exactly one kind of declaration.
+**Type declarations.** A scan can select types instead of functions, with a `types` block in place of `funcs`. It supports `exported`, `name`, `directive`, and `kind` (`struct`, `interface`, or `other` for any other type). Each scan selects exactly one kind of declaration.
 
 **Item fields.** Items gain:
 
 | Field | Description |
 | --- | --- |
 | `.ImportPath` | The package's import path: the module path joined with `.Dir`. Empty when the repository has no `go.mod`. |
-| `.Kind` | `func`, `method`, `struct`, `interface`, or `type`. |
+| `.Kind` | `func`, `method`, `struct`, `interface`, or `other` for any other type declaration. |
 | `.Doc` | The doc comment, without directives. |
 | `.Line` | The line of the declaration. |
 | `.Directives` | Arguments of each `//adder:` directive, by name: `{{ index .Directives.register "name" }}`. A directive repeated on one declaration is an error. |
@@ -826,7 +826,7 @@ updated    drivers/registry.gen.go
 
 **Paths.** Template paths and `partials` patterns in `pack.yaml` are relative to the root of the pack's `FS`. Scan directories and output paths are relative to the repository root and confined to it, like those in `adder.yaml` ([decision 5](#5-paths-in-the-configuration)).
 
-**Generators.** A use's generators become `adder new` commands under their own names. A name already taken, by the repository or another use, is an `invalid-name` problem; the use renames its generators with `generators: {driver: cache-driver}`.
+**Generators.** A use's generators become `adder new` commands under their own names. A name already taken, by the repository or another use, is an `invalid-name` problem; the use renames its generators with `rename: {driver: cache-driver}`.
 
 **Tests.** `pack.yaml` does not declare generator tests, because golden files belong to a repository and `adder test --update` cannot write into a pack. A repository tests a used pack's generators under the use, as `tests: {driver: [...]}` in the form of [decision 30](#30-generator-tests). A pack's module can keep an example repository that does so in its own CI.
 

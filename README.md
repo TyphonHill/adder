@@ -222,7 +222,7 @@ $ adder new driver --name gcs --dry-run --json
 | `init` | `changes`, `problems` |
 | `list` | `generators`, `outputs`, `problems` |
 | `describe <generator>` | `name`, `description`, `inputs`, `files`, `message`, `derive`, `inputSchema`, `problems` |
-| `explain <file>` | `path`, `generated`, `template`, `output`, `scans`, `status`, `problems` |
+| `explain <file>` | `path`, `generated`, `source` (what the header names), `output`, `scans`, `status`, `problems` |
 | `test` | `tests`, each with `generator`, `name`, `passed`, and `changes`, then `problems` |
 
 - `changes` lists every file in the plan, unchanged ones included. Each has a `path`, relative to the root with forward slashes, and a `status`: `unchanged`, `created`, `updated`, `skipped`, or `removed`. With `--diff`, changes that write or remove a file also have a `diff`.
@@ -249,12 +249,12 @@ Each entry under `derive.scans` selects declarations: functions and methods by d
 | `funcs.name` | Only match names containing a match for this regular expression. |
 | `funcs.kind` | `func` for plain functions only, or `method` for methods only. |
 | `funcs.receiver` | Only match methods on this type, with a value or pointer receiver. |
-| `funcs.firstParam` | Only match declarations whose first parameter has this name. |
+| `funcs.firstParamName` | Only match declarations whose first parameter has this name. |
 | `funcs.firstParamType` | Only match declarations whose first parameter has this type, written as Go writes it but with full import paths: `context.Context`, `go.temporal.io/sdk/workflow.Context`, `*Config`. |
 | `funcs.directive` | Only match declarations with this [directive](#directives) in their doc comment. |
 | `types.exported` | Only match exported type names. |
 | `types.name` | Only match type names containing a match for this regular expression. |
-| `types.kind` | `struct`, `interface`, or `type` for any other type declaration. |
+| `types.kind` | `struct`, `interface`, or `other` for any other type declaration, such as `type Status int`. |
 | `types.directive` | Only match types with this [directive](#directives) in their doc comment. |
 | `values.kind` | `const` or `var`. |
 | `values.exported` | Only match exported names. |
@@ -390,7 +390,7 @@ Outputs in other languages get the same header in their own comment syntax, chos
 
 Because unused imports are removed, templates can import everything a file might need instead of wrapping each import in `{{ if }}`. adder recognizes a package by its explicit name or by the last element of its path, so give an import an explicit name when its package name differs from its path. Missing imports are not added ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)).
 
-Templates also receive `.Module`, the module path from the root's `go.mod`, and `.Vars`. Referencing a field that does not exist is an error, so typos fail loudly.
+Templates also receive `.Module`, the module path from the root's `go.mod` or empty without one, and `.Vars`. Referencing a field that does not exist is an error, so typos fail loudly.
 
 #### One file per item
 
@@ -522,7 +522,7 @@ go tool adder derive
 - `options` take the settings of generator inputs (`help`, `default`, `pattern`, and `values`), with `type` `string`, `bool`, or `list`. An option without a default is required, except a bool, which defaults to `false`. A use gives options under `with`.
 - In `pack.yaml`, a mapping whose only key is `option`, such as `dirs: {option: dirs}`, takes that option's value. Templates and output paths read options as `.Options`.
 - A pack's templates see its own scans, `.Options`, and `.Module`, but not the repository's scans or `vars`. Template paths and `partials` are relative to the root of the pack's `FS`; scan directories and output paths are relative to the repository root.
-- A use's generators become `adder new` commands, and their new files reach the use's outputs in the same run. `generators: {driver: cache-driver}` under a use renames one, which two uses of a pack with generators need.
+- A use's generators become `adder new` commands, and their new files reach the use's outputs in the same run. `rename: {driver: cache-driver}` under a use renames one, which two uses of a pack with generators need.
 - A pack's generators have no tests of their own, since golden files belong to a repository. A use tests them with `tests: {driver: [{name: plain, inputs: {name: example}, want: testdata/driver}]}`, run by `adder test`.
 - The repository's own outputs and generator files can render a pack's template with `pack: store` next to `template`, using the repository's data and the pack's partials, without a use.
 - A use cannot change a pack's scans, outputs, or generators beyond its options and names. A repository that needs more writes its own or forks the pack.
@@ -658,7 +658,7 @@ adder provides a small set of deterministic functions alongside Go's [built-in t
 
 Functions that Sprout also has take the value last, so they work at the end of a pipeline. adder has no function that works out plurals by itself, since English needs a list of exceptions that would never be finished; write the plural, as in `{{ .Name }}s`, or take it from a directive argument for irregular words.
 
-Case functions split words at separators such as `_`, `-`, and spaces, at lowercase-to-uppercase changes, and at the end of an acronym: `HTTPServer` is `HTTP` and `Server`. The Go variants produce identifiers that follow Go naming style: they keep words already in capitals, such as `BMC`, and capitalize common initialisms such as `ID`, `HTTP`, and `URL`.
+Case functions split words at separators such as `_`, `-`, and spaces, at lowercase-to-uppercase changes, and at the end of an acronym: `HTTPServer` is `HTTP` and `Server`. The Go variants produce identifiers that follow Go naming style: they keep words already in capitals, such as `BMC`, and capitalize the initialisms in [staticcheck's list](https://staticcheck.dev/docs/configuration/options/#initialisms), such as `ID`, `HTTP`, `URL`, and `DB`. That list is frozen as of v1.0, so upgrading adder never renames a generated identifier; for another initialism, write it in capitals in the input, as in `user_SDK` for `UserSDK`.
 
 #### Your own functions
 

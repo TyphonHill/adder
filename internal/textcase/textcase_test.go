@@ -51,6 +51,9 @@ func TestCase(t *testing.T) {
 		{"trailing acronym", "ServeHTTP", "serve_http", "serve-http", "SERVE_HTTP", "ServeHttp", "serveHttp", "ServeHTTP", "serveHTTP"},
 		{"acronym that is not an initialism", "ChildBMCHealthCheckWorkflow", "child_bmc_health_check_workflow", "child-bmc-health-check-workflow", "CHILD_BMC_HEALTH_CHECK_WORKFLOW", "ChildBmcHealthCheckWorkflow", "childBmcHealthCheckWorkflow", "ChildBMCHealthCheckWorkflow", "childBMCHealthCheckWorkflow"},
 		{"leading acronym that is not an initialism", "BMCHealth", "bmc_health", "bmc-health", "BMC_HEALTH", "BmcHealth", "bmcHealth", "BMCHealth", "bmcHealth"},
+		{"initialism staticcheck adds", "user_db", "user_db", "user-db", "USER_DB", "UserDb", "userDb", "UserDB", "userDB"},
+		{"initialism only golint had", "lhs_value", "lhs_value", "lhs-value", "LHS_VALUE", "LhsValue", "lhsValue", "LhsValue", "lhsValue"},
+		{"capitals in the input win", "user_SDK", "user_sdk", "user-sdk", "USER_SDK", "UserSdk", "userSdk", "UserSDK", "userSDK"},
 		{"single letter word", "get_a_host", "get_a_host", "get-a-host", "GET_A_HOST", "GetAHost", "getAHost", "GetAHost", "getAHost"},
 		{"empty", "", "", "", "", "", "", "", ""},
 	}
