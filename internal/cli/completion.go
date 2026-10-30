@@ -153,7 +153,8 @@ func inputValues(cmd *cobra.Command, cfg *config.Config, root, name string, gen 
 	return values
 }
 
-// completeExplain completes the files adder generates that exist, as paths from the current directory.
+// completeExplain completes the files adder generates that exist, as paths from the current directory. Paths
+// use forward slashes everywhere, which every shell accepts, and what was typed matches with either separator.
 func completeExplain(opts *globalOptions) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		if len(args) > 0 {
@@ -180,13 +181,14 @@ func completeExplain(opts *globalOptions) cobra.CompletionFunc {
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveDefault
 		}
+		typed := filepath.ToSlash(toComplete)
 		var files []cobra.Completion
 		for _, c := range p.Changes {
 			if c.Status == plan.Created {
 				continue // not there yet
 			}
 			rel, err := filepath.Rel(cwd, filepath.Join(absRoot, filepath.FromSlash(c.Path)))
-			if err == nil && strings.HasPrefix(rel, toComplete) {
+			if rel = filepath.ToSlash(rel); err == nil && strings.HasPrefix(rel, typed) {
 				files = append(files, rel)
 			}
 		}

@@ -4,6 +4,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-30
+
 ### Added
 
 - Scans skip files that no platform can build, such as `//go:build ignore`, evaluated the same way on every machine, and `buildTags` on a scan sets custom tags such as `integration`.
@@ -74,6 +76,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Diagnostics with stable codes, file positions, and hints; every problem is reported at once.
 - Exit codes: 0 for success, 1 for problems, 2 for usage mistakes, and 3 for stale outputs.
 
-[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/TyphonHill/adder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TyphonHill/adder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/TyphonHill/adder/releases/tag/v0.1.0

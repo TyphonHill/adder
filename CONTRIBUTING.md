@@ -85,3 +85,14 @@ A failure is saved under the package's `testdata/fuzz`. Commit it with the fix, 
 - Report problems as `diag` diagnostics with a code and position. Add a new code only when no existing one fits, and document it in [docs/design.md](docs/design.md#4-structured-diagnostics).
 - Keep comments short: say what code is for, not how it works, and only explain the *why* when it is not obvious.
 - New behavior that affects generated output, configuration, or diagnostics needs a test, and the pull request should call it out.
+
+## Releasing
+
+Releases are tagged by hand from `main`. A Go module version can never change once anyone has downloaded it, because the checksum database records it, so a mistake in a release is fixed with a new patch release, never by moving or re-creating its tag.
+
+1. Wait until every check on `main` has passed, Windows and macOS included. Never tag a commit whose checks are still running.
+2. In a pull request:
+   - Move the `[Unreleased]` entries in `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD`, leave an empty `[Unreleased]` above it, and update the compare links at the bottom.
+   - Remove `(planned, vX.Y)` from the headings of the decisions in `docs/design.md` that shipped, and update the links to them in the roadmap, the design document, and the README.
+   - Mark the shipped roadmap rows ✅.
+3. Merge it once every check passes, then tag the merge commit `vX.Y.Z` and publish a GitHub release whose notes are the changelog section, with a link to the full changelog.
