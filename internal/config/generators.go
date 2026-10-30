@@ -21,8 +21,22 @@ type Generator struct {
 	Message string `yaml:"message"`
 	// Derive recomputes the derived outputs with the new files in place. It defaults to true.
 	Derive *bool `yaml:"derive"`
+	// Tests are sample inputs and the files the generator should create from them, for adder test.
+	Tests []GeneratorTest `yaml:"tests"`
 
 	// Pos is where the generator is declared, for reporting problems found while generating.
+	Pos diag.Pos `yaml:"-"`
+}
+
+// GeneratorTest is a generator run with sample inputs, compared with the files under Want.
+type GeneratorTest struct {
+	Name   string         `yaml:"name"`
+	Inputs map[string]any `yaml:"inputs"`
+	// Want is a slash-separated directory relative to the configuration file's directory, holding the files the
+	// generator should create at their paths in the repository.
+	Want string `yaml:"want"`
+
+	// Pos is where the test is declared, for reporting its problems and failures.
 	Pos diag.Pos `yaml:"-"`
 }
 
@@ -118,6 +132,9 @@ func (c *Config) normalizeGenerators() {
 			}
 			gen.Inputs[key] = in
 		}
+		for i := range gen.Tests {
+			gen.Tests[i].Want = cleanSlash(gen.Tests[i].Want)
+		}
 		for i := range gen.Files {
 			f := &gen.Files[i]
 			f.Template = cleanSlash(f.Template)
@@ -139,6 +156,9 @@ func (c *Config) recordGeneratorPositions(pos positions) {
 		}
 		for i := range gen.Files {
 			gen.Files[i].Pos = pos.at(at + ".files." + strconv.Itoa(i))
+		}
+		for i := range gen.Tests {
+			gen.Tests[i].Pos = pos.at(at + ".tests." + strconv.Itoa(i))
 		}
 		c.Generators[name] = gen
 	}
@@ -177,6 +197,10 @@ func (c *Config) validateGenerators(pos positions) diag.List {
 
 		for i, f := range gen.Files {
 			errs = append(errs, validateFile(name, i, f, gen.Inputs, at+".files."+strconv.Itoa(i), pos)...)
+		}
+		names := make(map[string]bool, len(gen.Tests))
+		for i, test := range gen.Tests {
+			errs = append(errs, validateTest(name, i, test, gen.Inputs, names, at+".tests."+strconv.Itoa(i), pos)...)
 		}
 	}
 	return errs
@@ -301,6 +325,48 @@ func validateFile(gen string, i int, f File, inputs map[string]Input, at string,
 			Message: fmt.Sprintf("%s: unknown ifExists %q", field, f.IfExists),
 			Hint:    "ifExists is fail or skip; adder never overwrites a file people own",
 		})
+	}
+	return errs
+}
+
+// validateTest checks a generator test. Names holds the test names seen so far. Input values are checked
+// against the generator's restrictions when the test runs, since those can depend on the scans.
+func validateTest(gen string, i int, test GeneratorTest, inputs map[string]Input, names map[string]bool, at string, pos positions) diag.List {
+	var errs diag.List
+	field := fmt.Sprintf("generator %q: test %d", gen, i)
+	switch {
+	case test.Name == "":
+		errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "%s: name is required", field))
+	case !generatorName.MatchString(test.Name):
+		errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".name"), "%s: name %q must be lowercase words joined by hyphens", field, test.Name))
+	case names[test.Name]:
+		errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".name"), "%s: another test is also called %q", field, test.Name))
+	}
+	names[test.Name] = true
+	switch test.Want {
+	case "":
+		errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "%s: want is required", field))
+	case ".":
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at + ".want"),
+			Message: field + ": want must be a directory of its own, not the configuration's directory",
+			Hint:    "use a directory under testdata, such as testdata/generators/<generator>/<test>",
+		})
+	default:
+		if d := checkPath(pos.at(at+".want"), fmt.Sprintf("%s: want %q", field, test.Want), test.Want); d != nil {
+			errs = append(errs, d)
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(test.Inputs)) {
+		if _, ok := inputs[key]; !ok {
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.InvalidValue,
+				Pos:     pos.at(at + ".inputs." + key),
+				Message: fmt.Sprintf("%s: unknown input %q", field, key),
+				Hint:    "inputs are keyed by input name, not flag, such as packageName",
+			})
+		}
 	}
 	return errs
 }

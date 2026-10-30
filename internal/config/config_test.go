@@ -296,6 +296,18 @@ func TestParseErrors(t *testing.T) {
 			want:     []want{{diag.InvalidValue, 6, 23}},
 			wantHint: "list tags as //go:build lines name them, such as integration",
 		},
+		{name: "test without a name or want", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - inputs: {name: a}\n", want: []want{{diag.MissingField, 7, 9}, {diag.MissingField, 7, 9}}},
+		{name: "test name not kebab case", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: With_Cache, want: w}\n", want: []want{{diag.InvalidName, 7, 10}}},
+		{name: "two tests with one name", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w}\n      - {name: a, want: v}\n", want: []want{{diag.InvalidName, 8, 10}}},
+		{name: "test want escapes the root", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: ../w}\n", want: []want{{diag.UnsafePath, 7, 19}}},
+		{
+			name:     "test with an unknown input",
+			input:    "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w, inputs: {nam: x}}\n",
+			want:     []want{{diag.InvalidValue, 7, 37}},
+			wantHint: "inputs are keyed by input name, not flag, such as packageName",
+		},
+		{name: "test want is the configuration directory", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: ./}\n", want: []want{{diag.InvalidValue, 7, 19}}},
+		{name: "unknown test field", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w, input: {}}\n", want: []want{{diag.UnknownField, 7, 0}}},
 		{name: "scan name reserved for items", input: "version: 1\nderive:\n  scans:\n    Item: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
 			name:     "templated path without each",
@@ -352,7 +364,7 @@ func TestParseErrors(t *testing.T) {
 		{name: "when and unless", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {type: bool}}\n    files: [{template: t, path: p, when: a, unless: a}]", want: []want{{diag.InvalidValue, 6, 45}}},
 		{name: "when names a string input", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {}}\n    files: [{template: t, path: p, when: a}]", want: []want{{diag.InvalidValue, 6, 36}}, wantHint: "when and unless take an input name, such as when: cache"},
 		{name: "unknown ifExists", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{template: t, path: p, ifExists: overwrite}]", want: []want{{diag.InvalidValue, 5, 36}}, wantHint: "ifExists is fail or skip; adder never overwrites a file people own"},
-		{name: "unknown generator field", input: "version: 1\ngenerators:\n  g: {fils: []}", want: []want{{diag.UnknownField, 3, 0}}, wantHint: "known fields: description, inputs, files, message, derive"},
+		{name: "unknown generator field", input: "version: 1\ngenerators:\n  g: {fils: []}", want: []want{{diag.UnknownField, 3, 0}}, wantHint: "known fields: description, inputs, files, message, derive, tests"},
 		{name: "scan without dirs", input: "version: 1\nderive:\n  scans:\n    A: {}", want: []want{{diag.MissingField, 4, 5}}},
 		{name: "dirs escape root", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [../a]}", want: []want{{diag.UnsafePath, 4, 16}}},
 		{

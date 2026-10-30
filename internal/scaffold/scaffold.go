@@ -31,17 +31,36 @@ type Result struct {
 // writing anything. Inputs are by input name: strings for string inputs and booleans for bool inputs.
 // New files are created in src.Repo, and derived outputs are compared with src.Existing.
 func Plan(ctx context.Context, cfg *config.Config, src derive.Sources, name string, inputs map[string]any) (*Result, error) {
+	res, created, err := planFiles(ctx, cfg, src, name, inputs)
+	if err != nil {
+		return nil, err
+	}
+	if gen := cfg.Generators[name]; gen.Derive == nil || *gen.Derive {
+		withNew := src
+		withNew.Repo = overlay{base: src.Repo, files: created}
+		derived, err := derive.Plan(ctx, cfg, withNew)
+		if err != nil {
+			return nil, err
+		}
+		res.Plan.Changes = append(res.Plan.Changes, derived.Changes...)
+	}
+	return res, nil
+}
+
+// planFiles plans the files the generator called name creates, without the derived outputs, and returns the
+// content of the new ones by path.
+func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name string, inputs map[string]any) (*Result, map[string][]byte, error) {
 	gen, ok := cfg.Generators[name]
 	if !ok {
-		return nil, unknownGenerator(cfg, name)
+		return nil, nil, unknownGenerator(cfg, name)
 	}
 	set, data, err := derive.Prepare(ctx, cfg, src)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	values, err := resolve(gen, inputs, data)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	data = maps.Clone(data)
 	data["Inputs"] = values
@@ -52,7 +71,7 @@ func Plan(ctx context.Context, cfg *config.Config, src derive.Sources, name stri
 	var problems diag.List
 	for i, f := range gen.Files {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !included(f, values) {
 			continue
@@ -78,19 +97,9 @@ func Plan(ctx context.Context, cfg *config.Config, src derive.Sources, name stri
 		res.Message = msg
 	}
 	if err := problems.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	if gen.Derive == nil || *gen.Derive {
-		withNew := src
-		withNew.Repo = overlay{base: src.Repo, files: created}
-		derived, err := derive.Plan(ctx, cfg, withNew)
-		if err != nil {
-			return nil, err
-		}
-		p.Changes = append(p.Changes, derived.Changes...)
-	}
-	return res, nil
+	return res, created, nil
 }
 
 // newFile renders the file f of a generator. Seen holds the paths of the files planned so far.

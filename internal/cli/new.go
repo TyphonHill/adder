@@ -129,6 +129,11 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 					inputs[input] = flag.Value.String()
 				}
 			}
+			if !opts.json && inputsFile != "-" && isTerminal(cmd.InOrStdin()) && isTerminal(cmd.ErrOrStderr()) {
+				if err := promptMissing(cmd, cfg, root, name, inputs); err != nil {
+					return err
+				}
+			}
 
 			res, err := scaffold.Run(cmd.Context(), cfg, name, inputs, scaffold.Options{Root: root, DryRun: dryRun})
 			if err != nil {

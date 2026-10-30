@@ -85,6 +85,7 @@ Positions follow two rules:
 | `invalid-input` | A generator input has the wrong type, fails a restriction, or is not declared. |
 | `file-exists` | A generator would create a file that already exists. |
 | `usage` | With `--json`, adder was invoked incorrectly, such as with an unknown flag. |
+| `golden-mismatch` | A generator test's files differ from its golden files. |
 
 **Why:** error text is for people and changes freely, but codes and positions are for tools. Keeping both from the start means JSON output, editor squiggles, and documentation links need no rework later.
 

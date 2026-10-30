@@ -18,6 +18,9 @@ type Description struct {
 	Message     string           `json:"message"` // the message template as written
 	Derive      bool             `json:"derive"`
 	InputSchema InputSchema      `json:"inputSchema"`
+
+	gen  config.Generator
+	data map[string]any // the scans, when an input refers to one
 }
 
 // DescribedInput is one input of a generator, with the values its scans allow now.
@@ -87,6 +90,8 @@ func Describe(ctx context.Context, cfg *config.Config, src derive.Sources, name 
 		Files:       []DescribedFile{},
 		Message:     gen.Message,
 		Derive:      gen.Derive == nil || *gen.Derive,
+		gen:         gen,
+		data:        data,
 		InputSchema: InputSchema{
 			Schema:     "https://json-schema.org/draft/2020-12/schema",
 			Type:       "object",
@@ -110,6 +115,11 @@ func Describe(ctx context.Context, cfg *config.Config, src derive.Sources, name 
 		d.Files = append(d.Files, DescribedFile{Template: f.Template, Path: f.Path, When: f.When, Unless: f.Unless, IfExists: f.IfExists})
 	}
 	return d, nil
+}
+
+// Check reports whether value is valid for the string input called input, as adder new checks it.
+func (d *Description) Check(input, value string) error {
+	return check("--"+config.Flag(input), value, d.gen.Inputs[input], d.data)
 }
 
 func describeInput(name string, in config.Input, data map[string]any) (DescribedInput, error) {

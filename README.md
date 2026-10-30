@@ -120,6 +120,7 @@ Running it again reports `unchanged` and leaves the file alone. Add a `drivers/g
 | `adder list` | List the generators and derived outputs in `adder.yaml`. |
 | `adder describe <generator>` | Show a generator's inputs, with the values its scans allow now, and the files it creates. With `--json`, it includes a JSON Schema of its inputs. |
 | `adder explain <file>` | Show which output and template produced a file, the scans the template uses, and whether the file is up to date. |
+| `adder test [generator...]` | Run the generators' tests and compare the files they create with golden files. `--update` rewrites the golden files. |
 
 Global flags:
 
@@ -198,6 +199,7 @@ $ adder new driver --name gcs --dry-run --json
 | `list` | `generators`, `outputs`, `problems` |
 | `describe <generator>` | `name`, `description`, `inputs`, `files`, `message`, `derive`, `inputSchema`, `problems` |
 | `explain <file>` | `path`, `generated`, `template`, `output`, `scans`, `status`, `problems` |
+| `test` | `tests`, each with `generator`, `name`, `passed`, and `changes`, then `problems` |
 
 - `changes` lists every file in the plan, unchanged ones included. Each has a `path`, relative to the root with forward slashes, and a `status`: `unchanged`, `created`, `updated`, `skipped`, or `removed`. With `--diff`, changes that write or remove a file also have a `diff`.
 - `problems` is always present and empty on success. Each problem has a `code`, a `message`, and, when known, a `pos` with `file`, `line`, and `column`, and a `hint`. Invocation mistakes, such as an unknown flag, have the code `usage`.
@@ -384,6 +386,8 @@ Next, implement New in drivers/gcs/gcs.go.
 
 Input names are lowerCamelCase. Each one is a flag in kebab-case (`packageName` is `--package-name`) and a template field (`.Inputs.packageName`). Every problem with the inputs is reported at once, and nothing is written unless the whole run succeeds.
 
+Run in a terminal, `adder new` asks for required inputs that were not given instead of failing, listing allowed values by number and asking again until an answer is valid. Optional inputs keep their defaults, so the result is the same as with flags. Scripts, CI, and agents, which have no terminal, get a `missing-input` problem as before, and so do `--json` and `--inputs -`.
+
 | Input field | Description |
 | --- | --- |
 | `type` | `string`, the default, or `bool`. Bool inputs are `false` unless their flag is given. |
@@ -406,8 +410,29 @@ Input names are lowerCamelCase. Each one is a flag in kebab-case (`packageName` 
 | `description` | Shown in `adder new`. |
 | `message` | A template printed after the files are created, such as next steps. |
 | `derive` | Set to `false` to skip updating derived outputs. |
+| `tests` | Sample inputs and the files the generator should create from them, for `adder test`. |
 
 Generator templates see `.Inputs`, `.Vars`, `.Module`, and every scan. Scans see the new files before they are written, which is how derived outputs pick them up in the same run. Go files are formatted with `gofmt` but get no generated-code header, because they are meant to be edited. A complete example is the test fixture in [`internal/scaffold/testdata/drivers`](internal/scaffold/testdata/drivers).
+
+#### Testing generators
+
+A generator can declare tests: sample inputs, and a directory of the files it should create from them, at their paths in the repository.
+
+```yaml
+generators:
+  driver:
+    # inputs, files, and message as above
+    tests:
+      - name: with-cache
+        inputs: {name: example, cache: true}
+        want: testdata/generators/driver/with-cache
+```
+
+`adder test` runs each test like `--dry-run` and compares the files the generator creates with the files under `want`. A missing, extra, or different file fails the test with a diff, a `golden-mismatch` problem, and exit status 1. `adder test --update` writes what the generator creates now, so review the diff before committing it.
+
+- `want` is relative to the directory holding `adder.yaml`. Keep it under `testdata`, which scans with `**` and Go tooling ignore.
+- Derived outputs are not compared, because they depend on the whole repository.
+- Tests run against the real repository, so `unique` and existing files still apply. Use inputs that will not exist, such as `example`.
 
 ### Template functions
 

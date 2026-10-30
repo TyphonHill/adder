@@ -101,8 +101,8 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | New files and the derived outputs they change computed as one plan, so registries update in the same run | ✅ |
 | A message after generating, with next steps for the person who ran it | ✅ |
 | Inputs from flags, from a JSON file, or from standard input | ✅ |
-| Interactive prompts for missing inputs when running in a terminal ([design 29](docs/design.md#29-prompts-for-missing-inputs-planned-v03)) | 🔜 v0.3 |
-| Generator tests: render a generator with sample inputs and compare to golden files ([design 30](docs/design.md#30-generator-tests-planned-v03)) | 🔜 v0.3 |
+| Interactive prompts for missing inputs when running in a terminal ([design 29](docs/design.md#29-prompts-for-missing-inputs-planned-v03)) | ✅ |
+| Generator tests: render a generator with sample inputs and compare to golden files ([design 30](docs/design.md#30-generator-tests-planned-v03)) | ✅ |
 | Composing generators, where one generator runs another | 💡 |
 | Inserting code into existing files through the syntax tree, for cases deriving cannot cover | 💡 |
 

@@ -8,6 +8,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 - Scans skip files that no platform can build, such as `//go:build ignore`, evaluated the same way on every machine, and `buildTags` on a scan sets custom tags such as `integration`.
 - Template functions `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `nindent`, and `plural`, with Sprout's names and argument order, and `groupBy`.
+- `adder new` asks for missing required inputs when run in a terminal, listing allowed values and asking again until an answer is valid.
+- Generator `tests` and `adder test`, which compares the files a generator creates from sample inputs with golden files, and `adder test --update` to rewrite them. A new diagnostic code `golden-mismatch` reports failures.
 - `adder list` shows the generators and derived outputs, `adder describe <generator>` shows a generator's inputs with the values its scans allow now and, with `--json`, a JSON Schema of its inputs, and `adder explain <file>` shows which output and template produced a file and whether it is up to date.
 - `each` on an output renders it once per scan item, as `.Item`, with a templated path. Files it generated that it no longer produces are removed, and `adder check` reports them as stale. Changes gain a `removed` status.
 - Generated-file headers for other languages, in each one's comment syntax: YAML, TOML, shell, Python, TypeScript, SQL, CSS, Markdown, HTML, and more.
