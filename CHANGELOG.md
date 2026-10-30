@@ -6,6 +6,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ### Added
 
+- `adder list` shows the generators and derived outputs, `adder describe <generator>` shows a generator's inputs with the values its scans allow now and, with `--json`, a JSON Schema of its inputs, and `adder explain <file>` shows which output and template produced a file and whether it is up to date.
 - `each` on an output renders it once per scan item, as `.Item`, with a templated path. Files it generated that it no longer produces are removed, and `adder check` reports them as stale. Changes gain a `removed` status.
 - Generated-file headers for other languages, in each one's comment syntax: YAML, TOML, shell, Python, TypeScript, SQL, CSS, Markdown, HTML, and more.
 - `--json` on every command prints the result and any problems as one JSON object on standard output, with a `usage` code for invocation mistakes. Exit codes are unchanged.

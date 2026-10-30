@@ -108,15 +108,15 @@ var directiveName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 // Output is a file rendered from a template with the results of every scan.
 type Output struct {
 	// Template is a slash-separated path relative to the configuration file's directory.
-	Template string `yaml:"template"`
+	Template string `yaml:"template" json:"template"`
 	// Path is a slash-separated path relative to the output root. With Each, it is a template rendered for each
 	// item.
-	Path string `yaml:"path"`
+	Path string `yaml:"path" json:"path"`
 	// Each names a scan; the template is rendered once per item, as .Item.
-	Each string `yaml:"each"`
+	Each string `yaml:"each" json:"each,omitempty"`
 
 	// Pos is where the output is declared, for reporting problems found while rendering.
-	Pos diag.Pos `yaml:"-"`
+	Pos diag.Pos `yaml:"-" json:"pos,omitzero"`
 }
 
 // Partial is a slash-separated glob pattern of template files, relative to the configuration file's directory.

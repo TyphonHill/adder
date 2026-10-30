@@ -117,6 +117,9 @@ Running it again reports `unchanged` and leaves the file alone. Add a `drivers/g
 | `adder derive` | Run every scan and rewrite the derived outputs that changed. |
 | `adder check` | Report derived outputs that are out of date, without writing anything. Exits with status 3 when any are, so CI can catch a forgotten `adder derive`. |
 | `adder new <generator>` | Create files with a generator, then update the derived outputs. `adder new` lists the generators, and `adder new <generator> --help` shows its inputs. |
+| `adder list` | List the generators and derived outputs in `adder.yaml`. |
+| `adder describe <generator>` | Show a generator's inputs, with the values its scans allow now, and the files it creates. With `--json`, it includes a JSON Schema of its inputs. |
+| `adder explain <file>` | Show which output and template produced a file, the scans the template uses, and whether the file is up to date. |
 
 Global flags:
 
@@ -192,11 +195,17 @@ $ adder new driver --name gcs --dry-run --json
 | `check` | `changes`, `problems` |
 | `new <generator>` | `generator`, `dryRun`, `changes`, `message`, `problems` |
 | `init` | `changes`, `problems` |
+| `list` | `generators`, `outputs`, `problems` |
+| `describe <generator>` | `name`, `description`, `inputs`, `files`, `message`, `derive`, `inputSchema`, `problems` |
+| `explain <file>` | `path`, `generated`, `template`, `output`, `scans`, `status`, `problems` |
 
 - `changes` lists every file in the plan, unchanged ones included. Each has a `path`, relative to the root with forward slashes, and a `status`: `unchanged`, `created`, `updated`, `skipped`, or `removed`. With `--diff`, changes that write or remove a file also have a `diff`.
 - `problems` is always present and empty on success. Each problem has a `code`, a `message`, and, when known, a `pos` with `file`, `line`, and `column`, and a `hint`. Invocation mistakes, such as an unknown flag, have the code `usage`.
 - `adder check` reports stale outputs as changes, not problems, and exits with status 3.
 - `--help` still prints text.
+- `describe`'s `inputSchema` is a JSON Schema (draft 2020-12) for the object `adder new --inputs` accepts, the shape MCP uses for tool inputs. `unique` becomes `"not": {"enum": [...]}` listing the values that exist now, and `valuesFrom` becomes `enum`.
+
+A coding agent can discover and run any generator this way: `adder list --json`, then `adder describe <generator> --json`, then `adder new <generator> --inputs - --dry-run --json` to preview, then the same without `--dry-run`.
 
 ## Configuration
 

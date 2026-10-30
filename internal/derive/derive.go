@@ -303,6 +303,27 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 	return data, nil
 }
 
+// Open returns sources for the repository at root, whose existing outputs are in the root too, and a function
+// that closes them.
+func Open(cfg *config.Config, root string) (Sources, func(), error) {
+	repo, err := os.OpenRoot(root)
+	if err != nil {
+		return Sources{}, nil, diag.Wrap(diag.IO, diag.Pos{File: root}, err)
+	}
+	templates, err := os.OpenRoot(cfg.Dir)
+	if err != nil {
+		_ = repo.Close()
+		return Sources{}, nil, diag.Wrap(diag.IO, diag.Pos{File: cfg.Dir}, err)
+	}
+	src := Sources{
+		Repo: repo.FS(), RepoDir: root,
+		Templates: templates.FS(), TemplatesDir: cfg.Dir,
+		Existing: repo.FS(), ExistingDir: root,
+	}
+	// Both roots are only read, so closing them cannot lose anything.
+	return src, func() { _ = repo.Close(); _ = templates.Close() }, nil
+}
+
 // Options locate the directories Run works in.
 type Options struct {
 	// Root is the repository root.

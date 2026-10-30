@@ -141,7 +141,7 @@ adder supports the two most recent Go releases. `go.mod` declares the older one 
 
 Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml/v3` for configuration, `golang.org/x/mod` for reading `go.mod`, and `github.com/rogpeppe/go-internal/diff` for `--diff` previews. Anything that shapes generated output, such as template functions and case conversion, is implemented in adder itself, because a dependency upgrade must never change what people's templates produce.
 
-Planned for v0.3: `golang.org/x/sys`, only to turn on color in Windows consoles ([decision 32](#32-terminal-output-planned-v03)). Tests also use `github.com/rogpeppe/go-internal/testscript`, from the same module as the diff code, which is never built into the binary.
+Planned for v0.3: `golang.org/x/sys`, only to turn on color in Windows consoles ([decision 32](#32-terminal-output-planned-v03)). Tests also use `github.com/rogpeppe/go-internal/testscript`, from the same module as the diff code, and `github.com/santhosh-tekuri/jsonschema/v6` to check the input schemas `adder describe` writes. Neither is built into the binary.
 
 ### 12. One configuration file at the root
 

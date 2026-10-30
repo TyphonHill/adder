@@ -456,3 +456,49 @@ func TestPathPattern(t *testing.T) {
 		})
 	}
 }
+
+func TestReferences(t *testing.T) {
+	fsys := fstest.MapFS{
+		"main.tmpl": {Data: []byte(`{{ range .Drivers }}{{ .Name }}{{ $.Module }}{{ end }}` +
+			`{{ if .Handlers }}{{ template "list" . }}{{ else }}{{ .Vars.X }}{{ end }}` +
+			`{{ with $x := .Jobs }}{{ $x }}{{ end }}{{ index . "Indirect" }}{{ (.Chained).Field }}`)},
+		"partials/list.tmpl": {Data: []byte(`{{ define "list" }}{{ range .Routes }}{{ end }}{{ template "list" . }}{{ end }}`)},
+		"broken.tmpl":        {Data: []byte(`{{ .X`)},
+	}
+	set, err := NewSet(fsys, []string{"partials/list.tmpl"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{"Chained", "Drivers", "Handlers", "Indirect", "Jobs", "Module", "Name", "Routes", "Unused"}
+	tests := []struct {
+		name     string
+		template string
+		want     []string
+		wantCode diag.Code
+	}{
+		{
+			name:     "fields, variables, branches, chains, and partials",
+			template: "main.tmpl",
+			want:     []string{"Chained", "Drivers", "Handlers", "Jobs", "Module", "Name", "Routes"},
+		},
+		{name: "missing template", template: "missing.tmpl", wantCode: diag.IO},
+		{name: "invalid template", template: "broken.tmpl", wantCode: diag.TemplateSyntax},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := set.References(tt.template, names)
+			if tt.wantCode != "" {
+				if list := diag.From(err); len(list) != 1 || list[0].Code != tt.wantCode {
+					t.Errorf("References() error = %v, want %s", err, tt.wantCode)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("References() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
