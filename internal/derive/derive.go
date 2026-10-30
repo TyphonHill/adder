@@ -86,7 +86,28 @@ func renderOutput(set *render.Set, data map[string]any, src Sources, out config.
 	if err := p.Add(src.Existing, target, content); err != nil {
 		return diag.Locate(err, src.ExistingDir, out.Pos)
 	}
+	if change := p.Changes[len(p.Changes)-1]; change.Status == plan.Updated && !replaceable(change) {
+		p.Changes = p.Changes[:len(p.Changes)-1]
+		return diag.Locate(&diag.Diagnostic{
+			Code:    diag.FileExists,
+			Pos:     diag.Pos{File: target},
+			Message: fmt.Sprintf("file already exists and adder did not generate it, so it is not replaced by %s", out.Template),
+			Hint:    "adder never overwrites files people own; move or delete the file, or write the output somewhere else",
+		}, src.ExistingDir, out.Pos)
+	}
 	return nil
+}
+
+// replaceable reports whether derive may overwrite a file with an output. A file whose new content carries
+// adder's header must already carry one, naming any template so that templates can be renamed. When the new
+// content has none, because the file type has no comments or the template writes its own generated-code
+// comment, adder cannot tell its files apart and replaces them as before.
+func replaceable(c plan.Change) bool {
+	if _, ours := header.Parse(c.Path, c.New); !ours {
+		return true
+	}
+	_, ours := header.Parse(c.Path, c.Old)
+	return ours
 }
 
 // planEach adds the output rendered for each item of its scan to p, then the files it generated before that it

@@ -272,6 +272,8 @@ Go outputs are formatted with `gofmt`, lose the imports they never use, and are 
 
 If a template already writes its own `// Code generated ... DO NOT EDIT.` line, adder keeps it as is.
 
+adder never replaces a file it did not generate. When a file already sits at an output's path without adder's header, `derive` stops with a `file-exists` problem and writes nothing, so move or delete the file first. Outputs that get no header, such as JSON, are replaced as before, since adder cannot tell its own apart.
+
 Outputs in other languages get the same header in their own comment syntax, chosen by file extension: `#` for YAML, TOML, Python, shell scripts, Makefiles, and Dockerfiles; `//` for TypeScript, JavaScript, Rust, Java, and Protocol Buffers; `--` for SQL; `/* */` for CSS; and `<!-- -->` for Markdown, HTML, and XML. It goes after a leading `#!` line, XML declaration, or Markdown front matter. JSON and other files without comments get no header. See [design 25](docs/design.md#25-generated-file-headers-for-other-languages-planned-v03) for the full table.
 
 Because unused imports are removed, templates can import everything a file might need instead of wrapping each import in `{{ if }}`. adder recognizes a package by its explicit name or by the last element of its path, so give an import an explicit name when its package name differs from its path. Missing imports are not added ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)).

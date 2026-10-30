@@ -18,9 +18,6 @@ const (
 	suffix = ". DO NOT EDIT."
 )
 
-// leadingLines is how far into a non-Go file a generated-code comment is looked for.
-const leadingLines = 10
-
 // comment is a language's syntax for a one-line comment.
 type comment struct{ open, close string }
 
@@ -126,11 +123,12 @@ func Parse(name string, src []byte) (source string, ok bool) {
 	if !ok {
 		return "", false
 	}
-	for _, line := range leading(src[preambleEnd(name, src):]) {
-		if rest, found := strings.CutPrefix(line, c.open+prefix); found {
-			if source, found := strings.CutSuffix(rest, suffix+c.close); found {
-				return source, true
-			}
+	// Only where Ensure writes it: a header anywhere else may be text quoted in a file people own, and Parse
+	// decides which files derive removes.
+	line, _, _ := strings.Cut(string(src[preambleEnd(name, src):]), "\n")
+	if rest, found := strings.CutPrefix(strings.TrimSuffix(line, "\r"), c.open+prefix); found {
+		if source, found := strings.CutSuffix(rest, suffix+c.close); found {
+			return source, true
 		}
 	}
 	return "", false
@@ -177,31 +175,37 @@ func preambleEnd(name string, src []byte) int {
 	return 0
 }
 
-// hasMarker reports whether src starts with a generated-code comment in syntax c, following Go's convention of a
-// "Code generated ... DO NOT EDIT." line.
+// hasMarker reports whether the comments at the top of src, before its first line of content, include a
+// "Code generated ... DO NOT EDIT." line in syntax c. This is Go's rule, which only counts such a comment before
+// the package clause.
 func hasMarker(c comment, src []byte) bool {
 	open, close := strings.TrimSpace(c.open), strings.TrimSpace(c.close)
-	for _, line := range leading(src) {
-		text, ok := strings.CutPrefix(strings.TrimSpace(line), open)
-		if !ok {
+	inBlock := false // inside a comment that runs until close
+	for line := range strings.Lines(string(src)) {
+		text := strings.TrimSpace(line)
+		switch {
+		case inBlock:
+			text = strings.TrimSpace(strings.TrimPrefix(text, "*")) // as in /*\n * text\n */
+		case text == "":
 			continue
+		case strings.HasPrefix(text, open):
+			text = strings.TrimSpace(strings.TrimPrefix(text, open))
+			inBlock = close != ""
+		default:
+			return false
 		}
-		text = strings.TrimSpace(strings.TrimSuffix(text, close))
+		content := false // text after the comment closes, on the same line
+		if inBlock {
+			if before, after, found := strings.Cut(text, close); found {
+				text, inBlock, content = strings.TrimSpace(before), false, strings.TrimSpace(after) != ""
+			}
+		}
 		if strings.HasPrefix(text, "Code generated ") && strings.HasSuffix(text, "DO NOT EDIT.") {
 			return true
 		}
-	}
-	return false
-}
-
-// leading returns the first leadingLines lines of src without their line endings.
-func leading(src []byte) []string {
-	var lines []string
-	for line := range strings.Lines(string(src)) {
-		lines = append(lines, strings.TrimRight(line, "\r\n"))
-		if len(lines) == leadingLines {
-			break
+		if content {
+			return false
 		}
 	}
-	return lines
+	return false
 }

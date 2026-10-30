@@ -20,6 +20,15 @@ cmp stdout removed.out
 exists stores/disk/extra_mock.gen.go
 exec adder check
 
+# A new item whose file already exists, written by hand, is refused and nothing is written.
+mkdir stores/cache
+cp cache.go stores/cache/cache.go
+cp handwritten.go stores/cache/cache_mock.gen.go
+exits 1 adder derive
+stderr '^stores[/\\]cache[/\\]cache_mock\.gen\.go: file already exists and adder did not generate it, so it is not replaced by templates/mock\.go\.tmpl \[file-exists\]$'
+grep 'written by hand' stores/cache/cache_mock.gen.go
+rm stores/cache
+
 # JSON reports removals with their own status.
 cp memory.go stores/memory/memory.go
 exec adder derive
@@ -73,6 +82,11 @@ stores:
 package memory
 
 // New returns an in-memory store.
+func New() any { return nil }
+-- cache.go --
+package cache
+
+// New returns a cache.
 func New() any { return nil }
 -- handwritten.go --
 package disk
