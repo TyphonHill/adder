@@ -34,6 +34,8 @@ func TestScripts(t *testing.T) {
 				env.Setenv(key, value)
 			}
 			env.Setenv("ADDER_ROOT", root)
+			// Scripts run the go that runs the tests, never a toolchain go.mod asks for, which may not be downloaded.
+			env.Setenv("GOTOOLCHAIN", "local")
 			return nil
 		},
 		UpdateScripts:       *update,
