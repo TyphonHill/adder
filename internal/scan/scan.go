@@ -115,6 +115,13 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir s
 		if _, generated := header.Source(parsed); generated {
 			continue
 		}
+		ok, err := buildable(fset, parsed, s.BuildTags)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
 
 		base := Item{Package: parsed.Name.Name, ImportPath: importPath(module, dir), Dir: dir, File: file}
 		var found []Item

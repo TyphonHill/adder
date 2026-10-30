@@ -290,6 +290,12 @@ func TestParseErrors(t *testing.T) {
 		{name: "scan name not identifier", input: "version: 1\nderive:\n  scans:\n    my-scan: {dirs: [a]}", want: []want{{diag.InvalidName, 4, 5}}},
 		{name: "scan name reserved", input: "version: 1\nderive:\n  scans:\n    Module: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{name: "scan name reserved for inputs", input: "version: 1\nderive:\n  scans:\n    Inputs: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
+		{
+			name:     "build tag with a space",
+			input:    "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      buildTags: [ok, \"two words\"]",
+			want:     []want{{diag.InvalidValue, 6, 23}},
+			wantHint: "list tags as //go:build lines name them, such as integration",
+		},
 		{name: "scan name reserved for items", input: "version: 1\nderive:\n  scans:\n    Item: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
 			name:     "templated path without each",

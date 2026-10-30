@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io/fs"
@@ -517,5 +518,67 @@ func TestRunErrors(t *testing.T) {
 				t.Fatalf("Run() error = %#v, want code %s at %v", list, tt.wantCode, tt.wantPos)
 			}
 		})
+	}
+}
+
+func TestRunBuildConstraints(t *testing.T) {
+	const body = "\n\npackage p\n\nfunc F() {}\n"
+	manyPlatforms := "//go:build ignore && (aix || android || darwin || dragonfly || freebsd || hurd || illumos || ios || js || linux || nacl || netbsd || openbsd || plan9 || solaris || wasip1 || windows)"
+	tests := []struct {
+		name     string
+		header   string // the lines before the package clause
+		file     string // the file's name, f.go when empty
+		tags     []string
+		want     bool
+		wantLine int // when set, a go-syntax problem is expected on this line
+	}{
+		{name: "no constraint", header: "// Package p does things.", want: true},
+		{name: "ignore", header: "//go:build ignore", want: false},
+		{name: "a platform", header: "//go:build linux", want: true},
+		{name: "two platforms", header: "//go:build linux && amd64", want: true},
+		{name: "every platform but one", header: "//go:build !windows", want: true},
+		{name: "no platform at all", header: "//go:build linux && !linux", want: false},
+		{name: "a custom tag that is not set", header: "//go:build integration", want: false},
+		{name: "a custom tag that is set", header: "//go:build integration", tags: []string{"integration"}, want: true},
+		{name: "a negated custom tag", header: "//go:build !integration", want: true},
+		{name: "a negated custom tag that is set", header: "//go:build !integration", tags: []string{"integration"}, want: false},
+		{name: "a Go version", header: "//go:build go1.26", want: true},
+		{name: "a toolchain tag or a custom one", header: "//go:build cgo || ignore", want: true},
+		{name: "an experiment", header: "//go:build goexperiment.jsonv2", want: true},
+		{name: "legacy plus build lines", header: "// +build ignore", want: false},
+		{name: "plus build lines combine with and", header: "// +build linux\n// +build ignore", want: false},
+		{name: "a go:build line wins over plus build lines", header: "//go:build linux\n// +build ignore", want: true},
+		{name: "too many platform tags to try", header: manyPlatforms, want: true},
+		{name: "file name suffixes never exclude", header: "", file: "f_windows.go", want: true},
+		{name: "an invalid constraint", header: "// Doc.\n//go:build linux &&", wantLine: 2},
+		{name: "two go:build lines", header: "//go:build linux\n//go:build darwin", wantLine: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name := cmp.Or(tt.file, "f.go")
+			fsys := fstest.MapFS{"p/" + name: file(tt.header + body)}
+			items, err := Run(t.Context(), fsys, "", config.Scan{Dirs: []string{"p"}, BuildTags: tt.tags})
+			if tt.wantLine != 0 {
+				list := diag.From(err)
+				if len(list) != 1 || list[0].Code != diag.GoSyntax || list[0].Pos.File != "p/"+name || list[0].Pos.Line != tt.wantLine {
+					t.Errorf("Run() error = %v, want a go-syntax problem on line %d", err, tt.wantLine)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := len(items) == 1; got != tt.want {
+				t.Errorf("scanned = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunConstraintAfterPackage(t *testing.T) {
+	fsys := fstest.MapFS{"p/f.go": file("package p\n\n//go:build ignore\nfunc F() {}\n")}
+	items, err := Run(t.Context(), fsys, "", config.Scan{Dirs: []string{"p"}})
+	if err != nil || len(items) != 1 {
+		t.Errorf("Run() = %d items, %v; a constraint after the package clause does not count", len(items), err)
 	}
 }
