@@ -926,6 +926,8 @@ Each change the review proposes is decided on its own. Those accepted ship befor
 
 **2. Try adder on a production codebase.** adder replaces the hand-rolled generator of a large repository in a local trial before the schema freezes, since a real generator is the best test of whether the schema is right. Nothing from that repository is published. What the trial finds comes back as general changes to adder, with examples of its own.
 
+The trial replaced a generator of about 430 lines of Go with 68 lines of `adder.yaml`. Every derived file matched the old generator's output byte for byte, apart from the header, and its tests passed. It found no reason to change the schema, and two things that make moving to adder harder than it should be, which v1.0 adds ([decision 44](#44-moving-from-a-hand-rolled-generator-planned-v10)).
+
 **3. Rewrite the documentation, with examples.** The README becomes a short page that shows what adder does: the problem it solves, one example before and after, a few small examples of deriving, scaffolding, packs, checks in CI, and agents, installation, and links. The reference moves to `docs/`, one file per topic:
 
 | File | Covers |
@@ -963,6 +965,25 @@ CI runs `adder check` and `go build ./...` in each, with adder built from the sa
 | Freezing without a production trial | Freezing is a one-way door, and the tests are written by the people who wrote the schema. |
 | Keeping the reference in the README | Seven hundred lines that mix a pitch, a tutorial, and a reference serve none of them well. |
 | A code of conduct in v1.0 | It matters once others join, which the launch after v1.0 invites. It arrives then, with a way to report problems that publishes no one's address. |
+
+### 44. Moving from a hand-rolled generator (planned, v1.0)
+
+A repository moving to adder already has the files its old generator wrote, and people used to its commands.
+
+**Adopting existing files.** `adder derive --adopt` replaces a file at an output's path that lacks adder's header, which derive otherwise refuses with `file-exists` ([decision 8](#8-the-generated-code-header-is-frozen)). It is the one-time step of moving to adder: the old generator's files, often uncommitted and in every checkout, become adder's.
+
+- It applies only to the paths outputs write in this run: an output's path, and for outputs with `each`, the paths its items render. A file adder would not write is never touched, and stale cleanup still removes only files with adder's header.
+- Adopted files are reported with their own status, `adopted`, in text and JSON, so a review shows exactly what changed hands. `--dry-run` and `--diff` preview them.
+- The `file-exists` hint names `--adopt`.
+- `adder check` has no `--adopt`: it reports such files as problems, which is how CI notices a checkout that still needs adopting.
+
+**Short flags for inputs.** An input may set `short` to a single letter, so `--name` can also be `-N`. It cannot be one `adder new` uses itself, `c`, `h`, `n`, `q`, or `v`, or one another input of the generator uses.
+
+| Considered | Why not |
+| --- | --- |
+| Recognizing another tool's `Code generated ... DO NOT EDIT.` comment as adder's own | Any tool's generated file at an output's path would be replaced silently. [Decision 8](#8-the-generated-code-header-is-frozen) counts only adder's header, and adopting is a one-time decision someone makes. |
+| An `adopt` setting on outputs | Adopting is a one-time step per checkout, not a property of the output, and a setting would stay in the configuration long after it was needed. |
+| Deriving short flags from input names | Two inputs starting with the same letter would collide, and adding an input could change another's flag. |
 
 ## Compatibility
 
