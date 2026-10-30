@@ -19,7 +19,7 @@ type Explanation struct {
 	Path string `json:"path"`
 	// Generated reports whether the file has adder's header.
 	Generated bool `json:"generated"`
-	// Template is the template the header names.
+	// Template is the template the header names, with its pack and use for a pack's template.
 	Template string `json:"template,omitempty"`
 	// Output is the output that writes or removes the file, nil when none does.
 	Output *config.Output `json:"output"`
@@ -42,10 +42,12 @@ func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) 
 		return e, nil
 	}
 	var output *config.Output
-	for i, out := range cfg.Derive.Outputs {
-		if out.Template == e.Template && writes(out, name) {
-			output = &cfg.Derive.Outputs[i]
-			break
+	var owner unit
+	for _, u := range units(cfg, src) {
+		for i, out := range u.cfg.Derive.Outputs {
+			if output == nil && out.Source() == e.Template && writes(out, name) {
+				output, owner = &u.cfg.Derive.Outputs[i], u
+			}
 		}
 	}
 	if output == nil {
@@ -62,13 +64,13 @@ func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) 
 	if i < 0 {
 		return e, nil
 	}
-	set, err := templates(cfg, src)
+	set, err := templates(owner, src)
 	if err != nil {
 		return nil, err
 	}
-	scans, err := set.References(output.Template, slices.Sorted(maps.Keys(cfg.Derive.Scans)))
+	scans, err := set.References(output.Template, slices.Sorted(maps.Keys(owner.cfg.Derive.Scans)))
 	if err != nil {
-		return nil, diag.Locate(err, src.TemplatesDir, output.Pos)
+		return nil, owner.locate(err, output.Pos)
 	}
 	e.Output, e.Scans, e.Status = output, nonNil(scans), &p.Changes[i].Status
 	return e, nil

@@ -78,7 +78,7 @@ func Describe(ctx context.Context, cfg *config.Config, src derive.Sources, name 
 	var data map[string]any
 	if slices.ContainsFunc(slices.Collect(maps.Values(gen.Inputs)), func(in config.Input) bool { return in.ValuesFrom != "" || in.Unique != "" }) {
 		var err error
-		if _, data, err = derive.Prepare(ctx, cfg, src); err != nil {
+		if _, data, err = derive.Prepare(ctx, cfg, src, ""); err != nil {
 			return nil, err
 		}
 	}

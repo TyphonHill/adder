@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/TyphonHill/adder/internal/diag"
 )
@@ -14,6 +15,7 @@ func TestNew(t *testing.T) {
 		name      string
 		packs     []Pack
 		wantFuncs []string
+		wantFS    []string
 		wantErrs  []string
 	}{
 		{name: "no packs"},
@@ -22,7 +24,9 @@ func TestNew(t *testing.T) {
 			packs:     []Pack{{Name: "local", Funcs: map[string]any{"shout": shout}}, {Name: "store-kit", Funcs: map[string]any{"quiet": strings.ToLower}}},
 			wantFuncs: []string{"quiet", "shout"},
 		},
-		{name: "a pack without functions", packs: []Pack{{Name: "store"}}},
+		{name: "a pack without functions", packs: []Pack{{Name: "store", FS: fstest.MapFS{"pack.yaml": {Data: []byte("version: 1\n")}}}}, wantFS: []string{"store"}},
+		{name: "an FS without pack.yaml", packs: []Pack{{Name: "store", FS: fstest.MapFS{"templates/x.tmpl": {}}}}, wantErrs: []string{`pack "store": its FS has no pack.yaml at its root`}},
+		{name: "pack.yaml that is a directory", packs: []Pack{{Name: "store", FS: fstest.MapFS{"pack.yaml/x": {}}}}, wantErrs: []string{`pack "store": its FS has no pack.yaml at its root`}},
 		{name: "a name that is not lowercase words", packs: []Pack{{Name: "Store"}}, wantErrs: []string{`pack name "Store" is not lowercase words joined by hyphens`}},
 		{name: "an empty name", packs: []Pack{{}}, wantErrs: []string{`pack name "" is not lowercase words joined by hyphens`}},
 		{name: "two packs with one name", packs: []Pack{{Name: "store"}, {Name: "store"}}, wantErrs: []string{`two packs are named "store"`}},
@@ -65,6 +69,14 @@ func TestNew(t *testing.T) {
 			slices.Sort(funcs)
 			if !slices.Equal(funcs, tt.wantFuncs) {
 				t.Errorf("Funcs() = %v, want %v", funcs, tt.wantFuncs)
+			}
+			for _, p := range tt.packs {
+				if _, ok := r.FS(p.Name); ok != slices.Contains(tt.wantFS, p.Name) {
+					t.Errorf("FS(%q) found = %v", p.Name, ok)
+				}
+			}
+			if _, ok := (*Registry)(nil).FS("store"); ok {
+				t.Error("a nil registry has a pack")
 			}
 		})
 	}

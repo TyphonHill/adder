@@ -33,7 +33,7 @@ const Version = 1
 var buildTag = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
 // reservedNames are template data keys that scans cannot use.
-var reservedNames = []string{"Inputs", "Item", "Module", "Vars"}
+var reservedNames = []string{"Inputs", "Item", "Module", "Options", "Vars"}
 
 // Config is a parsed adder configuration file.
 type Config struct {
@@ -45,6 +45,8 @@ type Config struct {
 	Derive   Derive    `yaml:"derive"`
 	// Generators create new files, each run as adder new <name>.
 	Generators map[string]Generator `yaml:"generators"`
+	// Packs are the packs the configuration uses, by the name of each use.
+	Packs map[string]Use `yaml:"packs"`
 
 	// Dir is the directory holding the configuration file; template paths resolve against it.
 	Dir string `yaml:"-"`
@@ -159,6 +161,10 @@ type Output struct {
 	Path string `yaml:"path" json:"path"`
 	// Each names a scan; the template is rendered once per item, as .Item.
 	Each string `yaml:"each" json:"each,omitempty"`
+	// Pack and Use name the pack and the use an output comes from, for an output a pack declares. Its template is
+	// in the pack.
+	Pack string `yaml:"-" json:"pack,omitempty"`
+	Use  string `yaml:"-" json:"use,omitempty"`
 
 	// Pos is where the output is declared, for reporting problems found while rendering.
 	Pos diag.Pos `yaml:"-" json:"pos,omitzero"`
@@ -235,13 +241,13 @@ func Find(dir string) (string, error) {
 	}
 }
 
-// Load reads and validates the configuration file at path.
-func Load(path string) (*Config, error) {
+// Load reads and validates the configuration file at path, loading the packs it uses from packs.
+func Load(path string, packs Packs) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, diag.Wrap(diag.IO, diag.Pos{File: path}, err)
 	}
-	cfg, err := Parse(path, data)
+	cfg, err := Parse(path, data, packs)
 	if err != nil {
 		return nil, err
 	}
@@ -249,8 +255,9 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// Parse decodes and validates configuration data, rejecting unknown fields. File names the data in diagnostics.
-func Parse(file string, data []byte) (*Config, error) {
+// Parse decodes and validates configuration data, rejecting unknown fields, and loads the packs it uses from
+// packs. File names the data in diagnostics.
+func Parse(file string, data []byte, packs Packs) (*Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 
@@ -265,7 +272,9 @@ func Parse(file string, data []byte) (*Config, error) {
 	pos := indexPositions(file, data)
 	cfg.normalize()
 	cfg.recordPositions(pos)
-	if err := cfg.validate(pos); err != nil {
+	problems := diag.From(cfg.validate(pos))
+	problems = append(problems, cfg.loadPacks(packs, pos)...)
+	if err := problems.Err(); err != nil {
 		return nil, err
 	}
 	return &cfg, nil

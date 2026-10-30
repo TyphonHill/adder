@@ -112,7 +112,7 @@ var All = []func(context.Context) error{
 			tb.Fatal(err)
 		}
 	}
-	cfg, err := config.Load(filepath.Join(root, config.FileName))
+	cfg, err := config.Load(filepath.Join(root, config.FileName), nil)
 	if err != nil {
 		tb.Fatal(err)
 	}

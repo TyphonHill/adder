@@ -1,5 +1,12 @@
-// Package adder builds adder with packs: template functions, and later generators and templates, shared across
+// Package adder builds adder with packs: derive outputs, templates, and template functions shared across
 // repositories.
+//
+// A pack is usually a Go package that embeds a pack.yaml and its templates:
+//
+//	//go:embed pack.yaml templates
+//	var files embed.FS
+//
+//	var Pack = adder.Pack{Name: "store", FS: files}
 //
 // A repository that uses packs builds its own adder from a small main package, and runs it with go tool:
 //
@@ -24,6 +31,7 @@ package adder
 import (
 	"cmp"
 	"context"
+	"io/fs"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -37,8 +45,12 @@ const module = "github.com/TyphonHill/adder"
 
 // Pack is a set of extensions to adder that repositories share.
 type Pack struct {
-	// Name identifies the pack: lowercase words joined by hyphens, such as "store".
+	// Name identifies the pack: lowercase words joined by hyphens, such as "store". A use in adder.yaml names
+	// the pack it uses.
 	Name string
+	// FS holds the pack's pack.yaml at its root, and the templates it names. It is usually an embed.FS, and nil for
+	// a pack of only functions.
+	FS fs.FS
 	// Funcs are template functions, available to every template, by name. Each follows the rules of
 	// text/template and must be deterministic. A name may not be built in or used by another pack.
 	Funcs map[string]any
@@ -57,7 +69,7 @@ func Main(packs ...Pack) {
 func internal(packs []Pack) []pack.Pack {
 	out := make([]pack.Pack, len(packs))
 	for i, p := range packs {
-		out[i] = pack.Pack{Name: p.Name, Funcs: p.Funcs}
+		out[i] = pack.Pack{Name: p.Name, FS: p.FS, Funcs: p.Funcs}
 	}
 	return out
 }

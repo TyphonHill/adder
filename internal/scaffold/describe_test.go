@@ -96,7 +96,7 @@ func TestInputSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the input schema is not valid JSON Schema: %v\n%s", err, encoded)
 	}
-	_, data, err := derive.Prepare(t.Context(), cfg, src)
+	_, data, err := derive.Prepare(t.Context(), cfg, src, "")
 	if err != nil {
 		t.Fatal(err)
 	}

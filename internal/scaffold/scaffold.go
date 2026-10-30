@@ -56,7 +56,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 	if !ok {
 		return nil, nil, unknownGenerator(cfg, name)
 	}
-	set, data, err := derive.Prepare(ctx, cfg, src)
+	set, data, err := derive.Prepare(ctx, cfg, src, "")
 	if err != nil {
 		return nil, nil, err
 	}

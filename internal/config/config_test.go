@@ -91,7 +91,7 @@ func TestParse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := Parse("adder.yaml", []byte(tt.input))
+			cfg, err := Parse("adder.yaml", []byte(tt.input), nil)
 			if err != nil {
 				t.Fatalf("Parse() error = %v", err)
 			}
@@ -149,7 +149,7 @@ func TestParseShared(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := Parse("adder.yaml", []byte(tt.input))
+			cfg, err := Parse("adder.yaml", []byte(tt.input), nil)
 			if err != nil {
 				t.Fatalf("Parse() error = %v", err)
 			}
@@ -184,7 +184,7 @@ generators:
 `
 
 func TestParseGenerators(t *testing.T) {
-	cfg, err := Parse("adder.yaml", []byte(generatorConfig))
+	cfg, err := Parse("adder.yaml", []byte(generatorConfig), nil)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -439,7 +439,7 @@ func TestParseErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse("adder.yaml", []byte(tt.input))
+			_, err := Parse("adder.yaml", []byte(tt.input), nil)
 			list := diag.From(err)
 			if len(list) == 0 {
 				t.Fatal("Parse() error = nil")
@@ -531,7 +531,7 @@ func TestLoad(t *testing.T) {
 				}
 			}
 
-			cfg, err := Load(path)
+			cfg, err := Load(path, nil)
 			if tt.wantCode != "" {
 				list := diag.From(err)
 				if len(list) != 1 || list[0].Code != tt.wantCode || list[0].Pos.File != path {

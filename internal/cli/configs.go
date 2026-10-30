@@ -78,7 +78,7 @@ func runConfigs(cmd *cobra.Command, opts *globalOptions, patterns []string, newR
 	outcome := &configsError{}
 	for _, file := range files {
 		rep := newReport()
-		cfg, err := config.Load(file)
+		cfg, err := config.Load(file, opts.packs)
 		if err == nil {
 			prefix := filepath.ToSlash(filepath.Dir(file))
 			if prefix == "." {

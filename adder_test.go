@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"testing"
+	"testing/fstest"
 
 	"github.com/TyphonHill/adder/internal/pack"
 )
@@ -49,7 +50,7 @@ func TestInternal(t *testing.T) {
 		packs []Pack
 	}{
 		{name: "none"},
-		{name: "every field", packs: []Pack{{Name: "local", Funcs: map[string]any{"same": same}}, {Name: "store"}}},
+		{name: "every field", packs: []Pack{{Name: "local", Funcs: map[string]any{"same": same}}, {Name: "store", FS: fstest.MapFS{}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -58,7 +59,7 @@ func TestInternal(t *testing.T) {
 				t.Fatalf("internal() = %d packs, want %d", len(got), len(tt.packs))
 			}
 			for i, p := range tt.packs {
-				if got[i].Name != p.Name || len(got[i].Funcs) != len(p.Funcs) {
+				if got[i].Name != p.Name || len(got[i].Funcs) != len(p.Funcs) || (got[i].FS == nil) != (p.FS == nil) {
 					t.Errorf("internal()[%d] = %+v, want %+v", i, got[i], p)
 				}
 			}
