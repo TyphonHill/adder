@@ -377,3 +377,82 @@ func TestListFuncs(t *testing.T) {
 		})
 	}
 }
+
+func TestPathPattern(t *testing.T) {
+	tests := []struct {
+		name      string
+		text      string
+		wantDir   string
+		matches   []string
+		unmatched []string
+		wantErr   bool
+	}{
+		{
+			name:      "an action spanning directories",
+			text:      "{{ .Item.Dir }}/{{ .Item.Name | toSnakeCase }}_mock.gen.go",
+			wantDir:   ".",
+			matches:   []string{"a/x_mock.gen.go", "a/b/c/new_store_mock.gen.go"},
+			unmatched: []string{"a/x_mock.go", "a/x_mock.gen.go.bak", "x.gen.go"},
+		},
+		{
+			name:      "a literal directory",
+			text:      "gen/mocks/{{ .Item.Package }}.gen.go",
+			wantDir:   "gen/mocks",
+			matches:   []string{"gen/mocks/a.gen.go"},
+			unmatched: []string{"gen/a.gen.go", "other/mocks/a.gen.go"},
+		},
+		{
+			name:    "a prefix ending inside a file name",
+			text:    "internal/mock_{{ .Item.Name }}.go",
+			wantDir: "internal",
+			matches: []string{"internal/mock_A.go"},
+		},
+		{
+			name:      "regular expression characters are literal",
+			text:      "a+b/{{ .Item.Name }}.(gen).go",
+			wantDir:   "a+b",
+			matches:   []string{"a+b/x.(gen).go"},
+			unmatched: []string{"aab/x.(gen).go", "a+b/x.gen.go"},
+		},
+		{
+			name:    "a condition may render nothing",
+			text:    "x{{ if .Item.Doc }}_doc{{ end }}.go",
+			wantDir: ".",
+			matches: []string{"x.go", "x_doc.go"},
+		},
+		{
+			name:    "no actions",
+			text:    "a/b/c.go",
+			wantDir: "a/b",
+			matches: []string{"a/b/c.go"},
+		},
+		{name: "invalid template", text: "{{ .X", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pattern, dir, err := PathPattern(tt.text)
+			if tt.wantErr {
+				if list := diag.From(err); len(list) != 1 || list[0].Code != diag.TemplateSyntax || list[0].Pos != (diag.Pos{}) {
+					t.Errorf("PathPattern() error = %v, want one template-syntax problem without a position", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if dir != tt.wantDir {
+				t.Errorf("dir = %q, want %q", dir, tt.wantDir)
+			}
+			for _, name := range tt.matches {
+				if !pattern.MatchString(name) {
+					t.Errorf("%s does not match %s", name, pattern)
+				}
+			}
+			for _, name := range tt.unmatched {
+				if pattern.MatchString(name) {
+					t.Errorf("%s matches %s", name, pattern)
+				}
+			}
+		})
+	}
+}

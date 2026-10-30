@@ -122,6 +122,17 @@ func TestRun(t *testing.T) {
 			wantFiles: []string{filepath.Join("drivers", "gcs", "gcs.go")},
 		},
 		{
+			name: "a new file under a symbolic link",
+			setup: func(t *testing.T, root string, _ *config.Config) {
+				if err := os.Symlink("s3", filepath.Join(root, "drivers", "gcs")); err != nil {
+					t.Skipf("cannot create symbolic links here: %v", err)
+				}
+			},
+			inputs:    map[string]any{"name": "gcs"},
+			wantCodes: []diag.Code{diag.UnsafePath},
+			wantFiles: []string{filepath.Join("drivers", "gcs", "gcs.go")},
+		},
+		{
 			name:      "unknown generator",
 			generator: "drivr",
 			wantCodes: []diag.Code{diag.UnknownGenerator},

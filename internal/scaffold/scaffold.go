@@ -73,7 +73,7 @@ func Plan(ctx context.Context, cfg *config.Config, src derive.Sources, name stri
 	if gen.Message != "" {
 		msg, err := render.Text(gen.Message, data)
 		if err != nil {
-			problems = append(problems, prefixed(err, gen.Pos, "message: ")...)
+			problems = append(problems, diag.Prefix(err, gen.Pos, "message: ")...)
 		}
 		res.Message = msg
 	}
@@ -98,7 +98,7 @@ func newFile(cfg *config.Config, src derive.Sources, set *render.Set, data map[s
 	field := fmt.Sprintf("file %d: path %q", i, f.Path)
 	rendered, err := render.Text(f.Path, data)
 	if err != nil {
-		return plan.Change{}, prefixed(err, f.Pos, field+": ")
+		return plan.Change{}, diag.Prefix(err, f.Pos, field+": ")
 	}
 	target := path.Clean(rendered)
 	if rendered != f.Path {
@@ -114,6 +114,9 @@ func newFile(cfg *config.Config, src derive.Sources, set *render.Set, data map[s
 	}
 	if d := config.CheckPath(f.Pos, field, target); d != nil {
 		return plan.Change{}, d
+	}
+	if err := plan.CheckLinks(src.Repo, target); err != nil {
+		return plan.Change{}, diag.Locate(err, src.RepoDir, f.Pos)
 	}
 
 	content, err := set.File(f.Template, target, data)
@@ -146,15 +149,6 @@ func included(f config.File, values map[string]any) bool {
 		return values[f.Unless] != true
 	}
 	return true
-}
-
-// prefixed attributes the problems in err to decl and prefixes their messages.
-func prefixed(err error, decl diag.Pos, prefix string) diag.List {
-	list := diag.Locate(err, "", decl)
-	for _, d := range list {
-		d.Message = prefix + d.Message
-	}
-	return list
 }
 
 func unknownGenerator(cfg *config.Config, name string) error {

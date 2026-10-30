@@ -1,9 +1,12 @@
 package derive
 
 import (
+	"cmp"
 	"flag"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +14,7 @@ import (
 
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/header"
 	"github.com/TyphonHill/adder/internal/plan"
 )
 
@@ -346,6 +350,172 @@ func TestPlanShared(t *testing.T) {
 			if tt.wantCodes == nil {
 				if got := string(p.Changes[0].New); got != tt.want {
 					t.Errorf("content = %q, want %q", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestPlanEach(t *testing.T) {
+	repo := fstest.MapFS{
+		"stores/a/a.go": {Data: []byte("package a\n\nfunc NewStore() {}\n")},
+		"stores/b/b.go": {Data: []byte("package b\n\nfunc NewStore() {}\n")},
+	}
+	templates := fstest.MapFS{
+		"mock.go.tmpl":  {Data: []byte("package {{ .Item.Package }}\n\n// {{ .Item.Name }} has {{ len .Stores }} siblings.\n")},
+		"other.go.tmpl": {Data: []byte("package other\n")},
+	}
+	const each = "{{ .Item.Dir }}/{{ .Item.Name | toSnakeCase }}_mock.gen.go"
+	generated := func(template, pkg string) *fstest.MapFile {
+		return &fstest.MapFile{Data: []byte(header.Format(template) + "\n\npackage " + pkg + "\n")}
+	}
+	at := diag.Pos{File: "adder.yaml", Line: 9}
+
+	tests := []struct {
+		name     string
+		path     string // the output's path; empty means each
+		existing fstest.MapFS
+		// extra is another output, written before the one with each.
+		extra       *config.Output
+		noItems     bool     // the scan matches nothing
+		wantChanges []string // "status path"
+		wantCodes   []diag.Code
+	}{
+		{
+			name:        "one file per item",
+			wantChanges: []string{"created stores/a/new_store_mock.gen.go", "created stores/b/new_store_mock.gen.go"},
+		},
+		{
+			name: "removes files it generated before",
+			existing: fstest.MapFS{
+				"stores/old/new_store_mock.gen.go": generated("mock.go.tmpl", "old"),
+				"stores/a/new_store_mock.gen.go":   generated("mock.go.tmpl", "a"),
+			},
+			wantChanges: []string{"updated stores/a/new_store_mock.gen.go", "created stores/b/new_store_mock.gen.go", "removed stores/old/new_store_mock.gen.go"},
+		},
+		{
+			name: "leaves files it did not generate",
+			existing: fstest.MapFS{
+				"stores/x/handwritten_mock.gen.go": {Data: []byte("package x\n")},
+				"stores/y/other_mock.gen.go":       generated("other.go.tmpl", "y"),
+				"stores/z/new_store.go":            generated("mock.go.tmpl", "z"),
+				"elsewhere/new_store_mock.gen.go":  generated("mock.go.tmpl", "elsewhere"),
+				"stores/testdata/x_mock.gen.go":    generated("mock.go.tmpl", "x"),
+				"stores/.hidden/x_mock.gen.go":     generated("mock.go.tmpl", "x"),
+				"stores/link_mock.gen.go":          {Data: []byte("a/new_store_mock.gen.go"), Mode: fs.ModeSymlink},
+			},
+			path:        "stores/{{ .Item.Dir }}_mock.gen.go",
+			wantChanges: []string{"created stores/stores/a_mock.gen.go", "created stores/stores/b_mock.gen.go"},
+		},
+		{
+			name:        "the search starts below the path's literal directory",
+			path:        "gen/mocks/{{ .Item.Package }}.gen.go",
+			existing:    fstest.MapFS{"gen/old.gen.go": generated("mock.go.tmpl", "old"), "gen/mocks/old.gen.go": generated("mock.go.tmpl", "old")},
+			wantChanges: []string{"created gen/mocks/a.gen.go", "created gen/mocks/b.gen.go", "removed gen/mocks/old.gen.go"},
+		},
+		{
+			name:      "items sharing a path",
+			path:      "stores/mock.gen.go",
+			wantCodes: []diag.Code{diag.DuplicatePath},
+		},
+		{
+			name:      "an item on another output's path",
+			extra:     &config.Output{Template: "other.go.tmpl", Path: "stores/a/new_store_mock.gen.go", Pos: at},
+			wantCodes: []diag.Code{diag.DuplicatePath},
+		},
+		{
+			name:      "a path that is not a file name",
+			path:      "{{ if false }}x{{ end }}",
+			wantCodes: []diag.Code{diag.InvalidValue, diag.InvalidValue},
+		},
+		{
+			name:      "a path outside the root",
+			path:      "../{{ .Item.Package }}.go",
+			wantCodes: []diag.Code{diag.UnsafePath, diag.UnsafePath},
+		},
+		{
+			name:      "a path that does not render",
+			path:      "{{ .Item.Nope }}.go",
+			wantCodes: []diag.Code{diag.TemplateExec, diag.TemplateExec},
+		},
+		{
+			name:      "a symbolic link on the way to an output",
+			existing:  fstest.MapFS{"stores/a": {Data: []byte("b"), Mode: fs.ModeSymlink}, "stores/b/x.go": {}},
+			wantCodes: []diag.Code{diag.UnsafePath},
+		},
+		{
+			name:      "items under a symbolic link",
+			path:      "links/{{ .Item.Package }}.gen.go",
+			existing:  fstest.MapFS{"links": {Data: []byte("stores"), Mode: fs.ModeSymlink}},
+			wantCodes: []diag.Code{diag.UnsafePath, diag.UnsafePath},
+		},
+		{
+			name:      "a search starting at a symbolic link",
+			path:      "links/{{ .Item.Package }}.gen.go",
+			noItems:   true,
+			existing:  fstest.MapFS{"links": {Data: []byte("stores"), Mode: fs.ModeSymlink}},
+			wantCodes: []diag.Code{diag.UnsafePath},
+		},
+		{
+			name:        "a scan without items removes every file the output generated",
+			noItems:     true,
+			existing:    fstest.MapFS{"stores/a/new_store_mock.gen.go": generated("mock.go.tmpl", "a")},
+			wantChanges: []string{"removed stores/a/new_store_mock.gen.go"},
+		},
+		{
+			name:     "a search below a missing directory finds nothing",
+			path:     "missing/{{ .Item.Package }}.gen.go",
+			noItems:  true,
+			existing: fstest.MapFS{"other.go": {}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := config.Output{Template: "mock.go.tmpl", Path: cmp.Or(tt.path, each), Each: "Stores", Pos: at}
+			name := regexp.MustCompile("^New")
+			if tt.noItems {
+				name = regexp.MustCompile("^Nothing$")
+			}
+			cfg := &config.Config{Version: 1, Derive: config.Derive{
+				Scans:   map[string]config.Scan{"Stores": {Dirs: []string{"stores/*"}, Funcs: config.FuncMatch{Name: config.Pattern{Regexp: name}}}},
+				Outputs: []config.Output{out},
+			}}
+			if tt.extra != nil {
+				cfg.Derive.Outputs = []config.Output{*tt.extra, out}
+			}
+			src := Sources{Repo: repo, Templates: templates}
+			if tt.existing != nil {
+				src.Existing = tt.existing
+			}
+
+			p, err := Plan(t.Context(), cfg, src)
+			var codes []diag.Code
+			for _, d := range diag.From(err) {
+				codes = append(codes, d.Code)
+				if d.Pos != at && d.Pos.File == "" {
+					t.Errorf("problem %q has no position", d.Message)
+				}
+			}
+			if !slices.Equal(codes, tt.wantCodes) {
+				t.Fatalf("Plan() problems = %v, want %v (error: %v)", codes, tt.wantCodes, err)
+			}
+			if err != nil {
+				return
+			}
+			var got []string
+			for _, c := range p.Changes {
+				if c.Path != "stores/a/new_store_mock.gen.go" || tt.extra == nil {
+					got = append(got, c.Status.String()+" "+c.Path)
+				}
+			}
+			if !slices.Equal(got, tt.wantChanges) {
+				t.Errorf("changes = %q, want %q", got, tt.wantChanges)
+			}
+			for _, c := range p.Changes {
+				if c.Status == plan.Created {
+					if source, ok := header.Parse(c.Path, c.New); !ok || source != "mock.go.tmpl" {
+						t.Errorf("%s has header %q, %v, want mock.go.tmpl", c.Path, source, ok)
+					}
 				}
 			}
 		})

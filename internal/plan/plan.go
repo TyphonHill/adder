@@ -26,9 +26,11 @@ const (
 	Updated
 	// Skipped is a new file that already exists and is left alone.
 	Skipped
+	// Removed is a file adder generated that its output no longer produces.
+	Removed
 )
 
-var statusNames = map[Status]string{Unchanged: "unchanged", Created: "created", Updated: "updated", Skipped: "skipped"}
+var statusNames = map[Status]string{Unchanged: "unchanged", Created: "created", Updated: "updated", Skipped: "skipped", Removed: "removed"}
 
 func (s Status) String() string {
 	if name, ok := statusNames[s]; ok {
@@ -50,16 +52,18 @@ type Change struct {
 	Path   string `json:"path"` // slash-separated, relative to the output root
 	Status Status `json:"status"`
 	Old    []byte `json:"-"` // current content, nil when the file does not exist
-	New    []byte `json:"-"`
+	New    []byte `json:"-"` // nil when the file is removed
 }
 
-// Diff returns the change as a unified diff that git apply and patch -p1 accept, or nil when it writes nothing.
+// Diff returns the change as a unified diff that git apply and patch -p1 accept, or nil when it changes nothing.
 func (c Change) Diff() []byte {
 	switch c.Status {
 	case Created:
 		return diff.Diff("/dev/null", nil, "b/"+c.Path, c.New)
 	case Updated:
 		return diff.Diff("a/"+c.Path, c.Old, "b/"+c.Path, c.New)
+	case Removed:
+		return diff.Diff("a/"+c.Path, c.Old, "/dev/null", nil)
 	}
 	return nil
 }
@@ -74,6 +78,9 @@ type Plan struct {
 func (p *Plan) Add(existing fs.FS, name string, content []byte) error {
 	change := Change{Path: name, Status: Created, New: content}
 	if existing != nil {
+		if err := CheckLinks(existing, name); err != nil {
+			return err
+		}
 		old, err := fs.ReadFile(existing, name)
 		switch {
 		case err == nil && bytes.Equal(old, content):
@@ -88,24 +95,33 @@ func (p *Plan) Add(existing fs.FS, name string, content []byte) error {
 	return nil
 }
 
-// Pending returns the changes that would write a file.
+// Pending returns the changes that would write or remove a file.
 func (p *Plan) Pending() []Change {
 	var pending []Change
 	for _, c := range p.Changes {
-		if c.Status == Created || c.Status == Updated {
+		if c.Status == Created || c.Status == Updated || c.Status == Removed {
 			pending = append(pending, c)
 		}
 	}
 	return pending
 }
 
-// Apply writes every pending change inside root.
+// Apply makes every pending change inside root. It never writes or removes through a symbolic link.
 func (p *Plan) Apply(ctx context.Context, root *os.Root) error {
 	for _, c := range p.Pending() {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if err := CheckLinks(root.FS(), c.Path); err != nil {
+			return err
+		}
 		name := filepath.FromSlash(c.Path)
+		if c.Status == Removed {
+			if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return diag.Wrap(diag.IO, diag.Pos{File: c.Path}, err)
+			}
+			continue
+		}
 		if dir := path.Dir(c.Path); dir != "." {
 			if err := root.MkdirAll(filepath.FromSlash(dir), 0o755); err != nil {
 				return diag.Wrap(diag.IO, diag.Pos{File: c.Path}, err)
@@ -131,4 +147,25 @@ func write(root *os.Root, name string, c Change) error {
 	}
 	_, err = f.Write(c.New)
 	return errors.Join(err, f.Close())
+}
+
+// CheckLinks returns an unsafe-path problem when name, or a directory on the way to it, is a symbolic link in
+// fsys. Writing through a link would change a file somewhere else, which may be one that people own.
+func CheckLinks(fsys fs.FS, name string) error {
+	for p := name; p != "." && p != "/"; p = path.Dir(p) {
+		info, err := fs.Lstat(fsys, p)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+		case err != nil:
+			return diag.Wrap(diag.IO, diag.Pos{File: name}, err)
+		case info.Mode()&fs.ModeSymlink != 0:
+			return &diag.Diagnostic{
+				Code:    diag.UnsafePath,
+				Pos:     diag.Pos{File: name},
+				Message: fmt.Sprintf("%s is a symbolic link", p),
+				Hint:    "adder never writes or removes files through a symbolic link; replace the link with a directory or file",
+			}
+		}
+	}
+	return nil
 }

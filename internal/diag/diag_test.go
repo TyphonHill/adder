@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -187,6 +188,34 @@ func TestDiagnosticJSON(t *testing.T) {
 			}
 			if string(got) != tt.want {
 				t.Errorf("json = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrefix(t *testing.T) {
+	decl := Pos{File: "adder.yaml", Line: 4, Column: 3}
+	tests := []struct {
+		name string
+		err  error
+		want []string // each problem as position: message
+	}{
+		{name: "a problem without a position", err: Errorf(InvalidValue, Pos{}, "bad"), want: []string{"adder.yaml:4:3: path: bad"}},
+		{name: "a problem with a position keeps it", err: Errorf(InvalidValue, Pos{File: "t.tmpl", Line: 1}, "bad"), want: []string{"t.tmpl:1: path: bad"}},
+		{
+			name: "every problem in a list",
+			err:  List{Errorf(InvalidValue, Pos{}, "one"), Errorf(InvalidValue, Pos{}, "two")},
+			want: []string{"adder.yaml:4:3: path: one", "adder.yaml:4:3: path: two"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, d := range Prefix(tt.err, decl, "path: ") {
+				got = append(got, d.Error())
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Prefix() = %q, want %q", got, tt.want)
 			}
 		})
 	}

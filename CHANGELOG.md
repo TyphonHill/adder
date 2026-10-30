@@ -6,7 +6,16 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ### Added
 
+- `each` on an output renders it once per scan item, as `.Item`, with a templated path. Files it generated that it no longer produces are removed, and `adder check` reports them as stale. Changes gain a `removed` status.
+- Generated-file headers for other languages, in each one's comment syntax: YAML, TOML, shell, Python, TypeScript, SQL, CSS, Markdown, HTML, and more.
 - `--json` on every command prints the result and any problems as one JSON object on standard output, with a `usage` code for invocation mistakes. Exit codes are unchanged.
+
+### Changed
+
+- Outputs in languages other than Go now get adder's generated-code header. Outputs that already have one keep it.
+- `Item` is reserved and can no longer be used as a scan name.
+- adder refuses to write or remove a file through a symbolic link, with an `unsafe-path` problem.
+- Scans no longer follow a symbolic link named directly in `dirs`, matching how wildcards already skipped them.
 
 ### Fixed
 

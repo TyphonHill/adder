@@ -81,9 +81,9 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Add missing imports from a built-in table of the standard library | 💡 |
 | Shared template partials, such as `templates/partials/license.tmpl` | ✅ |
 | More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` ([design 28](docs/design.md#28-more-template-functions-planned-v03)) | 🔜 v0.3 |
-| One output per item, with a templated path, for example a file per interface ([design 24](docs/design.md#24-one-output-per-item-planned-v03)) | 🔜 v0.3 |
-| Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)) | 🔜 v0.3 |
-| Generated-file headers for other languages, using their comment syntax ([design 25](docs/design.md#25-generated-file-headers-for-other-languages-planned-v03)) | 🔜 v0.3 |
+| One output per item, with a templated path, for example a file per interface ([design 24](docs/design.md#24-one-output-per-item-planned-v03)) | ✅ |
+| Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)) | ✅ |
+| Generated-file headers for other languages, using their comment syntax ([design 25](docs/design.md#25-generated-file-headers-for-other-languages-planned-v03)) | ✅ |
 | `--stdout` to print a single output instead of writing it | 💡 |
 
 ### Scaffolding: `adder new`
@@ -167,7 +167,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | End-to-end CLI tests with `testscript` ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
 | Fuzz tests for configuration parsing, header detection, directives, and import pruning ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
 | Benchmarks on large repositories with a performance budget ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
-| A symlink policy for scans and outputs ([design 26](docs/design.md#26-symlinks-planned-v03)) | 🔜 v0.3 |
+| A symlink policy for scans and outputs ([design 26](docs/design.md#26-symlinks-planned-v03)) | ✅ |
 | CodeQL | ✅ |
 | OpenSSF Scorecard | 🔜 after v1.0 |
 

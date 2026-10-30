@@ -43,7 +43,7 @@ adder.yaml:5:14: scan "drivers": dirs pattern "/abs" must be relative and stay i
 adder.yaml:7:7: output 0: path is required [missing-field]
 -- typo.err --
 adder.yaml:5: unknown field "paht" [unknown-field]
-	hint: known fields: template, path
+	hint: known fields: template, path, each
 -- args.err --
 adder: unknown command "extra" for "adder derive"
 Run 'adder derive --help' for usage.

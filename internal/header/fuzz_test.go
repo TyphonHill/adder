@@ -21,12 +21,26 @@ func FuzzEnsure(f *testing.F) {
 		f.Add(seed.src, seed.source)
 	}
 	f.Fuzz(func(t *testing.T, src, source string) {
-		Parse([]byte(src)) // must not panic on any input
+		Parse("x.go", []byte(src)) // must not panic on any input
+		if commentSafe(source) {
+			for _, name := range []string{"x.yaml", "x.md", "x.html", "run.sh", "x.css"} {
+				out, err := Ensure(name, []byte(src), source)
+				if err != nil {
+					t.Fatalf("Ensure(%q) error = %v", name, err)
+				}
+				if string(out) == src {
+					continue // src already has a generated-code comment
+				}
+				if got, ok := Parse(name, out); !ok || got != source {
+					t.Errorf("Parse(%q, Ensure(src, %q)) = %q, %v", name, source, got, ok)
+				}
+			}
+		}
 		file, err := parser.ParseFile(token.NewFileSet(), "", src, parser.PackageClauseOnly|parser.ParseComments)
 		if err != nil {
 			return
 		}
-		out, err := Ensure([]byte(src), source)
+		out, err := Ensure("x.go", []byte(src), source)
 		if err != nil {
 			t.Fatalf("Ensure() error = %v for a file that parses", err)
 		}
@@ -39,7 +53,7 @@ func FuzzEnsure(f *testing.F) {
 		if !commentSafe(source) {
 			return
 		}
-		if got, ok := Parse(out); !ok || got != source {
+		if got, ok := Parse("x.go", out); !ok || got != source {
 			t.Errorf("Parse(Ensure(src, %q)) = %q, %v", source, got, ok)
 		}
 	})

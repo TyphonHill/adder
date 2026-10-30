@@ -124,6 +124,15 @@ func From(err error) List {
 	return List{{Code: Other, Message: err.Error(), Err: err}}
 }
 
+// Prefix attributes the problems in err that have no position to decl and starts every message with prefix.
+func Prefix(err error, decl Pos, prefix string) List {
+	list := Locate(err, "", decl)
+	for _, d := range list {
+		d.Message = prefix + d.Message
+	}
+	return list
+}
+
 // Locate returns the diagnostics carried by err with positions usable from the current directory. Positions
 // inside a file system are joined to dir, the directory behind it, and problems without a position are
 // attributed to decl, the declaration they concern.

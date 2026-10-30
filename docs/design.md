@@ -71,8 +71,8 @@ Positions follow two rules:
 | `missing-field` | A required setting is absent. |
 | `unsupported-version` | The configuration declares a schema version this release does not understand. |
 | `invalid-name` | A scan or var name is not a valid Go identifier. |
-| `reserved-name` | A scan name collides with data adder provides: `Module`, `Vars`, or `Inputs`. |
-| `unsafe-path` | A path is absolute, escapes its root, or uses backslashes. |
+| `reserved-name` | A scan name collides with data adder provides: `Module`, `Vars`, `Inputs`, or `Item`. |
+| `unsafe-path` | A path is absolute, escapes its root, uses backslashes, or goes through a symbolic link. |
 | `duplicate-path` | Two outputs write the same file. |
 | `no-match` | A scan's directory pattern matched no directories, or a partial pattern matched no files. |
 | `go-syntax` | A scanned Go file does not parse. |
