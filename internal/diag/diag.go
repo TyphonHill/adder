@@ -38,6 +38,7 @@ const (
 	Usage              Code = "usage"
 	GoldenMismatch     Code = "golden-mismatch"
 	TypeCheck          Code = "type-check"
+	InvalidPack        Code = "invalid-pack"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.

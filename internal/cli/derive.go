@@ -28,6 +28,7 @@ Files whose content has not changed are left untouched.`,
 				rep := r.(*deriveReport)
 				options := derived
 				options.Root = run.root
+				options.Packs = opts.packs
 				p, err := derive.Run(cmd.Context(), run.cfg, options)
 				if err != nil {
 					return err

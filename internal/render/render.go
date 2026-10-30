@@ -8,6 +8,7 @@ import (
 	"go/format"
 	"go/scanner"
 	"io/fs"
+	"maps"
 	"path"
 	"reflect"
 	"regexp"
@@ -21,16 +22,20 @@ import (
 	"github.com/TyphonHill/adder/internal/imports"
 )
 
-// Set renders templates from a file system, each with the same partials loaded.
+// Set renders templates from a file system, each with the same partials and functions loaded.
 type Set struct {
 	fsys     fs.FS
 	partials *template.Template
+	funcs    template.FuncMap
 }
 
 // NewSet parses the named partial templates from fsys. Their {{ define }} blocks are available to every
-// template the set renders, and two partials may not define the same name.
-func NewSet(fsys fs.FS, partials []string) (*Set, error) {
-	base := template.New("").Funcs(Funcs()).Option("missingkey=error")
+// template the set renders, and two partials may not define the same name. Extra functions are added to the
+// built-in ones, and must pass [CheckFunc].
+func NewSet(fsys fs.FS, partials []string, extra template.FuncMap) (*Set, error) {
+	funcs := Funcs()
+	maps.Copy(funcs, extra)
+	base := template.New("").Funcs(funcs).Option("missingkey=error")
 	definedIn := make(map[string]string)
 	var problems diag.List
 	for _, name := range partials {
@@ -39,7 +44,7 @@ func NewSet(fsys fs.FS, partials []string) (*Set, error) {
 			problems = append(problems, diag.From(err)...)
 			continue
 		}
-		parsed, err := template.New(name).Funcs(Funcs()).Parse(src)
+		parsed, err := template.New(name).Funcs(funcs).Parse(src)
 		if err != nil {
 			problems = append(problems, templateError(diag.TemplateSyntax, name, err, nil))
 			continue
@@ -61,7 +66,7 @@ func NewSet(fsys fs.FS, partials []string) (*Set, error) {
 	if err := problems.Err(); err != nil {
 		return nil, err
 	}
-	return &Set{fsys: fsys, partials: base}, nil
+	return &Set{fsys: fsys, partials: base, funcs: funcs}, nil
 }
 
 // File executes the template name with data. Output for Go files is gofmt-formatted, without unused imports.
@@ -100,10 +105,11 @@ func (s *Set) File(name, outPath string, data any) ([]byte, error) {
 	return pruned, nil
 }
 
-// Text executes a template written inline, such as a path in adder.yaml. Its problems have no position.
-func Text(text string, data any) (string, error) {
+// Text executes a template written inline, such as a path in adder.yaml, with the set's functions. Its
+// problems have no position.
+func (s *Set) Text(text string, data any) (string, error) {
 	const name = "inline"
-	tmpl, err := template.New(name).Funcs(Funcs()).Option("missingkey=error").Parse(text)
+	tmpl, err := template.New(name).Funcs(s.funcs).Option("missingkey=error").Parse(text)
 	if err != nil {
 		d := templateError(diag.TemplateSyntax, name, err, data)
 		d.Pos = diag.Pos{}
@@ -224,10 +230,12 @@ func invalidGo(name, outPath string, out []byte, err error) *diag.Diagnostic {
 }
 
 // PathPattern returns a pattern matching every path the path template text can render, with each action replaced
-// by a wildcard that may span directories, and the deepest directory that holds all of them.
+// by a wildcard that may span directories, and the deepest directory that holds all of them. Function names are
+// checked when the path renders, with the functions of the packs adder was built with.
 func PathPattern(text string) (*regexp.Regexp, string, error) {
-	tmpl, err := template.New("inline").Funcs(Funcs()).Parse(text)
-	if err != nil {
+	tree := parse.New("inline")
+	tree.Mode = parse.SkipFuncCheck
+	if _, err := tree.Parse(text, "", "", map[string]*parse.Tree{}); err != nil {
 		d := templateError(diag.TemplateSyntax, "inline", err, nil)
 		d.Pos = diag.Pos{}
 		return nil, "", d
@@ -235,7 +243,7 @@ func PathPattern(text string) (*regexp.Regexp, string, error) {
 	var pattern, prefix strings.Builder
 	pattern.WriteString("^")
 	literal := true
-	for _, node := range tmpl.Root.Nodes {
+	for _, node := range tree.Root.Nodes {
 		if text, ok := node.(*parse.TextNode); ok {
 			pattern.WriteString(regexp.QuoteMeta(string(text.Text)))
 			if literal {

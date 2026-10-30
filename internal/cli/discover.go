@@ -112,7 +112,7 @@ for the object adder new --inputs accepts.`,
 			if _, ok := cfg.Generators[args[0]]; !ok {
 				return unknownGenerator(generatorsCommand(opts, cfg, root), cfg, args[0])
 			}
-			src, closeSources, err := derive.Open(cfg, root)
+			src, closeSources, err := opts.open(cfg, root)
 			if err != nil {
 				return err
 			}
@@ -203,7 +203,7 @@ template, the scans the template refers to, and whether the file is up to date.`
 			if err != nil {
 				return err
 			}
-			src, closeSources, err := derive.Open(cfg, root)
+			src, closeSources, err := opts.open(cfg, root)
 			if err != nil {
 				return err
 			}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/derive"
+	"github.com/TyphonHill/adder/internal/pack"
 	"github.com/TyphonHill/adder/internal/plan"
 	"github.com/TyphonHill/adder/internal/scan"
 )
@@ -38,10 +39,11 @@ type printer struct {
 	verbose bool
 	color   bool
 	prefix  string // written before each path, when several configurations run
+	packs   *pack.Registry
 }
 
 func (o *globalOptions) printer(w io.Writer) *printer {
-	return &printer{w: w, quiet: o.quiet, verbose: o.verbose, color: useColor(w)}
+	return &printer{w: w, quiet: o.quiet, verbose: o.verbose, color: useColor(w), packs: o.packs}
 }
 
 // useColor reports whether w should get color: a terminal, without NO_COLOR or TERM=dumb, whose color support
@@ -91,7 +93,7 @@ func (p *printer) scans(ctx context.Context, cfg *config.Config, root string) er
 	if !p.verbose || len(cfg.Derive.Scans) == 0 {
 		return nil
 	}
-	src, closeSources, err := derive.Open(cfg, root)
+	src, closeSources, err := derive.Open(cfg, root, p.packs)
 	if err != nil {
 		return err
 	}

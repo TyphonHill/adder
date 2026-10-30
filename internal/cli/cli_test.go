@@ -15,7 +15,7 @@ func run(ctx context.Context, args ...string) (code int, stdout, stderr string) 
 
 func runWithInput(ctx context.Context, stdin string, args ...string) (code int, stdout, stderr string) {
 	var out, errOut bytes.Buffer
-	code = Main(ctx, "v0.0.0-test", args, strings.NewReader(stdin), &out, &errOut)
+	code = Main(ctx, "v0.0.0-test", nil, args, strings.NewReader(stdin), &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 

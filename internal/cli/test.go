@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/derive"
 	"github.com/TyphonHill/adder/internal/diag"
 	"github.com/TyphonHill/adder/internal/plan"
 	"github.com/TyphonHill/adder/internal/scaffold"
@@ -85,7 +84,7 @@ func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testR
 		selected = slices.Sorted(maps.Keys(cfg.Generators))
 	}
 
-	src, closeSources, err := derive.Open(cfg, run.root)
+	src, closeSources, err := opts.open(cfg, run.root)
 	if err != nil {
 		return err
 	}

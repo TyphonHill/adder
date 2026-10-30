@@ -1,9 +1,12 @@
 package render
 
 import (
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"testing/fstest"
+	"text/template"
 
 	"github.com/TyphonHill/adder/internal/diag"
 )
@@ -47,7 +50,7 @@ func TestFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			set, err := NewSet(templates(tt.template), nil)
+			set, err := NewSet(templates(tt.template), nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -128,7 +131,7 @@ func TestFileErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			set, err := NewSet(tt.fsys, nil)
+			set, err := NewSet(tt.fsys, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -167,7 +170,7 @@ func TestText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Text(tt.text, data)
+			got, err := renderText(tt.text, data)
 			if tt.wantCode == "" {
 				if err != nil || got != tt.want {
 					t.Errorf("Text() = %q, %v, want %q", got, err, tt.want)
@@ -226,7 +229,7 @@ func TestSetPartials(t *testing.T) {
 		"partial.tmpl":  {Data: []byte(`{{ template "names" .Names }}`)},
 	}
 	data := map[string]any{"Names": []string{"a", "b"}, "Vars": map[string]string{"License": "MIT"}}
-	set, err := NewSet(fsys, []string{"_license.tmpl", "_names.tmpl"})
+	set, err := NewSet(fsys, []string{"_license.tmpl", "_names.tmpl"}, nil)
 	if err != nil {
 		t.Fatalf("NewSet() error = %v", err)
 	}
@@ -298,7 +301,7 @@ func TestSetPartialErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			set, err := NewSet(fsys, tt.partials)
+			set, err := NewSet(fsys, tt.partials, nil)
 			if err == nil && tt.template != "" {
 				_, err = set.File(tt.template, "x.txt", map[string]any{})
 			}
@@ -395,6 +398,12 @@ func TestPathPattern(t *testing.T) {
 			unmatched: []string{"a/x_mock.go", "a/x_mock.gen.go.bak", "x.gen.go"},
 		},
 		{
+			name:    "a function only a pack defines",
+			text:    "gen/{{ routeName .Item.Name }}.gen.go",
+			wantDir: "gen",
+			matches: []string{"gen/a.gen.go"},
+		},
+		{
 			name:      "a literal directory",
 			text:      "gen/mocks/{{ .Item.Package }}.gen.go",
 			wantDir:   "gen/mocks",
@@ -465,7 +474,7 @@ func TestReferences(t *testing.T) {
 		"partials/list.tmpl": {Data: []byte(`{{ define "list" }}{{ range .Routes }}{{ end }}{{ template "list" . }}{{ end }}`)},
 		"broken.tmpl":        {Data: []byte(`{{ .X`)},
 	}
-	set, err := NewSet(fsys, []string{"partials/list.tmpl"})
+	set, err := NewSet(fsys, []string{"partials/list.tmpl"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,6 +507,101 @@ func TestReferences(t *testing.T) {
 			}
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("References() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// renderText renders an inline template with the built-in functions.
+func renderText(text string, data any) (string, error) {
+	set, err := NewSet(nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	return set.Text(text, data)
+}
+
+func TestExtraFuncs(t *testing.T) {
+	fsys := fstest.MapFS{
+		"_shout.tmpl": {Data: []byte(`{{ define "shout" }}{{ shout . }}{{ end }}`)},
+		"file.tmpl":   {Data: []byte(`{{ shout "file" }}`)},
+		"uses.tmpl":   {Data: []byte(`{{ template "shout" "partial" }}`)},
+		"fails.tmpl":  {Data: []byte(`{{ fail }}`)},
+	}
+	extra := template.FuncMap{
+		"shout": func(s string) string { return strings.ToUpper(s) + "!" },
+		"fail":  func() (string, error) { return "", errors.New("no luck") },
+	}
+	set, err := NewSet(fsys, []string{"_shout.tmpl"}, extra)
+	if err != nil {
+		t.Fatalf("NewSet() error = %v", err)
+	}
+	tests := []struct {
+		name     string
+		template string // rendered as a file, or else inline
+		inline   string
+		want     string
+		wantCode diag.Code
+	}{
+		{name: "in a file", template: "file.tmpl", want: "FILE!"},
+		{name: "in a partial", template: "uses.tmpl", want: "PARTIAL!"},
+		{name: "in an inline template", inline: `{{ shout "path" }}`, want: "PATH!"},
+		{name: "an error from a function", template: "fails.tmpl", wantCode: diag.TemplateExec},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got string
+			var err error
+			if tt.template != "" {
+				var b []byte
+				b, err = set.File(tt.template, "out.txt", nil)
+				got = string(b)
+			} else {
+				got, err = set.Text(tt.inline, nil)
+			}
+			if tt.wantCode != "" {
+				if list := diag.From(err); len(list) != 1 || list[0].Code != tt.wantCode || !strings.Contains(list[0].Message, "no luck") {
+					t.Fatalf("error = %v, want a %s problem with the function's error", err, tt.wantCode)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Errorf("got %q, %v, want %q", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckFunc(t *testing.T) {
+	tests := []struct {
+		name    string
+		fn      any
+		wantErr string
+	}{
+		{name: "shout", fn: strings.ToUpper},
+		{name: "lookup", fn: func(string) (int, error) { return 0, nil }},
+		{name: "_under9", fn: strings.ToUpper},
+		{name: "", fn: strings.ToUpper, wantErr: "a function has no name"},
+		{name: "toSnakeCase", fn: strings.ToUpper, wantErr: `function "toSnakeCase" is built in`},
+		{name: "printf", fn: strings.ToUpper, wantErr: `function "printf" is built in`},
+		{name: "end", fn: strings.ToUpper, wantErr: `function "end" is built in`},
+		{name: "9lives", fn: strings.ToUpper, wantErr: `function name "9lives" is not an identifier`},
+		{name: "to-upper", fn: strings.ToUpper, wantErr: `function name "to-upper" is not an identifier`},
+		{name: "value", fn: "text", wantErr: `function "value" is string, not a function`},
+		{name: "missing", fn: nil, wantErr: `function "missing" is <nil>, not a function`},
+		{name: "nilFunc", fn: (func())(nil), wantErr: `function "nilFunc" is func(), not a function`},
+		{name: "nothing", fn: func() {}, wantErr: `function "nothing" must return one value, or a value and an error`},
+		{name: "pair", fn: func() (int, int) { return 0, 0 }, wantErr: `function "pair" must return one value, or a value and an error`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckFunc(tt.name, tt.fn)
+			got := ""
+			if err != nil {
+				got = err.Error()
+			}
+			if got != tt.wantErr {
+				t.Errorf("CheckFunc(%q) = %q, want %q", tt.name, got, tt.wantErr)
 			}
 		})
 	}

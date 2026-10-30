@@ -1,0 +1,63 @@
+# A repository's own build of adder adds its packs' template functions to every template.
+env GOPROXY=off
+exec go mod edit -replace=github.com/TyphonHill/adder=$ADDER_ROOT
+cp $ADDER_ROOT/go.sum go.sum
+exec go mod tidy
+exec go tool adder derive
+stdout '^created    greeting.txt$'
+cmp greeting.txt want/greeting.txt
+
+# The stock build does not have the function.
+exits 1 adder check
+stderr 'function "shout" not defined \[template-syntax\]'
+
+# A pack that cannot be registered fails every command.
+exits 1 go run ./tools/broken list
+stderr '^adder: pack "broken": function "join" is built in \[invalid-pack\]$'
+exits 1 go run ./tools/broken list --json
+stdout '"code": "invalid-pack"'
+
+-- go.mod --
+module example.com/app
+
+go 1.26.0
+
+require github.com/TyphonHill/adder v0.0.0
+
+tool example.com/app/tools/adder
+-- tools/adder/main.go --
+package main
+
+import (
+	"strings"
+
+	"github.com/TyphonHill/adder"
+)
+
+func main() {
+	adder.Main(adder.Pack{
+		Name:  "local",
+		Funcs: map[string]any{"shout": func(s string) string { return strings.ToUpper(s) + "!" }},
+	})
+}
+-- tools/broken/main.go --
+package main
+
+import (
+	"strings"
+
+	"github.com/TyphonHill/adder"
+)
+
+func main() {
+	adder.Main(adder.Pack{Name: "broken", Funcs: map[string]any{"join": strings.Join}})
+}
+-- adder.yaml --
+version: 1
+derive:
+  outputs:
+    - {template: greeting.tmpl, path: greeting.txt}
+-- greeting.tmpl --
+{{ shout "hello" }}
+-- want/greeting.txt --
+HELLO!

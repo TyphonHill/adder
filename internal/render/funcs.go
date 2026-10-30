@@ -2,12 +2,14 @@ package render
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 	"text/template"
+	"unicode"
 
 	"github.com/TyphonHill/adder/internal/textcase"
 )
@@ -38,6 +40,40 @@ func Funcs() template.FuncMap {
 		"indent":         indent,
 		"nindent":        nindent,
 		"plural":         plural,
+	}
+}
+
+// builtins are the functions and keywords text/template defines itself.
+var builtins = []string{
+	"and", "block", "break", "call", "continue", "define", "else", "end", "eq", "false", "ge", "gt", "html", "if",
+	"index", "js", "le", "len", "lt", "ne", "nil", "not", "or", "print", "printf", "println", "range", "slice",
+	"template", "true", "urlquery", "with",
+}
+
+var errorType = reflect.TypeFor[error]()
+
+// CheckFunc reports why fn cannot be added to the template functions as name: a name that is not an identifier
+// or is already built in, or a value text/template cannot call.
+func CheckFunc(name string, fn any) error {
+	if name == "" {
+		return errors.New("a function has no name")
+	}
+	if _, builtin := Funcs()[name]; builtin || slices.Contains(builtins, name) {
+		return fmt.Errorf("function %q is built in", name)
+	}
+	for i, r := range name {
+		if r != '_' && !unicode.IsLetter(r) && (i == 0 || !unicode.IsDigit(r)) {
+			return fmt.Errorf("function name %q is not an identifier", name)
+		}
+	}
+	t := reflect.TypeOf(fn)
+	switch {
+	case t == nil || t.Kind() != reflect.Func || reflect.ValueOf(fn).IsNil():
+		return fmt.Errorf("function %q is %T, not a function", name, fn)
+	case t.NumOut() == 1, t.NumOut() == 2 && t.Out(1) == errorType:
+		return nil
+	default:
+		return fmt.Errorf("function %q must return one value, or a value and an error", name)
 	}
 }
 
