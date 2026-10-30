@@ -135,7 +135,7 @@ Generators and derived files are declared in adder.yaml at the repository root.`
 	}
 	addGlobalFlags(cmd, opts)
 	cmd.AddCommand(newInitCommand(opts), newDeriveCommand(opts), newCheckCommand(opts), newNewCommand(opts),
-		newListCommand(opts), newDescribeCommand(opts), newExplainCommand(opts))
+		newListCommand(opts), newDescribeCommand(opts), newExplainCommand(opts), newTestCommand(opts))
 	return cmd, opts
 }
 

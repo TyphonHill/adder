@@ -1,0 +1,154 @@
+# A generator test without golden files fails, and --update writes them.
+exec adder derive
+exits 1 adder test
+stdout '^FAIL  driver/with-cache$'
+stderr '\[golden-mismatch\]$'
+exec adder test --update
+cmp stdout update.out
+exec adder test
+cmp stdout ok.out
+
+# Golden files under testdata never reach the scans or derived outputs.
+exec adder check
+exec adder describe driver
+! stdout 'example'
+
+# A template change shows up as a diff of the golden file.
+cp changed.tmpl templates/new/driver.go.tmpl
+exits 1 adder test driver
+cmp stdout changed.out
+
+-- update.out --
+created    testdata/generators/driver/with-cache/drivers/README.md
+created    testdata/generators/driver/with-cache/drivers/example/cache.go
+created    testdata/generators/driver/with-cache/drivers/example/example.go
+-- ok.out --
+ok    driver/with-cache
+-- changed.out --
+FAIL  driver/with-cache
+
+diff a/testdata/generators/driver/with-cache/drivers/example/example.go b/testdata/generators/driver/with-cache/drivers/example/example.go
+--- a/testdata/generators/driver/with-cache/drivers/example/example.go
++++ b/testdata/generators/driver/with-cache/drivers/example/example.go
+@@ -1,4 +1,4 @@
+-// Package example is a driver that stores objects. Licensed under Apache-2.0.
++// Package example is a driver that stores objects.
+ package example
+ 
+ import "example.com/storage/driver"
+-- changed.tmpl --
+// Package {{ .Inputs.name }} is a driver that {{ .Inputs.summary }}.
+package {{ .Inputs.name }}
+
+import "{{ .Module }}/driver"
+
+// New returns a {{ .Inputs.name }} driver.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+-- adder.yaml --
+version: 1
+vars:
+  License: Apache-2.0
+derive:
+  scans:
+    Drivers:
+      dirs: ["drivers/*"]
+      funcs:
+        exported: true
+        name: ^New$
+  outputs:
+    - template: templates/drivers.go.tmpl
+      path: drivers/drivers.gen.go
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name:
+        help: Driver name, used as the package name
+        pattern: "[a-z][a-z0-9]*"
+        unique: Drivers.Package
+      summary:
+        help: One-line description for the package documentation
+        default: stores objects
+      cache:
+        type: bool
+        help: Add an in-memory cache in front of the driver
+    files:
+      - template: templates/new/driver.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go
+      - template: templates/new/cache.go.tmpl
+        path: drivers/{{ .Inputs.name }}/cache.go
+        when: cache
+      - template: templates/new/README.md.tmpl
+        path: drivers/README.md
+        ifExists: skip
+    message: |
+      Next, implement New in drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
+    tests:
+      - name: with-cache
+        inputs: {name: example, cache: true}
+        want: testdata/generators/driver/with-cache
+-- driver/driver.go --
+package driver
+
+// Driver stores and retrieves objects.
+type Driver interface {
+	Get(key string) ([]byte, error)
+}
+
+// Factory creates a Driver from its configuration.
+type Factory func(config map[string]string) (Driver, error)
+-- drivers/local/local.go --
+package local
+
+import "example.com/storage/driver"
+
+// New returns a driver backed by the local filesystem.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+
+// NewOptions is not a constructor and is not registered.
+func NewOptions() {}
+-- drivers/s3/s3.go --
+package s3
+
+import "example.com/storage/driver"
+
+// New returns a driver backed by an S3 bucket.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+
+func newClient() {}
+-- go.mod --
+module example.com/storage
+
+go 1.26.0
+-- templates/drivers.go.tmpl --
+package drivers
+
+import (
+	"{{ .Module }}/driver"
+{{- range .Drivers }}
+	"{{ .ImportPath }}"
+{{- end }}
+)
+
+// All maps each driver name to its constructor.
+var All = map[string]driver.Factory{
+{{- range .Drivers }}
+	"{{ .Package }}": {{ .Package }}.New,
+{{- end }}
+}
+-- templates/new/README.md.tmpl --
+# Drivers
+
+Each directory holds one driver.
+-- templates/new/cache.go.tmpl --
+package {{ .Inputs.name }}
+
+type cache struct{ entries map[string][]byte }
+-- templates/new/driver.go.tmpl --
+// Package {{ .Inputs.name }} is a driver that {{ .Inputs.summary }}. Licensed under {{ .Vars.License }}.
+package {{ .Inputs.name }}
+
+import "{{ .Module }}/driver"
+
+// New returns a {{ .Inputs.name }} driver.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
