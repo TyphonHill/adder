@@ -27,6 +27,12 @@ func TestFile(t *testing.T) {
 			want:     "package x\n\nvar Names = []string{\"b\", \"a\"}\n",
 		},
 		{
+			name:     "go output drops unused imports",
+			template: "package x\nimport (\n\"fmt\"\n\"strings\"\n)\nvar N = strings.Join({{ printf \"%#v\" .Names }}, \",\")\n",
+			outPath:  "x.go",
+			want:     "package x\n\nimport (\n\t\"strings\"\n)\n\nvar N = strings.Join([]string{\"b\", \"a\"}, \",\")\n",
+		},
+		{
 			name:     "other output is left alone",
 			template: "{{ range sortAlpha .Names }}{{ . }}   {{ end }}",
 			outPath:  "x.txt",

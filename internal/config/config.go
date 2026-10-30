@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/token"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
 	"path"
@@ -149,6 +150,40 @@ func (p *Pattern) UnmarshalYAML(node *yaml.Node) error {
 	}
 	p.Regexp = re
 	return nil
+}
+
+// Find returns the path of the configuration file in dir or its nearest parent directory that has one, the way
+// go finds go.mod. The path is relative to dir when dir is relative.
+func Find(dir string) (string, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", diag.Wrap(diag.IO, diag.Pos{File: dir}, err)
+	}
+	for at := abs; ; at = filepath.Dir(at) {
+		candidate := filepath.Join(at, FileName)
+		info, err := os.Stat(candidate)
+		switch {
+		case err == nil && info.Mode().IsRegular():
+			if filepath.IsAbs(dir) {
+				return candidate, nil
+			}
+			rel, err := filepath.Rel(abs, candidate)
+			if err != nil {
+				return candidate, nil
+			}
+			return filepath.Join(dir, rel), nil
+		case err != nil && !errors.Is(err, fs.ErrNotExist):
+			return "", diag.Wrap(diag.IO, diag.Pos{File: candidate}, err)
+		}
+		if filepath.Dir(at) == at {
+			return "", &diag.Diagnostic{
+				Code:    diag.IO,
+				Message: fmt.Sprintf("no %s in %s or any parent directory", FileName, dir),
+				Hint:    "run adder init to create one, or pass --root or --config",
+				Err:     fs.ErrNotExist,
+			}
+		}
+	}
 }
 
 // Load reads and validates the configuration file at path.

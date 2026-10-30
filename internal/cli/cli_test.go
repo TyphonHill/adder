@@ -59,7 +59,9 @@ func TestCLI(t *testing.T) {
 		// setup prepares the copied fixture at root; it may be nil.
 		setup func(t *testing.T, root string)
 		// args returns the command line for the fixture at root.
-		args     func(root string) []string
+		args func(root string) []string
+		// dir is the directory to run in, relative to root; empty means the test's directory.
+		dir      string
 		canceled bool
 		wantCode int
 		// wantStdout and wantStderr are exact; the contains fields are used when the output has variable parts.
@@ -118,6 +120,48 @@ func TestCLI(t *testing.T) {
 					t.Errorf("output = %q, %v, want it untouched", got, err)
 				}
 			},
+		},
+		{
+			name:       "finds adder.yaml from a subdirectory",
+			args:       func(string) []string { return []string{"derive"} },
+			dir:        filepath.Join("drivers", "s3"),
+			wantCode:   ExitOK,
+			wantStdout: "created    drivers/drivers.gen.go\n",
+			after: func(t *testing.T, root string) {
+				if !exists(t, filepath.Join(root, output)) {
+					t.Error("output was not written at the root")
+				}
+			},
+		},
+		{
+			name: "problems found from a subdirectory are relative to it",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "drivers", "s3", "s3.go"), "package s3\n\nfunc {")
+			},
+			args:           func(string) []string { return []string{"check"} },
+			dir:            "drivers",
+			wantCode:       ExitError,
+			stderrContains: []string{filepath.Join("..", "drivers", "s3", "s3.go") + ":3:6: "},
+		},
+		{
+			name: "the root is the directory of an explicit configuration",
+			args: func(root string) []string {
+				return []string{"--config", filepath.Join(root, "adder.yaml"), "derive"}
+			},
+			wantCode:   ExitOK,
+			wantStdout: "created    drivers/drivers.gen.go\n",
+		},
+		{
+			name: "no adder.yaml anywhere",
+			setup: func(t *testing.T, root string) {
+				if err := os.Remove(filepath.Join(root, "adder.yaml")); err != nil {
+					t.Fatal(err)
+				}
+			},
+			args:           func(string) []string { return []string{"derive"} },
+			dir:            ".",
+			wantCode:       ExitError,
+			stderrContains: []string{"adder: no adder.yaml in . or any parent directory [io]", "hint: run adder init to create one"},
 		},
 		{
 			name: "dry run of current outputs",
@@ -287,6 +331,9 @@ func TestCLI(t *testing.T) {
 			root := copyFixture(t)
 			if tt.setup != nil {
 				tt.setup(t, root)
+			}
+			if tt.dir != "" {
+				t.Chdir(filepath.Join(root, tt.dir))
 			}
 			ctx := t.Context()
 			if tt.canceled {

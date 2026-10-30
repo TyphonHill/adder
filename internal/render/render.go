@@ -17,6 +17,7 @@ import (
 	"text/template"
 
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/imports"
 )
 
 // Set renders templates from a file system, each with the same partials loaded.
@@ -62,7 +63,7 @@ func NewSet(fsys fs.FS, partials []string) (*Set, error) {
 	return &Set{fsys: fsys, partials: base}, nil
 }
 
-// File executes the template name with data. Output for Go files is gofmt-formatted.
+// File executes the template name with data. Output for Go files is gofmt-formatted, without unused imports.
 func (s *Set) File(name, outPath string, data any) ([]byte, error) {
 	src, err := readTemplate(s.fsys, name)
 	if err != nil {
@@ -91,7 +92,11 @@ func (s *Set) File(name, outPath string, data any) ([]byte, error) {
 	if err != nil {
 		return nil, invalidGo(name, outPath, buf.Bytes(), err)
 	}
-	return formatted, nil
+	pruned, err := imports.Prune(formatted)
+	if err != nil {
+		return nil, invalidGo(name, outPath, formatted, err)
+	}
+	return pruned, nil
 }
 
 // Text executes a template written inline, such as a path in adder.yaml. Its problems have no position.

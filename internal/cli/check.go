@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/derive"
 )
 
@@ -31,11 +30,11 @@ func newCheckCommand(opts *globalOptions) *cobra.Command {
 It exits with status 3 when any output is out of date, so it can guard CI and repositories that commit generated files.`,
 		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(opts.configPath())
+			cfg, root, err := opts.load()
 			if err != nil {
 				return err
 			}
-			p, err := derive.Run(cmd.Context(), cfg, derive.Options{Root: opts.root, DryRun: true})
+			p, err := derive.Run(cmd.Context(), cfg, derive.Options{Root: root, DryRun: true})
 			if err != nil {
 				return err
 			}
