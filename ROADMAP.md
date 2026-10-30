@@ -142,15 +142,16 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | A pre-commit hook definition (`.pre-commit-hooks.yaml`) ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
 | A GitHub Action that runs `adder check` on pull requests ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
 | A GitLab CI example ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
-| Generator packs: generators shared across repositories as versioned Go modules | 🔜 v0.5 |
+| Generator packs: generators, derive outputs, and templates shared across repositories as versioned Go packages ([design 41](docs/design.md#41-generator-packs-planned-v05)) | 🔜 v0.5 |
 
 ### Library API
 
 | Feature | Status |
 | --- | --- |
 | Internal pipeline built on plans, `fs.FS`, and `context.Context`, ready to expose | ✅ |
-| A public facade in the root package, shipped as experimental once a real consumer needs it ([design 18](docs/design.md#18-the-library-api-arrives-when-it-has-a-real-consumer-planned)) | 🔜 v0.5 |
-| Register custom template functions and scanners from Go code | 🔜 v0.5 |
+| A public facade in the root package, experimental until v1.0: `adder.Main` and `adder.Pack` for a repository's own build ([design 18](docs/design.md#18-the-library-api-starts-with-packs-and-extensions-planned-v05)) | 🔜 v0.5 |
+| Register custom template functions and scanners from Go code ([design 42](docs/design.md#42-custom-template-functions-and-scanners-planned-v05)) | 🔜 v0.5 |
+| Run adder from Go, with plans and diagnostics as Go values, once a consumer such as an editor integration needs it ([design 18](docs/design.md#18-the-library-api-starts-with-packs-and-extensions-planned-v05)) | 💡 |
 | Compatibility guarantee for the library API | 🔜 v1.0 |
 
 ### Quality and security

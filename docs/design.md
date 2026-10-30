@@ -71,7 +71,7 @@ Positions follow two rules:
 | `missing-field` | A required setting is absent. |
 | `unsupported-version` | The configuration declares a schema version this release does not understand. |
 | `invalid-name` | A scan or var name is not a valid Go identifier. |
-| `reserved-name` | A scan name collides with data adder provides: `Module`, `Vars`, `Inputs`, or `Item`. |
+| `reserved-name` | A scan name collides with data adder provides: `Module`, `Vars`, `Inputs`, `Item`, or `Options`. |
 | `unsafe-path` | A path is absolute, escapes its root, uses backslashes, or goes through a symbolic link. |
 | `duplicate-path` | Two outputs write the same file. |
 | `no-match` | A scan's directory pattern matched no directories, or a partial pattern matched no files. |
@@ -87,6 +87,10 @@ Positions follow two rules:
 | `usage` | With `--json`, adder was invoked incorrectly, such as with an unknown flag. |
 | `golden-mismatch` | A generator test's files differ from its golden files. |
 | `type-check` | A type-aware scan could not load its packages: code that does not type check, a missing dependency, or no `go` command. |
+| `unknown-pack` | The configuration uses a pack that adder was not built with. |
+| `invalid-pack` | A pack cannot be registered, such as a duplicate pack, function, or scanner name. |
+| `unknown-scanner` | A scan names a scanner that no pack provides. |
+| `scanner` | A custom scanner failed. |
 
 **Why:** error text is for people and changes freely, but codes and positions are for tools. Keeping both from the start means JSON output, editor squiggles, and documentation links need no rework later.
 
@@ -133,9 +137,9 @@ Outside Go, adder's header counts only on the first line after any preamble, whe
 
 Stale outputs get their own code so CI can tell "regenerate and commit" apart from "something is broken".
 
-### 10. Everything is internal until the library API is designed
+### 10. Everything is internal except a small root package
 
-All packages live under `internal/`, so their APIs can change freely until v0.5, when the public library API is planned.
+All packages live under `internal/`, so their APIs can change freely. The root package holds the only public Go API, which starts with what packs and extensions need ([decision 18](#18-the-library-api-starts-with-packs-and-extensions-planned-v05)).
 
 ### 11. Go versions and dependencies
 
@@ -199,9 +203,35 @@ A scan uses type information only when it sets `typeCheck: true`. Filters that n
 
 How types are loaded is [decision 37](#37-loading-types).
 
-### 18. The library API arrives when it has a real consumer (planned)
+### 18. The library API starts with packs and extensions (planned, v0.5)
 
-The module's root package, `github.com/TyphonHill/adder`, is reserved for a small public facade over the internal packages, such as `adder.Load`, `adder.Derive`, and a way to register custom functions and scanners. It ships as an experimental v0.x API once a real consumer needs it, such as a repository that wants a custom scanner or an editor integration. The internal packages stay internal.
+The module's root package, `github.com/TyphonHill/adder`, is a small public facade over the internal packages. Its first consumer is a repository that builds its own adder with packs ([decision 41](#41-generator-packs-planned-v05)), custom template functions, or custom scanners ([decision 42](#42-custom-template-functions-and-scanners-planned-v05)), so v0.5 exposes only that:
+
+```go
+// Main runs the command line with the given packs, and exits.
+func Main(packs ...Pack)
+
+// Pack is a set of generators, derive outputs, templates, functions, and scanners.
+type Pack struct {
+	Name     string             // how adder.yaml refers to the pack
+	FS       fs.FS              // pack.yaml and its templates, usually an embed.FS; nil for a pack of only functions and scanners
+	Funcs    map[string]any     // template functions
+	Scanners map[string]Scanner // scanners, by the name scans use
+}
+
+type Scanner func(ctx context.Context, in *ScanInput) ([]any, error)
+```
+
+Scanners also get `ScanInput` and `Problem` ([decision 42](#42-custom-template-functions-and-scanners-planned-v05)).
+
+`cmd/adder` becomes `func main() { adder.Main() }`. `--version` reports the version of the adder module from build information, in a repository's own build too.
+
+The API is experimental until v1.0. Running adder from Go, such as loading a configuration and getting a plan back as Go values, waits for a consumer that needs it, such as an editor integration or an MCP server. Until then `--json` is the interface for tools. The internal packages stay internal.
+
+| Considered | Why not |
+| --- | --- |
+| `Load`, `Derive`, and `Check` returning plans and diagnostics | Would make plans, changes, items, and reports public. They changed shape as recently as v0.4, and no consumer needs them yet. |
+| Options as functions, such as `adder.Main(adder.WithPack(p))` | A struct gains fields without breaking callers, and a pack is data. Options for `Main` itself can be added when one is needed. |
 
 **Why:** moving code is easy; committing to an API is not. After v1.0 a breaking change needs a new `/v2` import path, and today's internal APIs are shaped by a single consumer, the command line. They changed completely in one refactoring, which would have broken every user had they been public. `cmd/adder` is already public, because `go get -tool` depends on its path.
 
@@ -704,6 +734,177 @@ A repository can hold several `adder.yaml` files, such as one per service in a m
 | A root configuration that includes the others | Another list to keep in sync, and the nested configurations could no longer run on their own. |
 | One configuration for the whole repository | Services owned by different teams would share one file, and scans would cross module boundaries. |
 
+### 41. Generator packs (planned, v0.5)
+
+A pack shares generators, derive outputs, and templates across repositories. It is a Go package, so it is versioned, downloaded, and verified like any other dependency.
+
+```go
+// github.com/acme/adder-packs/store/pack.go
+package store
+
+import (
+	"embed"
+
+	"github.com/TyphonHill/adder"
+)
+
+//go:embed pack.yaml templates
+var files embed.FS
+
+var Pack = adder.Pack{Name: "store", FS: files}
+```
+
+```yaml
+# github.com/acme/adder-packs/store/pack.yaml
+version: 1
+options:
+  dirs: {type: list, help: Directories that each hold one driver}
+  out: {help: Directory for the registry and new drivers}
+derive:
+  scans:
+    Drivers:
+      dirs: {option: dirs}
+      typeCheck: true
+      types: {implements: github.com/acme/store.Driver}
+  outputs:
+    - template: templates/registry.go.tmpl
+      path: "{{ .Options.out }}/registry.gen.go"
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name: {pattern: "^[a-z][a-z0-9]*$", unique: Drivers.Package}
+    files:
+      - template: templates/driver.go.tmpl
+        path: "{{ .Options.out }}/{{ .Inputs.name }}/driver.go"
+```
+
+A repository that uses the pack builds its own adder, and names the pack in `adder.yaml`:
+
+```go
+// tools/adder/main.go
+package main
+
+import (
+	"github.com/TyphonHill/adder"
+	"github.com/acme/adder-packs/store"
+)
+
+func main() { adder.Main(store.Pack) }
+```
+
+```yaml
+# adder.yaml
+version: 1
+packs:
+  drivers:
+    pack: store
+    with: {dirs: ["drivers/*"], out: drivers}
+```
+
+```console
+$ go mod edit -droptool github.com/TyphonHill/adder/cmd/adder
+$ go get -tool ./tools/adder
+$ go tool adder new driver --name gcs
+created    drivers/gcs/driver.go
+updated    drivers/registry.gen.go
+```
+
+**Building.** The repository's build takes the place of the `tool` line for `github.com/TyphonHill/adder/cmd/adder`, which is dropped because two tools named `adder` would make `go tool adder` ambiguous. `go tool adder` keeps working, now with the repository's packs. The Go command caches the build, so only the first run after a change compiles. `go.mod` and `go.sum` pin and verify the pack's version, private modules work as they do for any dependency, and tools such as Dependabot update packs like other modules. A stock adder that reads a configuration naming a pack it was not built with reports `unknown-pack`, with a hint to run the repository's own build.
+
+**Using a pack.** Each entry under `packs` is one use, named like a generator. `pack` is the pack's `Name`, and `with` gives its options. A pack can be used more than once, such as once per service directory, and each use is independent.
+
+**Options.** A pack declares `options` with the same settings as generator inputs ([decision 19](#19-scaffolding-with-adder-new)): `help`, `default`, `pattern`, and `values`, with `type` `string`, `bool`, or `list`, a list of strings. Options are given only in `with`, so `valuesFrom` and `unique` do not apply. An option without a default is required. Mistakes in `with` are configuration problems, such as `invalid-value` and `missing-field`, reported at the use in `adder.yaml`.
+
+- In `pack.yaml`, a mapping whose only key is `option`, such as `dirs: {option: dirs}`, is replaced by that option's value before the configuration is validated, so a list can fill `dirs` and a string can fill `implements`. Problems with the result are reported at the use's `with` value.
+- Templates in the pack, output paths, generator file paths, and messages see the options as `.Options`.
+- There are no overrides. A use cannot change a pack's scans, outputs, or generators beyond its options; a repository that needs more defines its own outputs or forks the pack.
+
+**Scope.** A pack's scans belong to each use. The pack's templates see them by name, with `.Options` and `.Module`, and nothing else from the repository: not its scans, `vars`, or partials. The repository's own templates do not see the pack's scans. `Options` joins the reserved scan names. `pack.yaml` holds `version`, `options`, `partials`, `derive`, and `generators`; a pack cannot declare `vars` or use other packs.
+
+**Paths.** Template paths and `partials` patterns in `pack.yaml` are relative to the root of the pack's `FS`. Scan directories and output paths are relative to the repository root and confined to it, like those in `adder.yaml` ([decision 5](#5-paths-in-the-configuration)).
+
+**Generators.** A use's generators become `adder new` commands under their own names. A name already taken, by the repository or another use, is an `invalid-name` problem; the use renames its generators with `generators: {driver: cache-driver}`.
+
+**Tests.** `pack.yaml` does not declare generator tests, because golden files belong to a repository and `adder test --update` cannot write into a pack. A repository tests a used pack's generators under the use, as `tests: {driver: [...]}` in the form of [decision 30](#30-generator-tests). A pack's module can keep an example repository that does so in its own CI.
+
+**Templates from a pack.** A repository's own outputs and generator files can render a pack's template with `pack: store` next to `template`. The template sees the repository's data as usual, and the pack's partials.
+
+**Headers.** Outputs from a pack's templates are marked `// Code generated by adder from templates/registry.go.tmpl in pack store. DO NOT EDIT.` The pack's version is left out, so upgrading a pack only rewrites the files whose content changes. The header still has the frozen form ([decision 8](#8-the-generated-code-header-is-frozen)).
+
+**Discovery.** `adder list` and `adder explain` name the use and the pack each output or generator comes from.
+
+**Problems.**
+
+- A problem in a pack's file carries the pack's name as `pack` in JSON and in text as `pack store: pack.yaml:3:5: message [code]`, with the path relative to the pack's `FS`.
+- New codes: `unknown-pack` for a configuration that names a pack adder was not built with, and `invalid-pack` for a pack that cannot be registered, such as two packs with the same name, a name that is not a lowercase word, or an `FS` without `pack.yaml`.
+
+| Considered | Why not |
+| --- | --- |
+| Pack versions in `adder.yaml`, fetched with `go mod download` | A second lock file that update tools do not understand, and packs with Go code would still need a build of their own. |
+| `adder pack add` copying a pack's files into the repository | Updates become manual, and copies drift from their source. Packs could not carry Go code. |
+| Go plugins (`plugin` package) | Linux and macOS only, and the plugin must be built with exactly the same toolchain and dependency versions as adder. |
+| Extensions as separate processes, or WebAssembly modules | A wire protocol to keep stable, and for WebAssembly a runtime dependency and a narrower Go toolchain for authors. |
+| Overrides of a pack's scans and outputs | Merge rules are the hardest part of a configuration to keep compatible, and a pack could no longer rely on its own scans. |
+
+**Why:** the Go module system already solves versioning, downloading, verification, private hosting, and updates, and the repositories adder serves already depend on it. A repository's own build is also the only way to run Go code from a pack, which custom functions and scanners need ([decision 42](#42-custom-template-functions-and-scanners-planned-v05)).
+
+### 42. Custom template functions and scanners (planned, v0.5)
+
+A pack can add template functions and scanners, written in Go. A pack without an `FS` is only functions and scanners, so a repository adds its own with a pack in its `tools/adder/main.go`:
+
+```go
+adder.Main(adder.Pack{
+	Name:     "local",
+	Funcs:    map[string]any{"routeName": routeName},
+	Scanners: map[string]adder.Scanner{"routes": scanRoutes},
+})
+```
+
+**Functions.** A pack's functions are available to every template, the repository's and every pack's. A name used by a built-in function or by another pack is an `invalid-pack` problem when adder starts, so adding a built-in function is a breaking change for packs that use its name, and the changelog says so. Functions follow the rules of `text/template`. They must be deterministic, as built-in functions are ([decision 13](#13-our-own-template-functions-with-sprouts-names)), which adder cannot check.
+
+**Scanners.** A scan can use a registered scanner instead of `funcs`, `types`, `values`, or `files`:
+
+```yaml
+scans:
+  Routes:
+    dirs: ["api/*"]
+    scanner: {name: routes, with: {prefix: /v1}}
+```
+
+```go
+type ScanInput struct {
+	FS   fs.FS    // the repository, with files adder new is about to write
+	Dirs []string // the scan's directories, expanded, slash-separated, and in order
+}
+
+// Decode decodes the scan's `with` settings into v, rejecting unknown fields.
+func (in *ScanInput) Decode(v any) error
+
+// Problem is a problem a scanner reports at a position in a repository file.
+type Problem struct {
+	File         string // slash-separated, relative to the repository root
+	Line, Column int
+	Message      string
+	Hint         string
+}
+```
+
+- `dirs` is optional for a scanner, which may read the files it needs from `FS`. Directories are expanded as for any scan, with the same boundaries ([decision 40](#40-multiple-configurations)).
+- A scanner returns its items as structs, pointers to structs, or `map[string]any`, in a deterministic order, which adder keeps. Templates, `each`, `valuesFrom`, `sortBy`, and `groupBy` read fields by name from either.
+- `Decode` reports problems in `with` at their position in `adder.yaml`, with the usual codes.
+- A scanner's error is reported at the scan with the new code `scanner`. A `Problem`, or several joined with `errors.Join`, is reported at its own position instead, so a scanner can point at the file that is wrong.
+- Scanner names, like function names, are unique across packs. A scan naming an unknown scanner is an `unknown-scanner` problem, with a hint to run the repository's own build.
+- Scanners must not write files or depend on anything outside `FS`, so that `check` and `derive` agree. adder cannot check this either.
+
+| Considered | Why not |
+| --- | --- |
+| Scanner items as a public `adder.Item` type | Would freeze the item model of the built-in scans for every scanner. Structs and maps let a scanner return whatever fields its templates need. |
+| A `Scanner` interface | A function is enough today. A scanner that needs more than one method can be added later as an optional interface. |
+| Functions available only to their own pack's templates | A repository using a pack's templates in its own outputs would have no way to reach the functions those templates need. |
+
+**Why:** a repository's code sometimes holds information no general scan can find, such as routes registered in a call chain or names in a non-Go file format. Custom functions and scanners let a repository or pack handle those cases without adder growing a feature for each.
+
 ## Compatibility
 
 From v1.0, semantic versioning covers:
@@ -712,6 +913,7 @@ From v1.0, semantic versioning covers:
 - Template data: scan item fields, `.Module`, and template function names and behavior.
 - The generated-code header format.
 - Diagnostic codes, exit codes, and JSON output.
+- The `pack.yaml` schema, and the root package's Go API.
 
 It does not cover the wording of messages or the human-readable output of commands, which may improve in any release.
 
