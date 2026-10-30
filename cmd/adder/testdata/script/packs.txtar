@@ -20,6 +20,27 @@ stdout '^  output    pack store: pack.yaml:8:7$'
 stdout '^  pack      store, used as drivers$'
 stdout '^  status    up to date$'
 
+# A pack's generators are commands, renamed per use, and their new files reach the use's registry in the same run.
+exec go tool adder list
+stdout '^  driver  Add an implementation \(pack store for drivers\)$'
+stdout '^  cache   Add an implementation \(pack store for caches\)$'
+exec go tool adder new driver --name gcs
+stdout '^created    drivers/gcs/gcs.go$'
+stdout '^updated    drivers/registry.gen.go$'
+stdout '^Implement New in drivers/gcs/gcs.go.$'
+grep '"disk", "gcs", "s3"' drivers/registry.gen.go
+exec go tool adder check
+
+# unique applies to the use's own scan.
+exits 2 go tool adder new cache --name mem
+stderr 'invalid-input'
+exec go tool adder new cache --name disk
+stdout '^created    caches/disk/disk.go$'
+
+# A use tests its pack's generators against golden files in the repository.
+exec go tool adder test
+stdout '^ok    driver/plain$'
+
 # A mistake in a use is reported where the use gives the option.
 cp bad.yaml adder.yaml
 exits 1 go tool adder check
@@ -49,7 +70,7 @@ import (
 	"github.com/TyphonHill/adder"
 )
 
-//go:embed pack.yaml registry.go.tmpl
+//go:embed pack.yaml registry.go.tmpl impl.go.tmpl
 var files embed.FS
 
 var Pack = adder.Pack{Name: "store", FS: files}
@@ -63,6 +84,19 @@ derive:
   outputs:
     - template: registry.go.tmpl
       path: "{{ index .Options.dirs 0 | trimSuffix \"/*\" }}/registry.gen.go"
+generators:
+  impl:
+    description: Add an implementation
+    inputs:
+      name: {pattern: "[a-z][a-z0-9]*", unique: Impls.Package}
+    files:
+      - template: impl.go.tmpl
+        path: "{{ index .Options.dirs 0 | trimSuffix \"/*\" }}/{{ .Inputs.name }}/{{ .Inputs.name }}.go"
+    message: Implement New in {{ index .Options.dirs 0 | trimSuffix "/*" }}/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
+-- store/impl.go.tmpl --
+package {{ .Inputs.name }}
+
+func New() {}
 -- store/registry.go.tmpl --
 package registry
 
@@ -73,9 +107,17 @@ packs:
   drivers:
     pack: store
     with: {dirs: ["drivers/*"]}
+    generators: {impl: driver}
+    tests:
+      driver: [{name: plain, inputs: {name: example}, want: testdata/driver}]
   caches:
     pack: store
     with: {dirs: ["caches/*"]}
+    generators: {impl: cache}
+-- testdata/driver/drivers/example/example.go --
+package example
+
+func New() {}
 -- bad.yaml --
 version: 1
 packs:

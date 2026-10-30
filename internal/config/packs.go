@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +37,10 @@ type Use struct {
 	Pack string `yaml:"pack"`
 	// With gives the pack's options, by name.
 	With map[string]any `yaml:"with"`
+	// Generators renames the pack's generators, from the pack's name to the command's.
+	Generators map[string]string `yaml:"generators"`
+	// Tests are the tests of the pack's generators, by command name, with golden files in the repository.
+	Tests map[string][]GeneratorTest `yaml:"tests"`
 
 	// Pos is where the use is declared.
 	Pos diag.Pos `yaml:"-"`
@@ -73,10 +78,11 @@ type Option struct {
 
 // packFile is the content of a pack.yaml.
 type packFile struct {
-	Version  int               `yaml:"version"`
-	Options  map[string]Option `yaml:"options"`
-	Partials []Partial         `yaml:"partials"`
-	Derive   Derive            `yaml:"derive"`
+	Version    int                  `yaml:"version"`
+	Options    map[string]Option    `yaml:"options"`
+	Partials   []Partial            `yaml:"partials"`
+	Derive     Derive               `yaml:"derive"`
+	Generators map[string]Generator `yaml:"generators"`
 }
 
 // optionKey is the only key of a mapping that stands for an option's value, as in dirs: {option: dirs}.
@@ -131,7 +137,80 @@ func (c *Config) loadPacks(packs Packs, pos positions) diag.List {
 		}
 		c.Packs[name] = use
 	}
-	return append(errs, c.checkUsePaths()...)
+	errs = append(errs, c.checkUsePaths()...)
+	return append(errs, c.addUseGenerators(pos)...)
+}
+
+// Outputs returns the configuration's own outputs, then those of each use of a pack, in name order.
+func (c *Config) Outputs() []Output {
+	outputs := slices.Clone(c.Derive.Outputs)
+	for _, name := range slices.Sorted(maps.Keys(c.Packs)) {
+		if use := c.Packs[name]; use.Config != nil {
+			outputs = append(outputs, use.Config.Derive.Outputs...)
+		}
+	}
+	return outputs
+}
+
+// addUseGenerators adds the generators of every use to the configuration's, under their command names, with the
+// tests the use gives them.
+func (c *Config) addUseGenerators(pos positions) diag.List {
+	var errs diag.List
+	from := make(map[string]string, len(c.Generators))
+	for name := range c.Generators {
+		from[name] = FileName
+	}
+	for _, useName := range slices.Sorted(maps.Keys(c.Packs)) {
+		use := c.Packs[useName]
+		at := "packs." + useName
+		if use.Config == nil {
+			continue
+		}
+		for _, name := range slices.Sorted(maps.Keys(use.Generators)) {
+			renamed := use.Generators[name]
+			switch _, ok := use.Config.Generators[name]; {
+			case !ok:
+				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".generators."+name), "pack use %q: pack %q has no generator %q", useName, use.Pack, name))
+			case !generatorName.MatchString(renamed):
+				errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".generators."+name), "pack use %q: generator name %q must be lowercase words joined by hyphens", useName, renamed))
+			}
+		}
+		commands := make(map[string]bool)
+		for _, name := range slices.Sorted(maps.Keys(use.Config.Generators)) {
+			gen := use.Config.Generators[name]
+			command := cmp.Or(use.Generators[name], name)
+			commands[command] = true
+			if first, taken := from[command]; taken {
+				errs = append(errs, &diag.Diagnostic{
+					Code:    diag.InvalidName,
+					Pos:     use.Pos,
+					Message: fmt.Sprintf("pack use %q: generator %q is already defined in %s", useName, command, first),
+					Hint:    fmt.Sprintf("rename it under the use, such as generators: {%s: %s-%s}", name, useName, name),
+				})
+				continue
+			}
+			from[command] = fmt.Sprintf("pack use %q", useName)
+			gen.Pack, gen.Use = use.Pack, useName
+			gen.Tests = use.Tests[command]
+			names := make(map[string]bool, len(gen.Tests))
+			for i := range gen.Tests {
+				testAt := at + ".tests." + command + "." + strconv.Itoa(i)
+				gen.Tests[i].Want = cleanSlash(gen.Tests[i].Want)
+				gen.Tests[i].Pos = pos.at(testAt)
+				errs = append(errs, validateTest(command, i, gen.Tests[i], gen.Inputs, names, testAt, pos)...)
+			}
+			if c.Generators == nil {
+				c.Generators = make(map[string]Generator)
+			}
+			c.Generators[command] = gen
+		}
+		for _, command := range slices.Sorted(maps.Keys(use.Tests)) {
+			if !commands[command] {
+				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".tests."+command), "pack use %q: tests name %q, which is not one of its generators", useName, command))
+			}
+		}
+	}
+	return errs
 }
 
 // checkUsePaths reports a file that the repository's outputs and a use, or two uses, would both write.
@@ -217,7 +296,7 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, funcs te
 	if err := root.Decode(&filled); err != nil {
 		return nil, nil, inPack(decodeError(PackFileName, err))
 	}
-	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive}
+	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive, Generators: filled.Generators}
 	pos := indexNode(PackFileName, pack, &root)
 	pos.overrides = overrides
 	if problems := cfg.renderPaths(values, funcs, adder.at(at), pos); len(problems) > 0 {
@@ -226,8 +305,19 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, funcs te
 	cfg.normalize()
 	cfg.recordPositions(pos)
 	// Positions already name the pack, except those of options given in adder.yaml.
-	if err := cfg.validate(pos); err != nil {
-		return nil, nil, diag.From(err)
+	problems = diag.From(cfg.validate(pos))
+	for _, name := range slices.Sorted(maps.Keys(cfg.Generators)) {
+		if cfg.Generators[name].Tests != nil {
+			problems = append(problems, &diag.Diagnostic{
+				Code:    diag.InvalidValue,
+				Pos:     pos.at("generators." + name + ".tests"),
+				Message: fmt.Sprintf("generator %q: a pack's generators have no tests of their own", name),
+				Hint:    "golden files belong to a repository: test the generator under its use in adder.yaml, with tests: {" + name + ": [...]}",
+			})
+		}
+	}
+	if len(problems) > 0 {
+		return nil, nil, problems
 	}
 	for i := range cfg.Derive.Outputs {
 		cfg.Derive.Outputs[i].Pack, cfg.Derive.Outputs[i].Use = pack, use

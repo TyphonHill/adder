@@ -56,7 +56,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 	if !ok {
 		return nil, nil, unknownGenerator(cfg, name)
 	}
-	set, data, err := derive.Prepare(ctx, cfg, src, "")
+	set, data, err := derive.Prepare(ctx, cfg, src, gen.Use)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -78,7 +78,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 		if !included(f, values) {
 			continue
 		}
-		change, err := newFile(cfg, src, set, data, i, f, seen)
+		change, err := newFile(cfg, src, gen, set, data, i, f, seen)
 		if err != nil {
 			problems = append(problems, diag.From(err)...)
 			continue
@@ -105,7 +105,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 }
 
 // newFile renders the file f of a generator. Seen holds the paths of the files planned so far.
-func newFile(cfg *config.Config, src derive.Sources, set *render.Set, data map[string]any, i int, f config.File, seen map[string]bool) (plan.Change, error) {
+func newFile(cfg *config.Config, src derive.Sources, gen config.Generator, set *render.Set, data map[string]any, i int, f config.File, seen map[string]bool) (plan.Change, error) {
 	field := fmt.Sprintf("file %d: path %q", i, f.Path)
 	rendered, err := set.Text(f.Path, data)
 	if err != nil {
@@ -120,7 +120,7 @@ func newFile(cfg *config.Config, src derive.Sources, set *render.Set, data map[s
 		return plan.Change{}, diag.Errorf(diag.InvalidValue, f.Pos, "%s is not a file name", field)
 	case seen[target]:
 		return plan.Change{}, diag.Errorf(diag.DuplicatePath, f.Pos, "%s is also created by another file of the generator", field)
-	case slices.ContainsFunc(cfg.Derive.Outputs, func(out config.Output) bool { return out.Path == target }):
+	case slices.ContainsFunc(cfg.Outputs(), func(out config.Output) bool { return out.Path == target }):
 		return plan.Change{}, diag.Errorf(diag.DuplicatePath, f.Pos, "%s is a derived output", field)
 	}
 	if d := config.CheckPath(f.Pos, field, target); d != nil {
@@ -131,7 +131,10 @@ func newFile(cfg *config.Config, src derive.Sources, set *render.Set, data map[s
 	}
 
 	content, err := set.File(f.Template, target, data)
-	if err != nil {
+	switch {
+	case err != nil && gen.Pack != "":
+		return plan.Change{}, diag.InPack(err, gen.Pack, f.Pos)
+	case err != nil:
 		return plan.Change{}, diag.Locate(err, src.TemplatesDir, f.Pos)
 	}
 	_, err = fs.Stat(src.Repo, target)

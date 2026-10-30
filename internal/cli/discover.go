@@ -30,6 +30,9 @@ type generatorReport struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Pos         diag.Pos `json:"pos,omitzero"`
+	// Pack and Use name the pack and the use a generator comes from.
+	Pack string `json:"pack,omitempty"`
+	Use  string `json:"use,omitempty"`
 }
 
 // describeReport is what describe reports.
@@ -55,12 +58,9 @@ func newListCommand(opts *globalOptions) *cobra.Command {
 				rep := r.(*listReport)
 				for _, name := range slices.Sorted(maps.Keys(run.cfg.Generators)) {
 					gen := run.cfg.Generators[name]
-					rep.Generators = append(rep.Generators, generatorReport{Name: name, Description: gen.Description, Pos: gen.Pos})
+					rep.Generators = append(rep.Generators, generatorReport{Name: name, Description: gen.Description, Pos: gen.Pos, Pack: gen.Pack, Use: gen.Use})
 				}
-				rep.Outputs = append(rep.Outputs, run.cfg.Derive.Outputs...)
-				for _, use := range slices.Sorted(maps.Keys(run.cfg.Packs)) {
-					rep.Outputs = append(rep.Outputs, run.cfg.Packs[use].Config.Derive.Outputs...)
-				}
+				rep.Outputs = append(rep.Outputs, run.cfg.Outputs()...)
 				if !opts.json && !opts.quiet {
 					if run.several {
 						fmt.Fprintf(cmd.OutOrStdout(), "%s\n", path.Join(run.prefix, config.FileName))
@@ -80,7 +80,11 @@ func printList(w io.Writer, rep *listReport) {
 		fmt.Fprintln(tw, "  none")
 	}
 	for _, gen := range rep.Generators {
-		fmt.Fprintf(tw, "  %s\t%s\n", gen.Name, gen.Description)
+		from := ""
+		if gen.Use != "" {
+			from = fmt.Sprintf(" (pack %s for %s)", gen.Pack, gen.Use)
+		}
+		fmt.Fprintf(tw, "  %s\t%s%s\n", gen.Name, gen.Description, from)
 	}
 	fmt.Fprintln(tw, "outputs")
 	if len(rep.Outputs) == 0 {

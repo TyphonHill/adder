@@ -2,6 +2,7 @@ package config
 
 import (
 	"io/fs"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -150,7 +151,6 @@ func TestPackProblems(t *testing.T) {
 		{name: "a pack.yaml that is not YAML", config: use, pack: "version: [1\n", want: []string{"pack store: pack.yaml:1 yaml-syntax"}},
 		{name: "a pack.yaml without a version", config: use, pack: "options: {dirs: {type: list}, out: {}}\n", want: []string{"pack store: pack.yaml:1:1 missing-field"}},
 		{name: "an unknown field in pack.yaml", config: use, pack: "version: 1\noptions: {dirs: {type: list}, out: {}}\nvars: {}\n", want: []string{"pack store: pack.yaml:3 unknown-field"}},
-		{name: "generators in pack.yaml", config: use, pack: "version: 1\noptions: {dirs: {type: list}, out: {}}\ngenerators: {}\n", want: []string{"pack store: pack.yaml:3 unknown-field"}},
 		{name: "an option pack.yaml does not declare", config: use, pack: "version: 1\noptions: {dirs: {type: list}, out: {}}\nderive:\n  scans:\n    S: {dirs: {option: nope}}\n", want: []string{"pack store: pack.yaml:5:15 invalid-value"}},
 		{name: "an option of the wrong type for its field", config: use, pack: "version: 1\noptions: {dirs: {type: list}, out: {}}\nderive:\n  scans:\n    S: {dirs: [x], includeTests: {option: out}}\n", want: []string{"pack store: pack.yaml:5 invalid-value"}},
 		{
@@ -172,6 +172,7 @@ func TestPackProblems(t *testing.T) {
 			pack:   storePack,
 			want:   []string{"adder.yaml:6:3 duplicate-path"},
 		},
+		{name: "a template in a scan's directories", config: "version: 1\nderive:\n  scans:\n    S: {dirs: [\"{{ .Vars.dir }}\"]}\n", want: []string{"adder.yaml:4:16 invalid-value"}},
 		{name: "a scan named Options", config: "version: 1\nderive:\n  scans:\n    Options: {dirs: [x]}\n", want: []string{"adder.yaml:4:5 reserved-name"}},
 	}
 	for _, tt := range tests {
@@ -238,6 +239,122 @@ func TestSource(t *testing.T) {
 		t.Run(tt.want, func(t *testing.T) {
 			if got := tt.out.Source(); got != tt.want {
 				t.Errorf("Source() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+const generatorPack = `version: 1
+options:
+  dir: {}
+  dirs: {type: list, default: ["drivers/*"]}
+derive:
+  scans:
+    Drivers: {dirs: {option: dirs}, funcs: {name: ^New$}}
+generators:
+  driver:
+    description: Add a driver
+    inputs:
+      name: {pattern: "[a-z]+", unique: Drivers.Package}
+    files:
+      - {template: driver.go.tmpl, path: "{{ .Options.dir }}/{{ .Inputs.name }}/driver.go"}
+`
+
+func TestPackGenerators(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   string
+		pack     string
+		want     map[string]string // command: use
+		wantErrs []string
+	}{
+		{
+			name:   "a use's generators become commands",
+			config: "version: 1\npacks:\n  drivers: {pack: store, with: {dir: drivers}}\n",
+			want:   map[string]string{"driver": "drivers"},
+		},
+		{
+			name:   "renamed generators",
+			config: "version: 1\npacks:\n  a: {pack: store, with: {dir: a}, generators: {driver: a-driver}}\n  b: {pack: store, with: {dir: b}}\n",
+			want:   map[string]string{"a-driver": "a", "driver": "b"},
+		},
+		{
+			name:   "tests under the use",
+			config: "version: 1\npacks:\n  drivers:\n    pack: store\n    with: {dir: drivers}\n    tests: {driver: [{name: plain, inputs: {name: example}, want: ./testdata/plain}]}\n",
+			want:   map[string]string{"driver": "drivers"},
+		},
+		{
+			name:     "a name the configuration's own generator has",
+			config:   "version: 1\ngenerators:\n  driver: {files: [{template: t.tmpl, path: x.go}]}\npacks:\n  drivers: {pack: store, with: {dir: drivers}}\n",
+			wantErrs: []string{"adder.yaml:5:3 invalid-name"},
+		},
+		{
+			name:     "two uses with one generator name",
+			config:   "version: 1\npacks:\n  a: {pack: store, with: {dir: a}}\n  b: {pack: store, with: {dir: b}}\n",
+			wantErrs: []string{"adder.yaml:4:3 invalid-name"},
+		},
+		{
+			name:     "renaming a generator the pack does not have",
+			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}, generators: {nope: x}}\n",
+			wantErrs: []string{"adder.yaml:3:55 invalid-value"},
+		},
+		{
+			name:     "a new name that is not lowercase words",
+			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}, generators: {driver: Driver}}\n",
+			wantErrs: []string{"adder.yaml:3:55 invalid-name"},
+		},
+		{
+			name:     "tests for a generator the use does not have",
+			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}, tests: {nope: []}}\n",
+			wantErrs: []string{"adder.yaml:3:50 invalid-value"},
+		},
+		{
+			name:     "a test with an undeclared input",
+			config:   "version: 1\npacks:\n  drivers:\n    pack: store\n    with: {dir: d}\n    tests: {driver: [{name: plain, inputs: {nam: x}, want: testdata/plain}]}\n",
+			wantErrs: []string{"adder.yaml:6:45 invalid-value"},
+		},
+		{
+			name:     "tests in pack.yaml",
+			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}}\n",
+			pack:     generatorPack + "    tests: [{name: plain, want: testdata/plain}]\n",
+			wantErrs: []string{"pack store: pack.yaml:15:5 invalid-value"},
+		},
+		{
+			name:     "unique on a scan the pack does not have",
+			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}}\n",
+			pack:     strings.Replace(generatorPack, "unique: Drivers.Package", "unique: Other.Package", 1),
+			wantErrs: []string{"pack store: pack.yaml:12:33 invalid-value"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pack := tt.pack
+			if pack == "" {
+				pack = generatorPack
+			}
+			cfg, err := Parse("adder.yaml", []byte(tt.config), fakePacks{"store": pack})
+			var errs []string
+			for _, d := range diag.From(err) {
+				errs = append(errs, d.Pos.String()+" "+string(d.Code))
+			}
+			if !slices.Equal(errs, tt.wantErrs) {
+				t.Fatalf("problems = %q, want %q\n%v", errs, tt.wantErrs, err)
+			}
+			if err != nil {
+				return
+			}
+			got := make(map[string]string)
+			for name, gen := range cfg.Generators {
+				got[name] = gen.Use
+				if gen.Pack != "store" || gen.Pos.Pack != "store" {
+					t.Errorf("generator %q comes from pack %q at %s", name, gen.Pack, gen.Pos)
+				}
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("generators = %v, want %v", got, tt.want)
+			}
+			if tests := cfg.Generators["driver"].Tests; len(tests) == 1 && (tests[0].Want != "testdata/plain" || tests[0].Pos.String() != "adder.yaml:6:22") {
+				t.Errorf("test = %+v", tests[0])
 			}
 		})
 	}
