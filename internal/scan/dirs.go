@@ -75,7 +75,8 @@ func walkPattern(fsys fs.FS, dir string, pattern []string, out *[]string) error 
 		}
 	default:
 		child := path.Join(dir, segment)
-		if info, err := fs.Stat(fsys, child); err == nil && info.IsDir() {
+		// Lstat, so a directory that is a symbolic link is skipped like any other link.
+		if info, err := fs.Lstat(fsys, child); err == nil && info.IsDir() {
 			return walkPattern(fsys, child, rest, out)
 		}
 	}
@@ -90,13 +91,19 @@ func wildcardChildren(fsys fs.FS, dir string) ([]string, error) {
 	}
 	var children []string
 	for _, entry := range entries {
-		name := entry.Name()
-		if !entry.IsDir() || name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		if !entry.IsDir() || Ignored(entry.Name()) {
 			continue
 		}
+		name := entry.Name()
 		children = append(children, path.Join(dir, name))
 	}
 	return children, nil
+}
+
+// Ignored reports whether wildcards skip a directory with this name: like go's ./..., testdata, vendor, and
+// names starting with "." or "_".
+func Ignored(name string) bool {
+	return name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
 
 func excluded(dir string, patterns []string) bool {

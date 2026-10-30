@@ -48,6 +48,21 @@ func (o overlay) Stat(name string) (fs.FileInfo, error) {
 	return fs.Stat(o.base, name)
 }
 
+// Lstat is Stat without following a symbolic link in the base, so scans skip links as they do without the overlay.
+func (o overlay) Lstat(name string) (fs.FileInfo, error) {
+	if _, ok := o.files[name]; ok || o.newDir(name) {
+		return o.Stat(name)
+	}
+	return fs.Lstat(o.base, name)
+}
+
+func (o overlay) ReadLink(name string) (string, error) {
+	if _, ok := o.files[name]; ok || o.newDir(name) {
+		return "", &fs.PathError{Op: "readlink", Path: name, Err: fs.ErrInvalid}
+	}
+	return fs.ReadLink(o.base, name)
+}
+
 func (o overlay) ReadDir(name string) ([]fs.DirEntry, error) {
 	entries, err := fs.ReadDir(o.base, name)
 	if err != nil && (!errors.Is(err, fs.ErrNotExist) || !o.hasFilesIn(name)) {

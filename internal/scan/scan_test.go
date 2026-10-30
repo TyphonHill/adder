@@ -3,6 +3,7 @@ package scan
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"reflect"
 	"regexp"
 	"slices"
@@ -235,11 +236,13 @@ func TestRunDirs(t *testing.T) {
 	for _, dir := range []string{"a", "a/b", "a/b/c", "x/b", "testdata", "vendor", ".hidden", "_old"} {
 		tree["tree/"+dir+"/f.go"] = file("package p\n\nfunc F() {}\n")
 	}
+	tree["tree/link"] = &fstest.MapFile{Data: []byte("a"), Mode: fs.ModeSymlink}
 	tests := []struct {
-		name    string
-		dirs    []string
-		exclude []string
-		want    []string
+		name     string
+		dirs     []string
+		exclude  []string
+		want     []string
+		wantCode diag.Code // when set, the problem expected instead
 	}{
 		{name: "double star matches any depth", dirs: []string{"tree/**"}, want: []string{"tree/a", "tree/a/b", "tree/a/b/c", "tree/x/b"}},
 		{name: "double star in the middle", dirs: []string{"tree/**/b"}, want: []string{"tree/a/b", "tree/x/b"}},
@@ -249,10 +252,18 @@ func TestRunDirs(t *testing.T) {
 		{name: "exclude a subtree", dirs: []string{"tree/**"}, exclude: []string{"tree/a/b/**"}, want: []string{"tree/a", "tree/x/b"}},
 		{name: "exclude with a wildcard", dirs: []string{"tree/**"}, exclude: []string{"tree/x/*"}, want: []string{"tree/a", "tree/a/b", "tree/a/b/c"}},
 		{name: "root directory", dirs: []string{"."}, want: nil},
+		{name: "wildcards skip linked directories", dirs: []string{"tree/*", "tree/**/b"}, want: []string{"tree/a", "tree/a/b", "tree/x/b"}},
+		{name: "a linked directory named outright is not followed", dirs: []string{"tree/link/b"}, wantCode: diag.NoMatch},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			items, err := Run(t.Context(), tree, "", config.Scan{Dirs: tt.dirs, Exclude: tt.exclude})
+			if tt.wantCode != "" {
+				if list := diag.From(err); len(list) != 1 || list[0].Code != tt.wantCode {
+					t.Errorf("Run() error = %v, want a %s problem", err, tt.wantCode)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("Run() error = %v", err)
 			}

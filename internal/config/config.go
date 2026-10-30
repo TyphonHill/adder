@@ -20,6 +20,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/header"
 )
 
 // FileName is the configuration file adder looks for in the repository root.
@@ -29,7 +30,7 @@ const FileName = "adder.yaml"
 const Version = 1
 
 // reservedNames are template data keys that scans cannot use.
-var reservedNames = []string{"Inputs", "Module", "Vars"}
+var reservedNames = []string{"Inputs", "Item", "Module", "Vars"}
 
 // Config is a parsed adder configuration file.
 type Config struct {
@@ -108,8 +109,11 @@ var directiveName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 type Output struct {
 	// Template is a slash-separated path relative to the configuration file's directory.
 	Template string `yaml:"template"`
-	// Path is a slash-separated path relative to the output root.
+	// Path is a slash-separated path relative to the output root. With Each, it is a template rendered for each
+	// item.
 	Path string `yaml:"path"`
+	// Each names a scan; the template is rendered once per item, as .Item.
+	Each string `yaml:"each"`
 
 	// Pos is where the output is declared, for reporting problems found while rendering.
 	Pos diag.Pos `yaml:"-"`
@@ -239,7 +243,9 @@ func (c *Config) normalize() {
 	for i := range c.Derive.Outputs {
 		out := &c.Derive.Outputs[i]
 		out.Template = cleanSlash(out.Template)
-		out.Path = cleanSlash(out.Path)
+		if out.Each == "" { // cleaning a template could remove an action, as in {{ .Item.Dir }}/..
+			out.Path = cleanSlash(out.Path)
+		}
 	}
 	c.normalizeGenerators()
 }
@@ -327,6 +333,10 @@ func (c *Config) validate(pos positions) error {
 	}
 
 	seen := make(map[string]bool, len(c.Derive.Outputs))
+	templates := make(map[string]int, len(c.Derive.Outputs))
+	for _, out := range c.Derive.Outputs {
+		templates[out.Template]++
+	}
 	for i, out := range c.Derive.Outputs {
 		at := "derive.outputs." + strconv.Itoa(i)
 		if out.Template == "" {
@@ -334,7 +344,18 @@ func (c *Config) validate(pos positions) error {
 		} else if d := checkPath(pos.at(at+".template"), fmt.Sprintf("output %d: template %q", i, out.Template), out.Template); d != nil {
 			errs = append(errs, d)
 		}
+		if out.Each != "" {
+			errs = append(errs, c.validateEach(i, out, templates[out.Template] > 1, at, pos)...)
+			continue
+		}
 		switch {
+		case strings.Contains(out.Path, "{{"):
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.InvalidValue,
+				Pos:     pos.at(at + ".path"),
+				Message: fmt.Sprintf("output %d: path %q is a template, but the output has no each", i, out.Path),
+				Hint:    "only outputs with each, which render one file per scan item, have templated paths",
+			})
 		case out.Path == "":
 			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "output %d: path is required", i))
 		case seen[out.Path]:
@@ -349,6 +370,39 @@ func (c *Config) validate(pos positions) error {
 
 	errs = append(errs, c.validateGenerators(pos)...)
 	return errs.Err()
+}
+
+// validateEach checks an output that renders one file per item of a scan. Shared reports whether another output
+// uses the same template.
+func (c *Config) validateEach(i int, out Output, shared bool, at string, pos positions) diag.List {
+	var errs diag.List
+	if !c.hasScan(out.Each) {
+		errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".each"), "output %d: each refers to %q, which is not a scan", i, out.Each))
+	}
+	if shared {
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at + ".template"),
+			Message: fmt.Sprintf("output %d: template %q is also used by another output", i, out.Template),
+			Hint:    "an output with each needs a template of its own, because its stale files are found by the header naming it",
+		})
+	}
+	if strings.TrimSpace(out.Path) == "" {
+		return append(errs, diag.Errorf(diag.MissingField, pos.at(at), "output %d: path is required", i))
+	}
+	tail := out.Path
+	if end := strings.LastIndex(tail, "}}"); end >= 0 {
+		tail = tail[end+len("}}"):]
+	}
+	if !header.Supported(tail) {
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at + ".path"),
+			Message: fmt.Sprintf("output %d: path %q must end in a file type adder can mark as generated", i, out.Path),
+			Hint:    "stale files are found by adder's header, so the path needs a literal extension with comments, such as .go, .ts, .yaml, or .sql",
+		})
+	}
+	return errs
 }
 
 // validateFuncs checks the function filters of the scan called name.

@@ -78,6 +78,16 @@ func TestParse(t *testing.T) {
 			wantOutPos:   diag.Pos{File: "adder.yaml", Line: 4, Column: 13},
 			wantMatch:    []string{"Anything"},
 		},
+		{
+			name:         "paths on outputs with each are kept as written",
+			input:        "version: 1\nderive:\n  scans:\n    Drivers: {dirs: [a]}\n  outputs:\n    - {template: ./t.go.tmpl, path: \"./{{ .Item.Dir }}/../x.go\", each: Drivers}\n",
+			wantDirs:     []string{"a"},
+			wantTemplate: "t.go.tmpl",
+			wantPath:     "./{{ .Item.Dir }}/../x.go",
+			wantScanPos:  diag.Pos{File: "adder.yaml", Line: 4, Column: 5},
+			wantOutPos:   diag.Pos{File: "adder.yaml", Line: 6, Column: 7},
+			wantMatch:    []string{"Anything"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -280,6 +290,27 @@ func TestParseErrors(t *testing.T) {
 		{name: "scan name not identifier", input: "version: 1\nderive:\n  scans:\n    my-scan: {dirs: [a]}", want: []want{{diag.InvalidName, 4, 5}}},
 		{name: "scan name reserved", input: "version: 1\nderive:\n  scans:\n    Module: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{name: "scan name reserved for inputs", input: "version: 1\nderive:\n  scans:\n    Inputs: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
+		{name: "scan name reserved for items", input: "version: 1\nderive:\n  scans:\n    Item: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
+		{
+			name:     "templated path without each",
+			input:    "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Vars.Dir }}/x.go\"\n",
+			want:     []want{{diag.InvalidValue, 7, 7}},
+			wantHint: "only outputs with each, which render one file per scan item, have templated paths",
+		},
+		{name: "each names no scan", input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Item.Name }}.go\"\n      each: Nope\n", want: []want{{diag.InvalidValue, 8, 7}}},
+		{
+			name:  "each with a shared template",
+			input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: a.go\n    - template: t.tmpl\n      path: \"{{ .Item.Name }}.go\"\n      each: S\n",
+			want:  []want{{diag.InvalidValue, 8, 7}},
+		},
+		{
+			name:     "each path without a header",
+			input:    "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Item.Name }}.json\"\n      each: S\n",
+			want:     []want{{diag.InvalidValue, 7, 7}},
+			wantHint: "stale files are found by adder's header, so the path needs a literal extension with comments, such as .go, .ts, .yaml, or .sql",
+		},
+		{name: "each path ending in an action", input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"x.{{ .Item.Ext }}\"\n      each: S\n", want: []want{{diag.InvalidValue, 7, 7}}},
+		{name: "each without a path", input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      each: S\n", want: []want{{diag.MissingField, 6, 7}}},
 		{name: "scan name reserved for vars", input: "version: 1\nderive:\n  scans:\n    Vars: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
 			name:     "var name not identifier",

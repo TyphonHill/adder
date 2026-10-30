@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strings"
 
 	"golang.org/x/mod/modfile"
 
@@ -44,28 +45,171 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 		return nil, err
 	}
 
+	// Single outputs claim their paths first, so an item rendering onto one is reported wherever it appears.
+	paths := make(map[string]bool, len(cfg.Derive.Outputs))
+	for _, out := range cfg.Derive.Outputs {
+		if out.Each == "" {
+			paths[out.Path] = true
+		}
+	}
 	var problems diag.List
 	var p plan.Plan
 	for _, out := range cfg.Derive.Outputs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		content, err := set.File(out.Template, out.Path, data)
-		if err == nil && path.Ext(out.Path) == ".go" {
-			content, err = header.Ensure(content, out.Template)
-		}
-		if err != nil {
-			problems = append(problems, diag.Locate(err, src.TemplatesDir, out.Pos)...)
+		if out.Each == "" {
+			problems = append(problems, renderOutput(set, data, src, out, out.Path, &p)...)
 			continue
 		}
-		if err := p.Add(src.Existing, out.Path, content); err != nil {
-			problems = append(problems, diag.Locate(err, src.ExistingDir, out.Pos)...)
+		found, err := planEach(ctx, set, data, src, out, &p, paths)
+		if err != nil {
+			return nil, err
 		}
+		problems = append(problems, found...)
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err
 	}
 	return &p, nil
+}
+
+// renderOutput adds the output rendered to target to p.
+func renderOutput(set *render.Set, data map[string]any, src Sources, out config.Output, target string, p *plan.Plan) diag.List {
+	content, err := set.File(out.Template, target, data)
+	if err == nil {
+		content, err = header.Ensure(target, content, out.Template)
+	}
+	if err != nil {
+		return diag.Locate(err, src.TemplatesDir, out.Pos)
+	}
+	if err := p.Add(src.Existing, target, content); err != nil {
+		return diag.Locate(err, src.ExistingDir, out.Pos)
+	}
+	if change := p.Changes[len(p.Changes)-1]; change.Status == plan.Updated && !replaceable(change) {
+		p.Changes = p.Changes[:len(p.Changes)-1]
+		return diag.Locate(&diag.Diagnostic{
+			Code:    diag.FileExists,
+			Pos:     diag.Pos{File: target},
+			Message: fmt.Sprintf("file already exists and adder did not generate it, so it is not replaced by %s", out.Template),
+			Hint:    "adder never overwrites files people own; move or delete the file, or write the output somewhere else",
+		}, src.ExistingDir, out.Pos)
+	}
+	return nil
+}
+
+// replaceable reports whether derive may overwrite a file with an output: only when the file has adder's header,
+// naming any template so that templates can be renamed. Files of a type without comments, such as JSON, get no
+// header, so adder cannot tell its own apart and replaces them as before.
+func replaceable(c plan.Change) bool {
+	if !header.Supported(c.Path) {
+		return true
+	}
+	_, ours := header.Parse(c.Path, c.Old)
+	return ours
+}
+
+// planEach adds the output rendered for each item of its scan to p, then the files it generated before that it
+// no longer produces. Paths holds every path planned so far.
+func planEach(ctx context.Context, set *render.Set, data map[string]any, src Sources, out config.Output, p *plan.Plan, paths map[string]bool) (diag.List, error) {
+	items, _ := data[out.Each].([]scan.Item)
+	produced := make(map[string]bool, len(items))
+	var problems diag.List
+	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		itemData := maps.Clone(data)
+		itemData["Item"] = item
+		target, err := itemPath(out, item, itemData, paths)
+		if err != nil {
+			problems = append(problems, diag.From(err)...)
+			continue
+		}
+		paths[target], produced[target] = true, true
+		problems = append(problems, renderOutput(set, itemData, src, out, target, p)...)
+	}
+	if len(problems) > 0 {
+		return problems, nil
+	}
+
+	stale, err := staleFiles(ctx, src.Existing, out, produced)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return nil, err
+	}
+	if err != nil {
+		return diag.Locate(err, src.ExistingDir, out.Pos), nil
+	}
+	p.Changes = append(p.Changes, stale...)
+	return nil, nil
+}
+
+// itemPath renders the output's path for an item and checks that it is a new file name inside the root.
+func itemPath(out config.Output, item scan.Item, data map[string]any, paths map[string]bool) (string, error) {
+	field := fmt.Sprintf("output %q: path %q", out.Template, out.Path)
+	rendered, err := render.Text(out.Path, data)
+	if err != nil {
+		return "", diag.Prefix(err, out.Pos, field+": ")
+	}
+	target := path.Clean(rendered)
+	field += fmt.Sprintf(" renders as %q for %s in %s, which", rendered, item.Name, item.File)
+	switch {
+	case strings.TrimSpace(rendered) == "" || strings.HasSuffix(rendered, "/") || target == ".":
+		return "", diag.Errorf(diag.InvalidValue, out.Pos, "%s is not a file name", field)
+	case paths[target]:
+		return "", &diag.Diagnostic{
+			Code:    diag.DuplicatePath,
+			Pos:     out.Pos,
+			Message: field + " is also written by another item or output",
+			Hint:    "use the item in the path, such as {{ .Item.Dir }}/{{ .Item.Name | toSnakeCase }}.gen.go",
+		}
+	}
+	if d := config.CheckPath(out.Pos, field, target); d != nil {
+		return "", d
+	}
+	return target, nil
+}
+
+// staleFiles finds the files the output generated that it no longer produces: files matching its path, whose
+// header names its template. It skips the directories ** skips, and never follows symbolic links.
+func staleFiles(ctx context.Context, existing fs.FS, out config.Output, produced map[string]bool) ([]plan.Change, error) {
+	if existing == nil {
+		return nil, nil
+	}
+	pattern, dir, err := render.PathPattern(out.Path)
+	if err != nil {
+		return nil, err
+	}
+	if err := plan.CheckLinks(existing, dir); err != nil {
+		return nil, err
+	}
+	var stale []plan.Change
+	err = fs.WalkDir(existing, dir, func(name string, entry fs.DirEntry, err error) error {
+		switch {
+		case name == dir && errors.Is(err, fs.ErrNotExist):
+			return fs.SkipAll
+		case err != nil:
+			return diag.Wrap(diag.IO, diag.Pos{File: name}, err)
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case entry.IsDir():
+			if name != dir && scan.Ignored(entry.Name()) {
+				return fs.SkipDir
+			}
+			return nil
+		case !entry.Type().IsRegular() || produced[name] || !pattern.MatchString(name):
+			return nil
+		}
+		content, err := fs.ReadFile(existing, name)
+		if err != nil {
+			return diag.Wrap(diag.IO, diag.Pos{File: name}, err)
+		}
+		if source, ok := header.Parse(name, content); ok && source == out.Template {
+			stale = append(stale, plan.Change{Path: name, Status: plan.Removed, Old: content})
+		}
+		return nil
+	})
+	return stale, err
 }
 
 // Prepare parses the partials and runs every scan, returning the templates and the data they render with.

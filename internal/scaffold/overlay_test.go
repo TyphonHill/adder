@@ -1,6 +1,7 @@
 package scaffold
 
 import (
+	"errors"
 	"io/fs"
 	"slices"
 	"testing"
@@ -88,5 +89,43 @@ func TestOverlayMissing(t *testing.T) {
 		if _, err := o.ReadDir(name); err == nil {
 			t.Errorf("ReadDir(%q) succeeded", name)
 		}
+	}
+}
+
+func TestOverlayLinks(t *testing.T) {
+	base := fstest.MapFS{
+		"drivers/s3/s3.go": {Data: []byte("package s3\n")},
+		"link":             {Data: []byte("drivers"), Mode: fs.ModeSymlink},
+	}
+	o := overlay{base: base, files: map[string][]byte{"new/a.go": []byte("package a\n")}}
+	if err := fstest.TestFS(o, "new/a.go", "drivers/s3/s3.go", "link"); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name       string
+		path       string
+		wantMode   fs.FileMode
+		wantTarget string
+		wantErr    error // from ReadLink
+	}{
+		{name: "a link in the base", path: "link", wantMode: fs.ModeSymlink, wantTarget: "drivers"},
+		{name: "a new file", path: "new/a.go", wantMode: 0, wantErr: fs.ErrInvalid},
+		{name: "a new directory", path: "new", wantMode: fs.ModeDir, wantErr: fs.ErrInvalid},
+		{name: "a file in the base", path: "drivers/s3/s3.go", wantMode: 0, wantErr: fs.ErrInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info, err := o.Lstat(tt.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := info.Mode().Type(); got != tt.wantMode {
+				t.Errorf("Lstat(%q) type = %v, want %v", tt.path, got, tt.wantMode)
+			}
+			target, err := o.ReadLink(tt.path)
+			if !errors.Is(err, tt.wantErr) || target != tt.wantTarget {
+				t.Errorf("ReadLink(%q) = %q, %v, want %q, %v", tt.path, target, err, tt.wantTarget, tt.wantErr)
+			}
+		})
 	}
 }

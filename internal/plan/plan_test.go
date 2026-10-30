@@ -1,15 +1,19 @@
 package plan
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"testing/fstest"
+
+	"github.com/TyphonHill/adder/internal/diag"
 )
 
 type failingFS struct{}
@@ -35,6 +39,7 @@ func TestAdd(t *testing.T) {
 		{name: "new file", existing: existing, path: "new/file.go", content: "new", wantStatus: Created},
 		{name: "no existing files", existing: nil, path: "a.go", content: "a", wantStatus: Created},
 		{name: "read error", existing: failingFS{}, path: "a.go", wantErr: fs.ErrPermission},
+		{name: "a directory where the file goes", existing: fstest.MapFS{"dir/a.go": {}}, path: "dir", wantErr: fs.ErrInvalid},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -66,6 +71,7 @@ func TestPending(t *testing.T) {
 		{name: "empty", changes: nil, want: nil},
 		{name: "only unchanged", changes: []Change{{Path: "a", Status: Unchanged}}, want: nil},
 		{name: "skipped files are not written", changes: []Change{{Path: "a", Status: Skipped}}, want: nil},
+		{name: "removed files", changes: []Change{{Path: "a", Status: Removed}}, want: []string{"a"}},
 		{
 			name:    "mixed, in order",
 			changes: []Change{{Path: "a", Status: Updated}, {Path: "b", Status: Unchanged}, {Path: "c", Status: Created}},
@@ -90,9 +96,12 @@ func TestApply(t *testing.T) {
 	tests := []struct {
 		name      string
 		initial   map[string]string // files on disk before applying
+		links     map[string]string // symbolic links on disk before applying, by name, to their targets
+		readOnly  string            // a directory made read-only before applying, which Windows does not enforce
 		changes   []Change
 		canceled  bool
 		want      map[string]string // files on disk after applying
+		wantGone  []string          // files that must not exist after applying
 		wantErr   bool
 		wantErrIs error
 	}{
@@ -120,6 +129,53 @@ func TestApply(t *testing.T) {
 			want:    map[string]string{"a.go": "on disk"},
 		},
 		{
+			name:     "removes files",
+			initial:  map[string]string{"a.go": "old", "b.go": "kept"},
+			changes:  []Change{{Path: "a.go", Status: Removed, Old: []byte("old")}},
+			want:     map[string]string{"b.go": "kept"},
+			wantGone: []string{"a.go"},
+		},
+		{
+			name:    "a directory in the way of a new file",
+			initial: map[string]string{"a": "file"},
+			changes: []Change{{Path: "a/b.go", Status: Created, New: []byte("x")}},
+			wantErr: true,
+		},
+		{
+			name:     "a directory that cannot be created",
+			initial:  map[string]string{"ro/a.go": "x"},
+			readOnly: "ro",
+			changes:  []Change{{Path: "ro/sub/b.go", Status: Created, New: []byte("x")}},
+			wantErr:  true,
+		},
+		{
+			name:    "a removed path that is a directory with files",
+			initial: map[string]string{"d/x.go": "kept"},
+			changes: []Change{{Path: "d", Status: Removed}},
+			want:    map[string]string{"d/x.go": "kept"},
+			wantErr: true,
+		},
+		{
+			name:    "a removed file that is already gone",
+			changes: []Change{{Path: "a.go", Status: Removed, Old: []byte("old")}},
+		},
+		{
+			name:    "never writes through a linked directory",
+			initial: map[string]string{"real/a.go": "owned"},
+			links:   map[string]string{"link": "real"},
+			changes: []Change{{Path: "link/a.go", Status: Updated, Old: []byte("owned"), New: []byte("new")}},
+			want:    map[string]string{"real/a.go": "owned"},
+			wantErr: true,
+		},
+		{
+			name:    "never removes a linked file",
+			initial: map[string]string{"real.go": "owned"},
+			links:   map[string]string{"a.go": "real.go"},
+			changes: []Change{{Path: "a.go", Status: Removed, Old: []byte("owned")}},
+			want:    map[string]string{"real.go": "owned", "a.go": "owned"},
+			wantErr: true,
+		},
+		{
 			name:      "never overwrites a file created since planning",
 			initial:   map[string]string{"a.go": "on disk"},
 			changes:   []Change{{Path: "a.go", Status: Created, New: []byte("new")}},
@@ -144,8 +200,27 @@ func TestApply(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			for name, content := range tt.initial {
-				if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(name)), []byte(content), 0o644); err != nil {
+				file := filepath.Join(dir, filepath.FromSlash(name))
+				if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 					t.Fatal(err)
+				}
+				if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tt.readOnly != "" {
+				if runtime.GOOS == "windows" {
+					t.Skip("Windows does not enforce read-only directories")
+				}
+				ro := filepath.Join(dir, tt.readOnly)
+				if err := os.Chmod(ro, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(ro, 0o755) }) // so TempDir can remove it
+			}
+			for name, target := range tt.links {
+				if err := os.Symlink(target, filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+					t.Skipf("cannot create symbolic links here: %v", err)
 				}
 			}
 			root, err := os.OpenRoot(dir)
@@ -175,6 +250,47 @@ func TestApply(t *testing.T) {
 					t.Errorf("%s = %q, %v, want %q", name, got, err, want)
 				}
 			}
+			for _, name := range tt.wantGone {
+				if _, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(name))); !errors.Is(err, fs.ErrNotExist) {
+					t.Errorf("%s still exists (%v)", name, err)
+				}
+			}
+		})
+	}
+}
+
+func TestCheckLinks(t *testing.T) {
+	fsys := fstest.MapFS{
+		"dir/file.go": {Data: []byte("x")},
+		"dirlink":     {Data: []byte("dir"), Mode: fs.ModeSymlink},
+		"filelink.go": {Data: []byte("dir/file.go"), Mode: fs.ModeSymlink},
+	}
+	tests := []struct {
+		name     string
+		fsys     fs.FS // nil means the links above
+		path     string
+		wantCode diag.Code // empty means no problem
+	}{
+		{name: "a file", path: "dir/file.go"},
+		{name: "a file that does not exist yet", path: "new/dir/file.go"},
+		{name: "a linked file", path: "filelink.go", wantCode: diag.UnsafePath},
+		{name: "a file in a linked directory", path: "dirlink/file.go", wantCode: diag.UnsafePath},
+		{name: "a linked directory", path: "dirlink", wantCode: diag.UnsafePath},
+		{name: "an unreadable file system", fsys: failingFS{}, path: "a/b.go", wantCode: diag.IO},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckLinks(cmp.Or[fs.FS](tt.fsys, fsys), tt.path)
+			var got diag.Code
+			if list := diag.From(err); len(list) > 0 {
+				got = list[0].Code
+				if list[0].Pos.File != tt.path {
+					t.Errorf("problem is at %v, want %s", list[0].Pos, tt.path)
+				}
+			}
+			if got != tt.wantCode {
+				t.Errorf("CheckLinks(%q) = %v, want code %q", tt.path, err, tt.wantCode)
+			}
 		})
 	}
 }
@@ -197,6 +313,11 @@ func TestChangeDiff(t *testing.T) {
 		},
 		{name: "unchanged", change: Change{Path: "x.txt", Status: Unchanged, Old: []byte("x\n"), New: []byte("x\n")}},
 		{name: "skipped", change: Change{Path: "x.txt", Status: Skipped, New: []byte("x\n")}},
+		{
+			name:   "removed",
+			change: Change{Path: "x.txt", Status: Removed, Old: []byte("x\n")},
+			want:   "diff a/x.txt /dev/null\n--- a/x.txt\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-x\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -219,6 +340,7 @@ func TestStatus(t *testing.T) {
 		{name: "created", status: Created, wantString: "created", wantText: "created"},
 		{name: "updated", status: Updated, wantString: "updated", wantText: "updated"},
 		{name: "skipped", status: Skipped, wantString: "skipped", wantText: "skipped"},
+		{name: "removed", status: Removed, wantString: "removed", wantText: "removed"},
 		{name: "unknown", status: Status(9), wantString: "Status(9)", wantErr: true},
 	}
 	for _, tt := range tests {

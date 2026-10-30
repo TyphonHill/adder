@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"text/template/parse"
 
 	"github.com/TyphonHill/adder/internal/diag"
 	"github.com/TyphonHill/adder/internal/imports"
@@ -220,4 +221,35 @@ func invalidGo(name, outPath string, out []byte, err error) *diag.Diagnostic {
 		}
 	}
 	return d
+}
+
+// PathPattern returns a pattern matching every path the path template text can render, with each action replaced
+// by a wildcard that may span directories, and the deepest directory that holds all of them.
+func PathPattern(text string) (*regexp.Regexp, string, error) {
+	tmpl, err := template.New("inline").Funcs(Funcs()).Parse(text)
+	if err != nil {
+		d := templateError(diag.TemplateSyntax, "inline", err, nil)
+		d.Pos = diag.Pos{}
+		return nil, "", d
+	}
+	var pattern, prefix strings.Builder
+	pattern.WriteString("^")
+	literal := true
+	for _, node := range tmpl.Root.Nodes {
+		if text, ok := node.(*parse.TextNode); ok {
+			pattern.WriteString(regexp.QuoteMeta(string(text.Text)))
+			if literal {
+				prefix.Write(text.Text)
+			}
+			continue
+		}
+		pattern.WriteString(".*")
+		literal = false
+	}
+	pattern.WriteString("$")
+	dir := path.Dir(prefix.String())
+	if !literal {
+		dir = path.Dir(prefix.String() + "x") // the prefix may end inside a file name, as in mocks/mock_
+	}
+	return regexp.MustCompile(pattern.String()), dir, nil
 }
