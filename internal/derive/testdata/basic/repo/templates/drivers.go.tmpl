@@ -3,7 +3,7 @@ package drivers
 import (
 	"{{ .Module }}/driver"
 {{- range .Drivers }}
-	"{{ $.Module }}/drivers/{{ .Package }}"
+	"{{ .ImportPath }}"
 {{- end }}
 )
 

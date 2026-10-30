@@ -19,19 +19,33 @@ import (
 	"github.com/TyphonHill/adder/internal/header"
 )
 
-// Item is a matched function or method declaration.
+// Item is a matched declaration.
 type Item struct {
-	Name     string // declared name
-	Receiver string // receiver type name, empty for plain functions
-	Package  string // package name from the file's package clause
-	Dir      string // slash-separated directory relative to the root
-	File     string // slash-separated file path relative to the root
+	Name       string  // declared name
+	Kind       string  // "func" or "method"
+	Receiver   string  // receiver type name, empty for plain functions
+	Package    string  // package name from the file's package clause
+	ImportPath string  // the package's import path, empty when the repository has no go.mod
+	Dir        string  // slash-separated directory relative to the root
+	File       string  // slash-separated file path relative to the root
+	Line       int     // line of the declaration
+	Doc        string  // doc comment without directives
+	Signature  string  // parameters and results as written, such as "(ctx context.Context) error"
+	Params     []Param // parameters, one per name
+	Results    []Param // results, one per name
 }
 
-// Run returns the declarations in fsys selected by s, sorted by name. Paths in fsys are relative to the repository root.
+// Param is a parameter or result of a function.
+type Param struct {
+	Name string // empty for unnamed parameters
+	Type string // as written, such as "context.Context"
+}
+
+// Run returns the declarations in fsys selected by s, sorted by name. Paths in fsys are relative to the repository
+// root, and module is the repository's module path, or empty when it has none.
 // Files adder generated are skipped, so outputs never feed back into scans; files from other generators are scanned.
 // Problems with the scan itself carry no position; problems in a file carry that file's path within fsys.
-func Run(ctx context.Context, fsys fs.FS, s config.Scan) ([]Item, error) {
+func Run(ctx context.Context, fsys fs.FS, module string, s config.Scan) ([]Item, error) {
 	dirs, err := expandDirs(fsys, s)
 	if err != nil {
 		return nil, err
@@ -40,7 +54,7 @@ func Run(ctx context.Context, fsys fs.FS, s config.Scan) ([]Item, error) {
 	fset := token.NewFileSet()
 	var items []Item
 	for _, dir := range dirs {
-		found, err := scanDir(ctx, fsys, fset, dir, s)
+		found, err := scanDir(ctx, fsys, fset, module, dir, s)
 		if err != nil {
 			return nil, err
 		}
@@ -57,36 +71,7 @@ func Run(ctx context.Context, fsys fs.FS, s config.Scan) ([]Item, error) {
 	return items, nil
 }
 
-// expandDirs resolves the scan's glob patterns to unique directories.
-func expandDirs(fsys fs.FS, s config.Scan) ([]string, error) {
-	var dirs []string
-	seen := make(map[string]bool)
-	for _, pattern := range s.Dirs {
-		matches, err := fs.Glob(fsys, pattern)
-		if err != nil {
-			return nil, diag.Errorf(diag.InvalidValue, diag.Pos{}, "dirs pattern %q: %v", pattern, err)
-		}
-
-		matched := false
-		for _, match := range matches {
-			info, err := fs.Stat(fsys, match)
-			if err != nil || !info.IsDir() {
-				continue
-			}
-			matched = true
-			if !seen[match] {
-				seen[match] = true
-				dirs = append(dirs, match)
-			}
-		}
-		if !matched {
-			return nil, diag.Errorf(diag.NoMatch, diag.Pos{}, "dirs pattern %q matched no directories", pattern)
-		}
-	}
-	return dirs, nil
-}
-
-func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, dir string, s config.Scan) ([]Item, error) {
+func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir string, s config.Scan) ([]Item, error) {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return nil, diag.Wrap(diag.IO, diag.Pos{File: dir}, err)
@@ -118,21 +103,67 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, dir string, s
 			continue
 		}
 
+		imports := fileImports(parsed)
 		for _, decl := range parsed.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || !matches(fn, s.Funcs) {
+			if !ok || !matches(fn, imports, s.Funcs) {
 				continue
 			}
-			items = append(items, Item{
-				Name:     fn.Name.Name,
-				Receiver: receiverName(fn),
-				Package:  parsed.Name.Name,
-				Dir:      dir,
-				File:     file,
-			})
+			items = append(items, funcItem(fset, fn, Item{
+				Package:    parsed.Name.Name,
+				ImportPath: importPath(module, dir),
+				Dir:        dir,
+				File:       file,
+			}))
 		}
 	}
 	return items, nil
+}
+
+// funcItem fills in the fields of item that describe fn.
+func funcItem(fset *token.FileSet, fn *ast.FuncDecl, item Item) Item {
+	item.Name = fn.Name.Name
+	item.Kind = config.KindFunc
+	if fn.Recv != nil {
+		item.Kind = config.KindMethod
+		item.Receiver = receiverName(fn)
+	}
+	item.Line = fset.Position(fn.Pos()).Line
+	if fn.Doc != nil {
+		item.Doc = strings.TrimSpace(fn.Doc.Text())
+	}
+	item.Signature = strings.TrimPrefix(written(fn.Type), "func")
+	item.Params = params(fn.Type.Params)
+	item.Results = params(fn.Type.Results)
+	return item
+}
+
+func params(list *ast.FieldList) []Param {
+	if list == nil {
+		return nil
+	}
+	var out []Param
+	for _, field := range list.List {
+		typ := written(field.Type)
+		if len(field.Names) == 0 {
+			out = append(out, Param{Type: typ})
+			continue
+		}
+		for _, name := range field.Names {
+			out = append(out, Param{Name: name.Name, Type: typ})
+		}
+	}
+	return out
+}
+
+func importPath(module, dir string) string {
+	if module == "" {
+		return ""
+	}
+	if dir == "." {
+		return module
+	}
+	return module + "/" + dir
 }
 
 // syntaxError reports the first Go syntax error in a file with its position.
@@ -149,25 +180,37 @@ func syntaxError(file string, err error) error {
 	return diag.Wrap(diag.GoSyntax, diag.Pos{File: file}, err)
 }
 
-func matches(fn *ast.FuncDecl, m config.FuncMatch) bool {
-	if m.Exported && !fn.Name.IsExported() {
+func matches(fn *ast.FuncDecl, imports map[string]string, m config.FuncMatch) bool {
+	switch {
+	case m.Exported && !fn.Name.IsExported():
 		return false
-	}
-	if m.Name.Regexp != nil && !m.Name.MatchString(fn.Name.Name) {
+	case m.Name.Regexp != nil && !m.Name.MatchString(fn.Name.Name):
 		return false
-	}
-	if m.FirstParam != "" && firstParamName(fn) != m.FirstParam {
+	case m.Kind == config.KindFunc && fn.Recv != nil, m.Kind == config.KindMethod && fn.Recv == nil:
 		return false
+	case m.Receiver != "" && (fn.Recv == nil || receiverName(fn) != m.Receiver):
+		return false
+	case m.FirstParam != "" && firstParamName(fn) != m.FirstParam:
+		return false
+	case m.FirstParamType != "":
+		first := firstParam(fn)
+		return first != nil && sameType(qualifiedType(first.Type, imports), m.FirstParamType)
 	}
 	return true
 }
 
-func firstParamName(fn *ast.FuncDecl) string {
-	params := fn.Type.Params.List
-	if len(params) == 0 || len(params[0].Names) == 0 {
-		return ""
+func firstParam(fn *ast.FuncDecl) *ast.Field {
+	if params := fn.Type.Params.List; len(params) > 0 {
+		return params[0]
 	}
-	return params[0].Names[0].Name
+	return nil
+}
+
+func firstParamName(fn *ast.FuncDecl) string {
+	if first := firstParam(fn); first != nil && len(first.Names) > 0 {
+		return first.Names[0].Name
+	}
+	return ""
 }
 
 func receiverName(fn *ast.FuncDecl) string {

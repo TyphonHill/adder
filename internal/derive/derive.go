@@ -71,10 +71,22 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 // templateData runs every scan and adds the module path when the repository has a go.mod.
 func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[string]any, error) {
 	data := make(map[string]any, len(cfg.Derive.Scans)+1)
+
+	gomod, err := fs.ReadFile(src.Repo, "go.mod")
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		return nil, locate(diag.Wrap(diag.IO, diag.Pos{File: "go.mod"}, err), src.RepoDir, diag.Pos{})
+	}
+	module := modfile.ModulePath(gomod)
+	if module != "" {
+		data["Module"] = module
+	}
+
 	var problems diag.List
 	for _, name := range slices.Sorted(maps.Keys(cfg.Derive.Scans)) {
 		s := cfg.Derive.Scans[name]
-		items, err := scan.Run(ctx, src.Repo, s)
+		items, err := scan.Run(ctx, src.Repo, module, s)
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
@@ -86,17 +98,6 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err
-	}
-
-	gomod, err := fs.ReadFile(src.Repo, "go.mod")
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return data, nil
-	case err != nil:
-		return nil, locate(diag.Wrap(diag.IO, diag.Pos{File: "go.mod"}, err), src.RepoDir, diag.Pos{})
-	}
-	if module := modfile.ModulePath(gomod); module != "" {
-		data["Module"] = module
 	}
 	return data, nil
 }

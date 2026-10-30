@@ -47,8 +47,11 @@ type Derive struct {
 
 // Scan selects function and method declarations from a set of directories.
 type Scan struct {
-	// Dirs are slash-separated glob patterns relative to the repository root.
-	Dirs         []string  `yaml:"dirs"`
+	// Dirs are slash-separated glob patterns relative to the repository root. A "**" segment matches any
+	// number of directories.
+	Dirs []string `yaml:"dirs"`
+	// Exclude lists directory patterns, in the same syntax as Dirs, to leave out.
+	Exclude      []string  `yaml:"exclude"`
 	IncludeTests bool      `yaml:"includeTests"`
 	Funcs        FuncMatch `yaml:"funcs"`
 
@@ -56,11 +59,23 @@ type Scan struct {
 	Pos diag.Pos `yaml:"-"`
 }
 
+// Declaration kinds a function scan can select.
+const (
+	KindFunc   = "func"
+	KindMethod = "method"
+)
+
 // FuncMatch filters declarations. Unset fields match every declaration.
 type FuncMatch struct {
 	Exported   bool    `yaml:"exported"`
 	FirstParam string  `yaml:"firstParam"`
 	Name       Pattern `yaml:"name"`
+	// Kind limits the scan to plain functions or to methods.
+	Kind string `yaml:"kind"`
+	// Receiver matches methods on this type, whether the receiver is a value or a pointer.
+	Receiver string `yaml:"receiver"`
+	// FirstParamType matches the first parameter's type, written with full import paths. Whitespace is ignored.
+	FirstParamType string `yaml:"firstParamType"`
 }
 
 // Output is a file rendered from a template with the results of every scan.
@@ -140,6 +155,9 @@ func (c *Config) normalize() {
 		for i, dir := range scan.Dirs {
 			scan.Dirs[i] = cleanSlash(dir)
 		}
+		for i, dir := range scan.Exclude {
+			scan.Exclude[i] = cleanSlash(dir)
+		}
 		c.Derive.Scans[name] = scan
 	}
 	for i := range c.Derive.Outputs {
@@ -188,14 +206,18 @@ func (c *Config) validate(pos positions) error {
 		if len(scan.Dirs) == 0 {
 			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "scan %q: dirs is required", name))
 		}
-		for i, dir := range scan.Dirs {
-			field := fmt.Sprintf("scan %q: dirs pattern %q", name, dir)
-			if d := checkPath(pos.at(at+".dirs."+strconv.Itoa(i)), field, dir); d != nil {
-				errs = append(errs, d)
-			} else if _, err := path.Match(dir, ""); err != nil {
-				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".dirs."+strconv.Itoa(i)), "%s: %v", field, err))
+		for _, list := range []struct {
+			key      string
+			patterns []string
+		}{{"dirs", scan.Dirs}, {"exclude", scan.Exclude}} {
+			for i, dir := range list.patterns {
+				field := fmt.Sprintf("scan %q: %s pattern %q", name, list.key, dir)
+				if d := checkPattern(pos.at(at+"."+list.key+"."+strconv.Itoa(i)), field, dir); d != nil {
+					errs = append(errs, d)
+				}
 			}
 		}
+		errs = append(errs, validateFuncs(name, scan.Funcs, at+".funcs", pos)...)
 	}
 
 	seen := make(map[string]bool, len(c.Derive.Outputs))
@@ -220,6 +242,49 @@ func (c *Config) validate(pos positions) error {
 	}
 
 	return errs.Err()
+}
+
+// validateFuncs checks the function filters of the scan called name.
+func validateFuncs(name string, m FuncMatch, at string, pos positions) diag.List {
+	var errs diag.List
+	switch m.Kind {
+	case "", KindFunc, KindMethod:
+	default:
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at + ".kind"),
+			Message: fmt.Sprintf("scan %q: unknown kind %q", name, m.Kind),
+			Hint:    "kind is func or method",
+		})
+	}
+	if m.Receiver != "" {
+		if !token.IsIdentifier(m.Receiver) {
+			errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".receiver"), "scan %q: receiver %q must be a type name", name, m.Receiver))
+		}
+		if m.Kind == KindFunc {
+			errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".receiver"), "scan %q: receiver only matches methods, but kind is func", name))
+		}
+	}
+	return errs
+}
+
+// checkPattern reports directory patterns that are unsafe or malformed. "**" may only appear as a whole segment.
+func checkPattern(pos diag.Pos, field, pattern string) *diag.Diagnostic {
+	if d := checkPath(pos, field, pattern); d != nil {
+		return d
+	}
+	for segment := range strings.SplitSeq(pattern, "/") {
+		if segment == "**" {
+			continue
+		}
+		if strings.Contains(segment, "**") {
+			return &diag.Diagnostic{Code: diag.InvalidValue, Pos: pos, Message: field + `: "**" must be a whole path segment`, Hint: `write a/**/b, not a/**b`}
+		}
+		if _, err := path.Match(segment, ""); err != nil {
+			return diag.Errorf(diag.InvalidValue, pos, "%s: %v", field, err)
+		}
+	}
+	return nil
 }
 
 // checkPath reports paths that are not relative, slash-separated, and confined to their root.
