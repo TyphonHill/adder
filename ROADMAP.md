@@ -38,7 +38,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | The schema listed in SchemaStore, so editors find it without a modeline | 🔜 after v1.0 |
 | `adder validate`: check the configuration and templates without writing anything ([design 31](docs/design.md#31-checking-the-configuration-planned-after-v10)) | 🔜 after v1.0 |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
-| Multiple configurations in one repository, for monorepos and nested modules ([design 40](docs/design.md#40-multiple-configurations-planned-v04)) | 🔜 v0.4 |
+| Multiple configurations in one repository, for monorepos and nested modules ([design 40](docs/design.md#40-multiple-configurations-planned-v04)) | ✅ |
 | `adder migrate`: upgrade a configuration to a newer schema version | 🔜 v1.0 |
 
 ### Scanning

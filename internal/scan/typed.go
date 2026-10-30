@@ -38,7 +38,8 @@ const (
 // RunTyped is Run for a scan with typeCheck: it loads the scanned packages with the Go toolchain, offline and in
 // one fixed environment, and applies the filters that compare types.
 func RunTyped(ctx context.Context, src TypedSource, s config.Scan) ([]Item, error) {
-	dirs, err := expandDirs(src.FS, s)
+	l := newListing(src.FS)
+	dirs, err := expandDirs(l, s)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func RunTyped(ctx context.Context, src TypedSource, s config.Scan) ([]Item, erro
 	scanned := make(map[string]bool)
 	var patterns []string
 	for _, dir := range dirs {
-		if hasPackage(src.FS, dir, s.IncludeTests) {
+		if hasPackage(l, dir, s.IncludeTests) {
 			scanned[dir] = true
 			patterns = append(patterns, "./"+dir)
 		}
@@ -141,8 +142,8 @@ func RunTyped(ctx context.Context, src TypedSource, s config.Scan) ([]Item, erro
 }
 
 // hasPackage reports whether dir holds Go files the scan would load.
-func hasPackage(fsys fs.FS, dir string, includeTests bool) bool {
-	entries, err := fs.ReadDir(fsys, dir)
+func hasPackage(l *listing, dir string, includeTests bool) bool {
+	entries, err := l.read(dir)
 	if err != nil {
 		return false
 	}

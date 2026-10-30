@@ -28,36 +28,35 @@ func newCheckCommand(opts *globalOptions) *cobra.Command {
 		Long: `check computes what derive would write and reports every output that differs, without writing anything.
 
 It exits with status 3 when any output is out of date, so it can guard CI and repositories that commit generated files.`,
-		Args: usageArgs(cobra.NoArgs),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			rep := &planReport{Changes: []changeReport{}}
-			opts.report = rep
-			cfg, root, err := opts.load()
-			if err != nil {
-				return err
-			}
-			p, err := derive.Run(cmd.Context(), cfg, derive.Options{Root: root, DryRun: true})
-			if err != nil {
-				return err
-			}
-			rep.Changes = changesReport(p.Changes, showDiff)
-			pending := p.Pending()
-			if !opts.json {
-				out := opts.printer(cmd.OutOrStdout())
-				if err := out.scans(cmd.Context(), cfg, root); err != nil {
+		Args: patternArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			newReport := func() report { return &planReport{Changes: []changeReport{}} }
+			return runConfigs(cmd, opts, args, newReport, func(run configRun, r report) error {
+				rep := r.(*planReport)
+				p, err := derive.Run(cmd.Context(), run.cfg, derive.Options{Root: run.root, DryRun: true})
+				if err != nil {
 					return err
 				}
-				for _, c := range p.Changes {
-					out.change(c, true)
+				rep.Changes = changesReport(p.Changes, showDiff)
+				pending := p.Pending()
+				if !opts.json {
+					out := opts.printer(cmd.OutOrStdout())
+					out.prefix = run.prefix
+					if err := out.scans(cmd.Context(), run.cfg, run.root); err != nil {
+						return err
+					}
+					for _, c := range p.Changes {
+						out.change(c, true)
+					}
+					if showDiff {
+						out.diffs(pending)
+					}
 				}
-				if showDiff {
-					out.diffs(pending)
+				if len(pending) > 0 {
+					return &staleError{count: len(pending)}
 				}
-			}
-			if len(pending) > 0 {
-				return &staleError{count: len(pending)}
-			}
-			return nil
+				return nil
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&showDiff, "diff", false, "also show each out-of-date output as a unified diff")

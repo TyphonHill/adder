@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"errors"
+
 	"github.com/spf13/cobra"
 
 	"github.com/TyphonHill/adder/internal/derive"
@@ -15,35 +17,38 @@ func newDeriveCommand(opts *globalOptions) *cobra.Command {
 		Long: `derive runs every scan in adder.yaml and re-renders the derived outputs.
 
 Files whose content has not changed are left untouched.`,
-		Args: usageArgs(cobra.NoArgs),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Args: patternArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			derived.DryRun = derived.DryRun || showDiff
-			rep := &deriveReport{DryRun: derived.DryRun, Changes: []changeReport{}}
-			opts.report = rep
-			cfg, root, err := opts.load()
-			if err != nil {
-				return err
+			if derived.OutDir != "" && len(args) > 0 {
+				return &usageError{errors.New("--out writes one configuration's outputs and cannot be combined with directory patterns"), cmd.CommandPath()}
 			}
-			derived.Root = root
-			p, err := derive.Run(cmd.Context(), cfg, derived)
-			if err != nil {
-				return err
-			}
-			rep.Changes = changesReport(p.Changes, showDiff)
-			if opts.json {
+			newReport := func() report { return &deriveReport{DryRun: derived.DryRun, Changes: []changeReport{}} }
+			return runConfigs(cmd, opts, args, newReport, func(run configRun, r report) error {
+				rep := r.(*deriveReport)
+				options := derived
+				options.Root = run.root
+				p, err := derive.Run(cmd.Context(), run.cfg, options)
+				if err != nil {
+					return err
+				}
+				rep.Changes = changesReport(p.Changes, showDiff)
+				if opts.json {
+					return nil
+				}
+				out := opts.printer(cmd.OutOrStdout())
+				out.prefix = run.prefix
+				if err := out.scans(cmd.Context(), run.cfg, run.root); err != nil {
+					return err
+				}
+				for _, c := range p.Changes {
+					out.change(c, derived.DryRun)
+				}
+				if showDiff {
+					out.diffs(p.Pending())
+				}
 				return nil
-			}
-			out := opts.printer(cmd.OutOrStdout())
-			if err := out.scans(cmd.Context(), cfg, root); err != nil {
-				return err
-			}
-			for _, c := range p.Changes {
-				out.change(c, derived.DryRun)
-			}
-			if showDiff {
-				out.diffs(p.Pending())
-			}
-			return nil
+			})
 		},
 	}
 	cmd.Flags().StringVar(&derived.OutDir, "out", "", "write outputs under this directory instead of --root")

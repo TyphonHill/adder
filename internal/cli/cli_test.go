@@ -425,7 +425,7 @@ func TestCLI(t *testing.T) {
 			name:           "unexpected argument",
 			args:           func(string) []string { return []string{"derive", "extra"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{`unknown command "extra"`, "Run 'adder derive --help' for usage."},
+			stderrContains: []string{`"extra" is not a directory`, "Run 'adder derive --help' for usage."},
 		},
 		{
 			name:           "unknown flag",

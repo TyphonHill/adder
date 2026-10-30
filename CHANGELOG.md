@@ -7,9 +7,16 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 ### Added
 
 - Constant and variable scans, with a `values` block filtering by `kind`, `exported`, `name`, `type`, and `directive`. Items gain `.Type`, `.Value`, and `.Iota`, and a `const` group's type carries to the names that repeat it, so `iota` enums work.
+- Monorepos: `derive`, `check`, `list`, and `test` take directory patterns such as `./...` and run every `adder.yaml` they match, with paths shown from the current directory and the most serious exit status. Wildcards and the search for stale files stop at nested `adder.yaml` and `go.mod` files, and `.ImportPath` follows the nearest `go.mod`.
 - Type-aware scans with `typeCheck: true`, which load types with the Go toolchain, offline and for one platform, `linux/amd64` unless `platform` sets another. `implements` selects every type that implements an interface, with `.Pointer` when only its pointer does, and `firstParamType` and the `values` `type` filter compare types instead of spelling. A new diagnostic code `type-check` reports code that does not type check and missing dependencies.
 - File scans, with a `files` block that lists files that are not Go source, such as SQL migrations, by a `name` pattern. With `each`, an output can render one file per listed file.
 - Template function `sortBy`, which sorts items by a string or number field, such as `sortBy "Iota" .Colors` for declaration order.
+
+### Changed
+
+- Wildcards in scan directories no longer descend into a directory with its own `adder.yaml` or `go.mod`; name it outright to scan it.
+- `adder explain <file>` uses the `adder.yaml` nearest the file rather than the current directory, and names the file as it was given.
+- `derive`, `check`, and `list` reject arguments that are not directories, with a clearer message than before.
 
 ## [0.3.0] - 2026-10-30
 

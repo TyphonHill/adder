@@ -6,6 +6,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"path"
 	"slices"
 
 	"github.com/TyphonHill/adder/internal/config"
@@ -36,6 +37,7 @@ type printer struct {
 	quiet   bool
 	verbose bool
 	color   bool
+	prefix  string // written before each path, when several configurations run
 }
 
 func (o *globalOptions) printer(w io.Writer) *printer {
@@ -65,7 +67,7 @@ func (p *printer) change(c plan.Change, planned bool) {
 	if planned && c.Status != plan.Unchanged && c.Status != plan.Skipped {
 		verb = "would be "
 	}
-	fmt.Fprintf(p.w, "%s%s  %s\n", verb, p.paint(statusColor[c.Status], fmt.Sprintf("%-9s", c.Status)), c.Path)
+	fmt.Fprintf(p.w, "%s%s  %s\n", verb, p.paint(statusColor[c.Status], fmt.Sprintf("%-9s", c.Status)), path.Join(p.prefix, c.Path))
 }
 
 // printf prints text unless --quiet is set.
@@ -79,6 +81,7 @@ func (p *printer) printf(format string, args ...any) {
 // them.
 func (p *printer) diffs(changes []plan.Change) {
 	for _, c := range changes {
+		c.Path = path.Join(p.prefix, c.Path) // so the patch applies from the current directory
 		fmt.Fprintf(p.w, "\n%s", c.Diff())
 	}
 }
@@ -103,7 +106,11 @@ func (p *printer) scans(ctx context.Context, cfg *config.Config, root string) er
 		if n == 1 {
 			items = "item"
 		}
-		fmt.Fprintf(p.w, "%s  scan %s found %d %s\n", p.paint(dim, fmt.Sprintf("%-9s", "scanned")), name, n, items)
+		where := ""
+		if p.prefix != "" {
+			where = " in " + p.prefix
+		}
+		fmt.Fprintf(p.w, "%s  scan %s%s found %d %s\n", p.paint(dim, fmt.Sprintf("%-9s", "scanned")), name, where, n, items)
 	}
 	return nil
 }

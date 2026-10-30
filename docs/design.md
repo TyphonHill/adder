@@ -692,8 +692,9 @@ A repository can hold several `adder.yaml` files, such as one per service in a m
 **Running several.** `derive`, `check`, `list`, and `test` accept directory patterns as `go` does: `adder check ./...` runs every `adder.yaml` at or below the current directory, skipping `testdata`, `vendor`, and hidden directories, and `adder check services/api` runs one. Without arguments, commands use the nearest configuration, as now. `--root` and `--config` cannot be combined with patterns.
 
 - Configurations run one after another, and a problem in one does not stop the others.
-- Text output prefixes each path with its configuration's directory, relative to the current directory, so `services/api/drivers/drivers.gen.go`.
-- With `--json`, the object holds `configs`, one entry per configuration with its `config` path and the command's usual fields, and a single `problems` list.
+- Text output prefixes each path with its configuration's directory, relative to the current directory, so `services/api/drivers/drivers.gen.go`, and diffs use the same paths, so the patch applies from where the command ran.
+- With `--json`, the object holds `configs`, one entry per configuration with its `config` path and the command's usual fields, including its own `problems`, so a tool can tell which configuration a problem belongs to. The top-level `problems` holds only problems that concern no one configuration, such as a pattern that matches nothing.
+- `adder test` takes directory patterns and generator names together, told apart because patterns contain a slash or are `.`, `..`, or `...`. A named generator runs in the configurations that have it.
 - The exit status is the most serious across configurations: 2 for a usage mistake, then 1 for a problem, then 3 for stale outputs.
 
 `adder explain <file>` uses the configuration nearest the file rather than the current directory.

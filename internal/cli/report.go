@@ -97,6 +97,9 @@ func problemsFrom(err error) diag.List {
 	if _, ok := errors.AsType[*staleError](err); ok || err == nil {
 		return diag.List{}
 	}
+	if _, ok := errors.AsType[*configsError](err); ok {
+		return diag.List{} // each configuration's problems are in its own report
+	}
 	if errors.Is(err, context.Canceled) {
 		return diag.List{{Code: diag.Other, Message: "interrupted"}}
 	}
