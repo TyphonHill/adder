@@ -10,6 +10,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"io/fs"
+	"maps"
 	"path"
 	"slices"
 	"strconv"
@@ -23,7 +24,7 @@ import (
 // Item is a matched declaration.
 type Item struct {
 	Name       string  // declared name
-	Kind       string  // "func" or "method"
+	Kind       string  // "func", "method", "struct", "interface", "type", "const", or "var"
 	Receiver   string  // receiver type name, empty for plain functions
 	Package    string  // package name from the file's package clause
 	ImportPath string  // the package's import path, empty when the repository has no go.mod
@@ -35,6 +36,9 @@ type Item struct {
 	Params     []Param // parameters, one per name
 	Results    []Param // results, one per name
 	Fields     []Field // struct fields, one per name
+	Type       string  // for constants and variables, the type as written, repeated through a const group
+	Value      string  // for constants and variables, the value as written
+	Iota       int     // for constants, the position in their const group, which is their value of iota
 
 	// Directives holds the arguments of each //adder: directive in the doc comment, by directive name.
 	Directives map[string]map[string]string
@@ -125,9 +129,12 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir s
 
 		base := Item{Package: parsed.Name.Name, ImportPath: importPath(module, dir), Dir: dir, File: file}
 		var found []Item
-		if s.Types != nil {
+		switch {
+		case s.Types != nil:
 			found, err = typeItems(fset, parsed, *s.Types, base)
-		} else {
+		case s.Values != nil:
+			found, err = valueItems(fset, parsed, *s.Values, base)
+		default:
 			found, err = funcItems(fset, parsed, s.Funcs, base)
 		}
 		if err != nil {
@@ -202,6 +209,86 @@ func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Ite
 			}
 			item.Directives = found
 			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
+func valueItems(fset *token.FileSet, file *ast.File, m config.ValueMatch, base Item) ([]Item, error) {
+	var items []Item
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || (gen.Tok != token.CONST && gen.Tok != token.VAR) {
+			continue
+		}
+		kind := gen.Tok.String()
+		if m.Kind != "" && m.Kind != kind {
+			continue
+		}
+		// A group's directives apply to every name in it; a name's own directive of the same name replaces them.
+		var group map[string]map[string]string
+		if gen.Lparen.IsValid() {
+			var err error
+			if group, err = directives(fset, gen.Doc); err != nil {
+				return nil, err
+			}
+		}
+
+		var repeated string // the type a const without its own type and value repeats
+		for i, spec := range gen.Specs {
+			vs := spec.(*ast.ValueSpec)
+			typ := ""
+			if vs.Type != nil {
+				typ = written(vs.Type)
+			}
+			if kind == config.KindConst {
+				if vs.Type == nil && len(vs.Values) == 0 {
+					typ = repeated
+				} else {
+					repeated = typ
+				}
+			}
+
+			doc := vs.Doc
+			if doc == nil && !gen.Lparen.IsValid() {
+				doc = gen.Doc
+			}
+			own, err := directives(fset, doc)
+			if err != nil {
+				return nil, err
+			}
+			found := own
+			if len(group) > 0 {
+				found = maps.Clone(group)
+				maps.Copy(found, own)
+			}
+
+			for j, name := range vs.Names {
+				switch {
+				case name.Name == "_",
+					m.Exported && !name.IsExported(),
+					m.Name.Regexp != nil && !m.Name.MatchString(name.Name),
+					m.Type != "" && m.Type != typ,
+					m.Directive != "" && found[m.Directive] == nil:
+					continue
+				}
+				item := base
+				item.Name = name.Name
+				item.Kind = kind
+				item.Line = fset.Position(name.Pos()).Line
+				if doc != nil {
+					item.Doc = strings.TrimSpace(doc.Text())
+				}
+				item.Type = typ
+				if len(vs.Values) == len(vs.Names) {
+					item.Value = written(vs.Values[j])
+				}
+				if kind == config.KindConst {
+					item.Iota = i
+				}
+				item.Directives = found
+				items = append(items, item)
+			}
 		}
 	}
 	return items, nil

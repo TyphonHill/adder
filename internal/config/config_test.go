@@ -308,6 +308,14 @@ func TestParseErrors(t *testing.T) {
 		},
 		{name: "test want is the configuration directory", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: ./}\n", want: []want{{diag.InvalidValue, 7, 19}}},
 		{name: "unknown test field", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w, input: {}}\n", want: []want{{diag.UnknownField, 7, 0}}},
+		{name: "values with an unknown kind", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      values: {kind: constant}\n", want: []want{{diag.InvalidValue, 6, 16}}},
+		{name: "values with an invalid directive", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      values: {directive: Bad}\n", want: []want{{diag.InvalidValue, 6, 16}}},
+		{
+			name:        "values and types together",
+			input:       "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      types: {}\n      values: {}\n",
+			want:        []want{{diag.InvalidValue, 7, 7}},
+			wantMessage: `scan "S": has types and values; use only one`,
+		},
 		{name: "scan name reserved for items", input: "version: 1\nderive:\n  scans:\n    Item: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
 			name:     "templated path without each",
