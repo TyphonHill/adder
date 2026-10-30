@@ -58,7 +58,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Comment directives in Go's directive syntax, such as `//adder:register name=s3`: a `directive` filter and `.Directives` on items ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax)) | ✅ |
 | Scan type declarations with a `types` block: structs, interfaces, and other types, with `.Fields` for structs | ✅ |
 | Type-aware matching, opted into per scan with `typeCheck: true`: types that implement an interface, and type matches that survive any import alias ([design 17](docs/design.md#17-type-aware-scans-are-an-explicit-opt-in-planned-v04), [37](docs/design.md#37-loading-types-planned-v04)) | 🔜 v0.4 |
-| Scan constants and variables, for enums and lookup tables ([design 38](docs/design.md#38-constant-and-variable-scans-planned-v04)) | 🔜 v0.4 |
+| Scan constants and variables, for enums and lookup tables ([design 38](docs/design.md#38-constant-and-variable-scans-planned-v04)) | ✅ |
 | File scans: list non-Go files such as SQL migrations or JSON fixtures ([design 39](docs/design.md#39-file-scans-planned-v04)) | 🔜 v0.4 |
 | Parallel parsing and caching for very large repositories | 💡 |
 

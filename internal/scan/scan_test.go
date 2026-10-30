@@ -582,3 +582,111 @@ func TestRunConstraintAfterPackage(t *testing.T) {
 		t.Errorf("Run() = %d items, %v; a constraint after the package clause does not count", len(items), err)
 	}
 }
+
+func TestRunValues(t *testing.T) {
+	fsys := fstest.MapFS{"color/color.go": file(`package color
+
+// Color is a color.
+type Color int
+
+// Colors, in the order they are drawn.
+//
+//adder:enum prefix=Color
+const (
+	// Red is first.
+	Red Color = iota
+	Green
+	//adder:enum prefix=Hue
+	Blue
+	_
+	Max = 3
+	Last
+)
+
+// Default is used when none is set.
+//
+//adder:setting
+var Default = Red
+
+var a, b = 1, "two"
+
+var c, d = pair()
+
+var (
+	e Color
+)
+
+func pair() (int, int) { return 0, 0 }
+`)}
+	base := Item{Package: "color", ImportPath: "example.com/m/color", Dir: "color", File: "color/color.go"}
+	at := func(item Item, name, kind string, line int) Item {
+		item.Name, item.Kind, item.Line = name, kind, line
+		return item
+	}
+	enum := map[string]map[string]string{"enum": {"prefix": "Color"}}
+	red := at(base, "Red", "const", 11)
+	red.Doc, red.Type, red.Value, red.Directives = "Red is first.", "Color", "iota", enum
+	green := at(base, "Green", "const", 12)
+	green.Type, green.Iota, green.Directives = "Color", 1, enum
+	blue := at(base, "Blue", "const", 14)
+	blue.Type, blue.Iota, blue.Directives = "Color", 2, map[string]map[string]string{"enum": {"prefix": "Hue"}}
+	maxValue := at(base, "Max", "const", 16)
+	maxValue.Value, maxValue.Iota, maxValue.Directives = "3", 4, enum
+	last := at(base, "Last", "const", 17)
+	last.Iota, last.Directives = 5, enum
+	def := at(base, "Default", "var", 23)
+	def.Doc, def.Value, def.Directives = "Default is used when none is set.", "Red", map[string]map[string]string{"setting": {}}
+	a := at(base, "a", "var", 25)
+	a.Value = "1"
+	b := at(base, "b", "var", 25)
+	b.Value = `"two"`
+	c := at(base, "c", "var", 27)
+	d := at(base, "d", "var", 27)
+	e := at(base, "e", "var", 30)
+	e.Type = "Color"
+
+	tests := []struct {
+		name   string
+		values config.ValueMatch
+		want   []Item
+	}{
+		{name: "every constant and variable", want: []Item{blue, def, green, last, maxValue, red, a, b, c, d, e}},
+		{name: "constants", values: config.ValueMatch{Kind: config.KindConst}, want: []Item{blue, green, last, maxValue, red}},
+		{name: "variables", values: config.ValueMatch{Kind: config.KindVar}, want: []Item{def, a, b, c, d, e}},
+		{name: "exported", values: config.ValueMatch{Exported: true, Kind: config.KindVar}, want: []Item{def}},
+		{name: "by name", values: config.ValueMatch{Name: pattern("^[A-Z][a-z]+$"), Kind: config.KindConst}, want: []Item{blue, green, last, maxValue, red}},
+		{name: "by type, repeated through the group", values: config.ValueMatch{Type: "Color"}, want: []Item{blue, green, red, e}},
+		{name: "by a directive from the group", values: config.ValueMatch{Directive: "enum"}, want: []Item{blue, green, last, maxValue, red}},
+		{name: "by a directive on one variable", values: config.ValueMatch{Directive: "setting"}, want: []Item{def}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Run(t.Context(), fsys, "example.com/m", config.Scan{Dirs: []string{"color"}, Values: &tt.values})
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Run() =\n%#v\nwant\n%#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunValuesDirectiveProblems(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		line int
+	}{
+		{name: "in a group's comment", src: "package p\n\n//adder:Bad\nconst (\n\tA = 1\n)\n", line: 3},
+		{name: "in a name's comment", src: "package p\n\nconst (\n\t//adder:Bad\n\tA = 1\n)\n", line: 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Run(t.Context(), fstest.MapFS{"p/p.go": file(tt.src)}, "", config.Scan{Dirs: []string{"p"}, Values: &config.ValueMatch{}})
+			if list := diag.From(err); len(list) != 1 || list[0].Code != diag.InvalidDirective || list[0].Pos.Line != tt.line {
+				t.Errorf("Run() error = %v, want an invalid-directive problem on line %d", err, tt.line)
+			}
+		})
+	}
+}

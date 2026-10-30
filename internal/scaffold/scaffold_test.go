@@ -209,7 +209,7 @@ func TestRun(t *testing.T) {
 			},
 			inputs:    map[string]any{"name": "gcs", "summary": "local"},
 			wantCodes: []diag.Code{diag.InvalidValue},
-			wantHint:  "string fields: Dir, Doc, File, ImportPath, Kind, Name, Package, Receiver, Signature",
+			wantHint:  "string fields: Dir, Doc, File, ImportPath, Kind, Name, Package, Receiver, Signature, Type, Value",
 			wantFiles: []string{"adder.yaml"},
 		},
 		{

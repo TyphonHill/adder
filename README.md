@@ -219,7 +219,7 @@ A coding agent can discover and run any generator this way: `adder list --json`,
 
 ### Scans
 
-Each entry under `derive.scans` selects declarations: functions and methods by default, or type declarations with a `types` block. A scan uses `funcs` or `types`, not both. Its name becomes the template field that holds the results, so it must be a valid Go identifier other than `Module`, `Vars`, `Inputs`, or `Item`, which adder provides.
+Each entry under `derive.scans` selects declarations: functions and methods by default, type declarations with a `types` block, or constants and variables with a `values` block. A scan uses one of `funcs`, `types`, and `values`. Its name becomes the template field that holds the results, so it must be a valid Go identifier other than `Module`, `Vars`, `Inputs`, or `Item`, which adder provides.
 
 | Field | Description |
 | --- | --- |
@@ -238,6 +238,11 @@ Each entry under `derive.scans` selects declarations: functions and methods by d
 | `types.name` | Only match type names containing a match for this regular expression. |
 | `types.kind` | `struct`, `interface`, or `type` for any other type declaration. |
 | `types.directive` | Only match types with this [directive](#directives) in their doc comment. |
+| `values.kind` | `const` or `var`. |
+| `values.exported` | Only match exported names. |
+| `values.name` | Regular expression the name must match. |
+| `values.type` | The type as written, such as `Color`. In a `const` group, a name without its own type and value repeats the one before it, as Go does, so every member of an `iota` enum has its type. |
+| `values.directive` | Only match names with this directive, in their own doc comment or in their group's. A name's own directive replaces the group's directive of the same name. |
 
 Files that no platform can build are skipped, such as those marked `//go:build ignore` or with a custom tag that `buildTags` does not list. Platform tags such as `linux` or `amd64` may take any value, so results are the same on every machine, and file name suffixes such as `_windows.go` never exclude a file.
 
@@ -246,7 +251,7 @@ Every match is an item with these fields, sorted by name:
 | Field | Description |
 | --- | --- |
 | `.Name` | Declared name. |
-| `.Kind` | `func`, `method`, `struct`, `interface`, or `type`. |
+| `.Kind` | `func`, `method`, `struct`, `interface`, `type`, `const`, or `var`. |
 | `.Receiver` | Receiver type for methods, empty for functions. |
 | `.Package` | Package name from the file's `package` clause. |
 | `.ImportPath` | The package's import path, empty when the repository has no `go.mod`. |
@@ -257,6 +262,9 @@ Every match is an item with these fields, sorted by name:
 | `.Signature` | For functions, parameters and results as written, such as `(ctx context.Context) error`. |
 | `.Params`, `.Results` | For functions, each parameter and result, with `.Name` and `.Type` as written. |
 | `.Fields` | For structs, each field with `.Name`, `.Type`, `.Tag`, and `.Embedded`. |
+| `.Type` | For constants and variables, the type as written, repeated through a `const` group. |
+| `.Value` | For constants and variables, the value as written. Empty for a constant that repeats the one before it, and when several names share one value, as in `a, b = f()`. |
+| `.Iota` | For constants, the position in their `const` group, which is their value of `iota`. |
 | `.Directives` | The arguments of each [directive](#directives), by directive name. |
 
 Fields that do not apply to a declaration are empty.

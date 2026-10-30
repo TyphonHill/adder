@@ -70,6 +70,8 @@ type Scan struct {
 	Funcs     FuncMatch `yaml:"funcs"`
 	// Types selects type declarations instead of functions when set.
 	Types *TypeMatch `yaml:"types"`
+	// Values selects constant and variable declarations instead of functions when set.
+	Values *ValueMatch `yaml:"values"`
 
 	// Pos is where the scan is declared, for reporting problems found while scanning.
 	Pos diag.Pos `yaml:"-"`
@@ -82,6 +84,8 @@ const (
 	KindStruct    = "struct"
 	KindInterface = "interface"
 	KindType      = "type" // any other type declaration, such as `type Status int`
+	KindConst     = "const"
+	KindVar       = "var"
 )
 
 // FuncMatch filters declarations. Unset fields match every declaration.
@@ -105,6 +109,18 @@ type TypeMatch struct {
 	Name     Pattern `yaml:"name"`
 	// Kind limits the scan to structs, interfaces, or other types.
 	Kind      string `yaml:"kind"`
+	Directive string `yaml:"directive"`
+}
+
+// ValueMatch filters constant and variable declarations. Unset fields match every declaration.
+type ValueMatch struct {
+	// Kind limits the scan to constants or variables.
+	Kind     string  `yaml:"kind"`
+	Exported bool    `yaml:"exported"`
+	Name     Pattern `yaml:"name"`
+	// Type matches the type as written, which a name in a const group without its own repeats from the name
+	// before it, as Go does.
+	Type      string `yaml:"type"`
 	Directive string `yaml:"directive"`
 }
 
@@ -338,12 +354,29 @@ func (c *Config) validate(pos positions) error {
 				})
 			}
 		}
-		if scan.Types != nil {
-			if pos.has(at + ".funcs") {
-				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".types"), "scan %q: use funcs or types, not both", name))
+		var blocks []string
+		for _, block := range []struct {
+			key string
+			set bool
+		}{{"funcs", pos.has(at + ".funcs")}, {"types", scan.Types != nil}, {"values", scan.Values != nil}} {
+			if block.set {
+				blocks = append(blocks, block.key)
 			}
+		}
+		if len(blocks) > 1 {
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.InvalidValue,
+				Pos:     pos.at(at + "." + blocks[1]),
+				Message: fmt.Sprintf("scan %q: has %s; use only one", name, strings.Join(blocks, " and ")),
+				Hint:    "each scan selects one kind of declaration: funcs, types, or values",
+			})
+		}
+		switch {
+		case scan.Types != nil:
 			errs = append(errs, validateTypes(name, *scan.Types, at+".types", pos)...)
-		} else {
+		case scan.Values != nil:
+			errs = append(errs, validateValues(name, *scan.Values, at+".values", pos)...)
+		default:
 			errs = append(errs, validateFuncs(name, scan.Funcs, at+".funcs", pos)...)
 		}
 	}
@@ -447,6 +480,21 @@ func validateFuncs(name string, m FuncMatch, at string, pos positions) diag.List
 }
 
 // validateTypes checks the type filters of the scan called name.
+func validateValues(name string, m ValueMatch, at string, pos positions) diag.List {
+	var errs diag.List
+	switch m.Kind {
+	case "", KindConst, KindVar:
+	default:
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at + ".kind"),
+			Message: fmt.Sprintf("scan %q: unknown value kind %q", name, m.Kind),
+			Hint:    "kind is const or var",
+		})
+	}
+	return append(errs, validateDirective(name, m.Directive, at, pos)...)
+}
+
 func validateTypes(name string, m TypeMatch, at string, pos positions) diag.List {
 	var errs diag.List
 	switch m.Kind {
