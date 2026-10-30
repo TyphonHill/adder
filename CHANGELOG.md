@@ -4,11 +4,13 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-30
+
 ### Added
 
+- Packs: a Go package can share derive outputs, generators, and their templates, embedded with a `pack.yaml` that declares typed `options`. A repository uses a pack under `packs` in `adder.yaml`, once or several times, giving its options under `with`, and builds its own adder with the pack. Problems in a pack's files carry the pack's name, as `pack` in JSON, and a new diagnostic code `unknown-pack` reports a configuration that uses a pack adder was not built with. A use's generators become `adder new` commands, which a use can rename, and a use tests them with golden files in the repository. The repository's own outputs and generator files can render a pack's template with `pack`.
 - Custom template functions: a repository builds its own adder from a small `main` package that calls `adder.Main` with an `adder.Pack` of functions, and runs it with `go tool adder`. The root package `github.com/TyphonHill/adder` is the first public Go API, experimental until v1.0. A new diagnostic code `invalid-pack` reports a pack that cannot be registered, such as a function named like a built-in one.
 - Custom scanners: a pack's `Scanners` are Go functions that a scan runs with `scanner: {name, with}`, reading the repository and returning structs or maps, which templates and generator inputs read by field name. A returned `adder.Problem` is reported at its file. New diagnostic codes `scanner` and `unknown-scanner` report a failing scanner and one adder was not built with.
-- Packs: a Go package can share derive outputs, generators, and their templates, embedded with a `pack.yaml` that declares typed `options`. A repository uses a pack under `packs` in `adder.yaml`, once or several times, giving its options under `with`, and builds its own adder with the pack. Problems in a pack's files carry the pack's name, as `pack` in JSON, and a new diagnostic code `unknown-pack` reports a configuration that uses a pack adder was not built with. A use's generators become `adder new` commands, which a use can rename, and a use tests them with golden files in the repository. The repository's own outputs and generator files can render a pack's template with `pack`.
 
 ### Changed
 
@@ -105,7 +107,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Diagnostics with stable codes, file positions, and hints; every problem is reported at once.
 - Exit codes: 0 for success, 1 for problems, 2 for usage mistakes, and 3 for stale outputs.
 
-[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/TyphonHill/adder/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TyphonHill/adder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TyphonHill/adder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TyphonHill/adder/compare/v0.1.0...v0.2.0

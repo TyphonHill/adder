@@ -141,7 +141,7 @@ Stale outputs get their own code so CI can tell "regenerate and commit" apart fr
 
 ### 10. Everything is internal except a small root package
 
-All packages live under `internal/`, so their APIs can change freely. The root package holds the only public Go API, which starts with what packs and extensions need ([decision 18](#18-the-library-api-starts-with-packs-and-extensions-planned-v05)).
+All packages live under `internal/`, so their APIs can change freely. The root package holds the only public Go API, which starts with what packs and extensions need ([decision 18](#18-the-library-api-starts-with-packs-and-extensions)).
 
 ### 11. Go versions and dependencies
 
@@ -205,9 +205,9 @@ A scan uses type information only when it sets `typeCheck: true`. Filters that n
 
 How types are loaded is [decision 37](#37-loading-types).
 
-### 18. The library API starts with packs and extensions (planned, v0.5)
+### 18. The library API starts with packs and extensions
 
-The module's root package, `github.com/TyphonHill/adder`, is a small public facade over the internal packages. Its first consumer is a repository that builds its own adder with packs ([decision 41](#41-generator-packs-planned-v05)), custom template functions, or custom scanners ([decision 42](#42-custom-template-functions-and-scanners-planned-v05)), so v0.5 exposes only that:
+The module's root package, `github.com/TyphonHill/adder`, is a small public facade over the internal packages. Its first consumer is a repository that builds its own adder with packs ([decision 41](#41-generator-packs)), custom template functions, or custom scanners ([decision 42](#42-custom-template-functions-and-scanners)), so v0.5 exposes only that:
 
 ```go
 // Main runs the command line with the given packs, and exits.
@@ -224,9 +224,9 @@ type Pack struct {
 type Scanner func(ctx context.Context, in *ScanInput) ([]any, error)
 ```
 
-Scanners also get `ScanInput` and `Problem` ([decision 42](#42-custom-template-functions-and-scanners-planned-v05)).
+Scanners also get `ScanInput` and `Problem` ([decision 42](#42-custom-template-functions-and-scanners)).
 
-`cmd/adder` becomes `func main() { adder.Main() }`. `--version` reports the version of the adder module from build information, in a repository's own build too.
+`cmd/adder` is `func main() { adder.Main() }`. `--version` reports the version of the adder module from build information, in a repository's own build too.
 
 The API is experimental until v1.0. Running adder from Go, such as loading a configuration and getting a plan back as Go values, waits for a consumer that needs it, such as an editor integration or an MCP server. Until then `--json` is the interface for tools. The internal packages stay internal.
 
@@ -736,7 +736,7 @@ A repository can hold several `adder.yaml` files, such as one per service in a m
 | A root configuration that includes the others | Another list to keep in sync, and the nested configurations could no longer run on their own. |
 | One configuration for the whole repository | Services owned by different teams would share one file, and scans would cross module boundaries. |
 
-### 41. Generator packs (planned, v0.5)
+### 41. Generator packs
 
 A pack shares generators, derive outputs, and templates across repositories. It is a Go package, so it is versioned, downloaded, and verified like any other dependency.
 
@@ -849,9 +849,9 @@ updated    drivers/registry.gen.go
 | Extensions as separate processes, or WebAssembly modules | A wire protocol to keep stable, and for WebAssembly a runtime dependency and a narrower Go toolchain for authors. |
 | Overrides of a pack's scans and outputs | Merge rules are the hardest part of a configuration to keep compatible, and a pack could no longer rely on its own scans. |
 
-**Why:** the Go module system already solves versioning, downloading, verification, private hosting, and updates, and the repositories adder serves already depend on it. A repository's own build is also the only way to run Go code from a pack, which custom functions and scanners need ([decision 42](#42-custom-template-functions-and-scanners-planned-v05)).
+**Why:** the Go module system already solves versioning, downloading, verification, private hosting, and updates, and the repositories adder serves already depend on it. A repository's own build is also the only way to run Go code from a pack, which custom functions and scanners need ([decision 42](#42-custom-template-functions-and-scanners)).
 
-### 42. Custom template functions and scanners (planned, v0.5)
+### 42. Custom template functions and scanners
 
 A pack can add template functions and scanners, written in Go. A pack without an `FS` is only functions and scanners, so a repository adds its own with a pack in its `tools/adder/main.go`:
 
