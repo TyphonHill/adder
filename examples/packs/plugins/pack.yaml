@@ -1,0 +1,29 @@
+version: 1
+
+options:
+  dirs: {type: list, help: "Directories that each hold one plugin package, such as caches/*"}
+  out: {help: Directory for the registry and for new plugins}
+  package: {help: Package name of the registry}
+
+derive:
+  scans:
+    # A plugin is a package with an exported New function.
+    Plugins:
+      dirs: {option: dirs}
+      funcs: {exported: true, name: ^New$}
+  outputs:
+    - template: templates/registry.go.tmpl
+      path: "{{ .Options.out }}/registry.gen.go"
+
+generators:
+  plugin:
+    description: Add a plugin
+    inputs:
+      name:
+        help: Plugin name, used as the package name
+        pattern: "[a-z][a-z0-9]*"
+        unique: Plugins.Package
+    files:
+      - template: templates/plugin.go.tmpl
+        path: "{{ .Options.out }}/{{ .Inputs.name }}/{{ .Inputs.name }}.go"
+    message: Implement New in {{ .Options.out }}/{{ .Inputs.name }}/{{ .Inputs.name }}.go.

@@ -1,0 +1,17 @@
+package drivers
+
+import (
+	"example.com/registry/storage"
+{{- range .Drivers }}
+	"{{ .ImportPath }}"
+{{- end }}
+)
+
+// All returns a new instance of every driver, by package name.
+func All() map[string]storage.Driver {
+	return map[string]storage.Driver{
+{{- range .Drivers }}
+		"{{ .Package }}": {{ .Package }}.New(),
+{{- end }}
+	}
+}

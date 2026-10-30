@@ -1,0 +1,23 @@
+// Package {{ .Inputs.name }} stores values in {{ .Inputs.summary }}.
+package {{ .Inputs.name }}
+
+import (
+	"errors"
+
+	"{{ .Module }}/storage"
+)
+
+type driver struct{}
+
+// New returns a {{ .Inputs.name }} driver.
+func New() storage.Driver {
+	return driver{}
+}
+
+func (driver) Get(key string) ([]byte, error) {
+	return nil, errors.New("{{ .Inputs.name }}: Get is not implemented")
+}
+
+func (driver) Put(key string, value []byte) error {
+	return errors.New("{{ .Inputs.name }}: Put is not implemented")
+}

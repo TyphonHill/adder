@@ -4,6 +4,10 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- `examples/`: three complete repositories using adder, a derived registry with a generator, HTTP routes from directives, and a pack with a custom function and scanner, each tested with adder from the same commit.
+
 ### Changed
 
 These changes settle names before v1.0 freezes them. Configurations that use an old name fail to load with `unknown-field` or `invalid-value`, naming the new one.

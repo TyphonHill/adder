@@ -1,0 +1,10 @@
+// Package {{ .Inputs.name }} is the {{ pluginTitle .Inputs.name }} plugin.
+package {{ .Inputs.name }}
+
+// Plugin is the {{ pluginTitle .Inputs.name }} plugin.
+type Plugin struct{}
+
+// New returns the {{ pluginTitle .Inputs.name }} plugin.
+func New() *Plugin {
+	return &Plugin{}
+}

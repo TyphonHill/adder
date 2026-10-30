@@ -1,0 +1,10 @@
+// Package config holds the application's default settings.
+package config
+
+// Default settings, from {{ (index .Settings 0).File }}.
+const (
+{{- range .Settings }}
+	{{/* Keys are in capitals, so lowering them first lets toGoPascalCase find the words: LISTEN_ADDR is ListenAddr. */ -}}
+	{{ toLower .Key | toGoPascalCase }} = {{ quote .Value }}
+{{- end }}
+)

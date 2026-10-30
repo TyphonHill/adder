@@ -1,0 +1,19 @@
+version: 1
+
+packs:
+  # The plugins pack, used for caches.
+  caches:
+    pack: plugins
+    with: {dirs: ["caches/*"], out: caches, package: caches}
+    # A pack's generators are tested where they are used, with golden files in this repository.
+    tests:
+      plugin: [{name: plain, inputs: {name: example}, want: testdata/plugin/plain}]
+
+derive:
+  scans:
+    # Settings from .env files, read by this repository's own env-file scanner.
+    Settings:
+      scanner: {name: env-file, with: {files: [config/defaults.env]}}
+  outputs:
+    - template: templates/settings.go.tmpl
+      path: config/settings.gen.go

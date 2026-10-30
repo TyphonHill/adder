@@ -1,0 +1,18 @@
+package api
+
+import (
+	"net/http"
+{{ range groupBy "ImportPath" .Routes }}
+	"{{ .Key }}"
+{{- end }}
+)
+
+// Register adds every route to mux.
+func Register(mux *http.ServeMux) {
+{{- range groupBy "ImportPath" .Routes }}
+	// {{ (index .Items 0).Package }}
+{{- range .Items }}
+	mux.HandleFunc("{{ index .Directives "route" "method" }} {{ index .Directives "route" "path" }}", {{ .Package }}.{{ .Name }})
+{{- end }}
+{{- end }}
+}

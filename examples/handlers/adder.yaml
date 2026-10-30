@@ -1,0 +1,16 @@
+version: 1
+
+derive:
+  scans:
+    # Every function marked //adder:route is a handler, with its method and path as arguments.
+    Routes:
+      dirs: ["api/*"]
+      funcs: {directive: route}
+  outputs:
+    # One function registers every route, grouped by package.
+    - template: templates/routes.go.tmpl
+      path: api/routes.gen.go
+    # One page per route. Removing a route removes its page.
+    - template: templates/route.md.tmpl
+      each: Routes
+      path: "docs/routes/{{ .Item.Package }}-{{ .Item.Name | toKebabCase }}.md"
