@@ -173,7 +173,7 @@ When an output produces one file per item, adder removes files it previously gen
 | Searching the whole repository for headers | Slow, and cannot tell which configuration owns a file in a monorepo. |
 | An owned output directory, deleted before generating | Only works when generated files live apart from handwritten code. |
 
-### 16. Comment directives use Go's directive syntax (planned, v0.2)
+### 16. Comment directives use Go's directive syntax
 
 Directives look like `//adder:register name=s3 desc="Local disk"`: no space after `//`, a lowercase name, and `key=value` arguments with Go-style quoting when needed. Only directives in a declaration's doc comment count. A malformed directive, a directive repeated on one declaration, or an argument given twice is an `invalid-directive` problem rather than something adder guesses about. Bare words without `=` are rejected for now, so they stay available for a future meaning.
 
@@ -191,7 +191,7 @@ The module's root package, `github.com/TyphonHill/adder`, is reserved for a smal
 
 **Why:** moving code is easy; committing to an API is not. After v1.0 a breaking change needs a new `/v2` import path, and today's internal APIs are shaped by a single consumer, the command line. They changed completely in one refactoring, which would have broken every user had they been public. `cmd/adder` is already public, because `go get -tool` depends on its path.
 
-### 19. Scaffolding with `adder new` (planned, v0.2)
+### 19. Scaffolding with `adder new`
 
 Generators create new files that people then own. They live next to `derive` in `adder.yaml`:
 
@@ -292,7 +292,7 @@ Next, implement New in drivers/gcs/gcs.go.
 | An `overwrite` file policy | Breaks the promise that files people own are never rewritten. |
 | A diff library | A small, stable algorithm is better copied than depended on. |
 
-### 20. Richer scans without type checking (planned, v0.2)
+### 20. Richer scans without type checking
 
 Go source alone says far more than names, so these additions parse files rather than type-check them.
 

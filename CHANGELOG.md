@@ -4,6 +4,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 ### Added
 
 - Directory patterns with `**`, which skip `testdata`, `vendor`, and hidden directories like `./...`, and `exclude` patterns.
@@ -40,5 +42,6 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Diagnostics with stable codes, file positions, and hints; every problem is reported at once.
 - Exit codes: 0 for success, 1 for problems, 2 for usage mistakes, and 3 for stale outputs.
 
-[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/TyphonHill/adder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/TyphonHill/adder/releases/tag/v0.1.0
