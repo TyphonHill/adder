@@ -39,8 +39,8 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | `adder validate`: check the configuration and templates without writing anything ([design 31](docs/design.md#31-checking-the-configuration-planned-after-v10)) | 🔜 after v1.0 |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
 | Multiple configurations in one repository, for monorepos and nested modules ([design 40](docs/design.md#40-multiple-configurations)) | ✅ |
-| `adder derive --adopt`: take over the files a previous generator wrote, once, when moving to adder ([design 44](docs/design.md#44-moving-from-a-hand-rolled-generator-planned-v10)) | 🔜 v1.0 |
-| Short flags for generator inputs, such as `-N` for `--name` ([design 44](docs/design.md#44-moving-from-a-hand-rolled-generator-planned-v10)) | 🔜 v1.0 |
+| A `file-exists` hint that names another tool's generated file, for moving to adder ([design 44](docs/design.md#44-moving-from-a-hand-rolled-generator-planned-v10)) | 🔜 v1.0 |
+| Short flags for generator inputs, such as `-N` for `--name` | 💡 |
 | `adder migrate`: upgrade a configuration to a newer schema version, with the first schema version that needs it ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 💡 |
 
 ### Scanning
@@ -200,7 +200,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Documentation site: guides, configuration reference generated from the schema, function reference ([design 35](docs/design.md#35-documentation-and-examples-planned-after-v10)) | 🔜 after v1.0 |
 | Recipes: driver and plugin registries, HTTP routes, CLI commands, gRPC wiring, workflow engines | 🔜 after v1.0 |
 | Comparison page: adder versus `go generate`, stencil, plop, hygen, and hand-rolled generators | 🔜 after v1.0 |
-| Migration guide from a hand-rolled generator | 🔜 after v1.0 |
+| Migration guide from a hand-rolled generator, in `docs/migrating.md` ([design 44](docs/design.md#44-moving-from-a-hand-rolled-generator-planned-v10)) | 🔜 v1.0 |
 | Support and deprecation policy for configuration fields and Go versions, in `docs/compatibility.md` ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
 | Launch: announcement post, Gophers Slack, r/golang | 🔜 after v1.0 |
 
