@@ -9,6 +9,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Directory patterns with `**`, which skip `testdata`, `vendor`, and hidden directories like `./...`, and `exclude` patterns.
 - Function filters `kind`, `receiver`, and `firstParamType`, which matches the first parameter's type through the file's imports.
 - Scan item fields `.Kind`, `.ImportPath`, `.Line`, `.Doc`, `.Signature`, `.Params`, and `.Results`.
+- `//adder:` directives in doc comments, a `directive` filter, and `.Directives` on items.
+- Type declaration scans with a `types` block, filtering by export, name, kind, and directive, with `.Fields` for structs.
 
 ## [0.1.0] - 2026-10-29
 

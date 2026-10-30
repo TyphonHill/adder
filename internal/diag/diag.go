@@ -29,6 +29,7 @@ const (
 	TemplateSyntax     Code = "template-syntax"
 	TemplateExec       Code = "template-exec"
 	InvalidOutput      Code = "invalid-output"
+	InvalidDirective   Code = "invalid-directive"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.

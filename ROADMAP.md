@@ -54,8 +54,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Match on `kind` (functions or methods) and `receiver` | ✅ |
 | `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking-planned-v02)) | ✅ |
 | `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | ✅ |
-| Comment directives in Go's directive syntax, such as `//adder:register name=s3`: a `directive` filter and `.Directives` on items ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax-planned-v02)) | 🔜 v0.2 |
-| Scan type declarations with a `types` block: structs, interfaces, and other types, with `.Fields` for structs | 🔜 v0.2 |
+| Comment directives in Go's directive syntax, such as `//adder:register name=s3`: a `directive` filter and `.Directives` on items ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax-planned-v02)) | ✅ |
+| Scan type declarations with a `types` block: structs, interfaces, and other types, with `.Fields` for structs | ✅ |
 | Type-aware matching, opted into per scan with `typeCheck: true`: types that implement an interface, and type matches that survive any import alias ([design 17](docs/design.md#17-type-aware-scans-are-an-explicit-opt-in-planned-v04)) | 🔜 v0.4 |
 | Scan constants and variables, for enums and lookup tables | 🔜 v0.4 |
 | File scans: list non-Go files such as SQL migrations or JSON fixtures | 🔜 v0.4 |

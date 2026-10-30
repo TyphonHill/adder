@@ -76,6 +76,7 @@ Positions follow two rules:
 | `template-syntax` | A template does not parse. |
 | `template-exec` | A template failed while rendering, for example by referencing a missing field. |
 | `invalid-output` | A template rendered Go that does not parse. |
+| `invalid-directive` | An `//adder:` directive is malformed or repeated on one declaration. |
 
 **Why:** error text is for people and changes freely, but codes and positions are for tools. Keeping both from the start means JSON output, editor squiggles, and documentation links need no rework later.
 
@@ -166,7 +167,7 @@ When an output produces one file per item, adder removes files it previously gen
 
 ### 16. Comment directives use Go's directive syntax (planned, v0.2)
 
-Directives look like `//adder:register name=s3 desc="Local disk"`: no space after `//`, a lowercase name, and `key=value` arguments with Go-style quoting when needed.
+Directives look like `//adder:register name=s3 desc="Local disk"`: no space after `//`, a lowercase name, and `key=value` arguments with Go-style quoting when needed. Only directives in a declaration's doc comment count. A malformed directive, a directive repeated on one declaration, or an argument given twice is an `invalid-directive` problem rather than something adder guesses about. Bare words without `=` are rejected for now, so they stay available for a future meaning.
 
 **Why:** Go's doc comment rules treat `//name:value` lines as directives, which godoc hides and gofmt keeps together, and the tools Go developers use most follow the same form: `//go:generate`, `//go:embed`, `//nolint:`, `//lint:ignore`. The `// +marker:` style from Kubernetes generators appears as text in documentation and is rarely used outside that ecosystem.
 

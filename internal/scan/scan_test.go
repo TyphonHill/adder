@@ -299,6 +299,7 @@ func Plain(a, b int, _ string) {}
 			Signature:  "(ctx context.Context, name string, retries int) (err error)",
 			Params:     []Param{{"ctx", "context.Context"}, {"name", "string"}, {"retries", "int"}},
 			Results:    []Param{{"err", "error"}},
+			Directives: map[string]map[string]string{"register": {"name": "svc"}},
 		}
 	}
 	plain := func(importPath string) Item {
@@ -335,6 +336,126 @@ func Plain(a, b int, _ string) {}
 	}
 }
 
+var declarations = fstest.MapFS{
+	"model/model.go": file(`package model
+
+import "sync"
+
+// User is a person with an account.
+//
+//adder:register table=users desc="People with accounts"
+type User struct {
+	sync.Mutex
+	*Base
+	ID, Email string ` + "`json:\"id\"`" + `
+	Roles     []string
+}
+
+type (
+	// Store saves users.
+	//
+	//adder:register table=stores
+	Store interface{ Save(User) error }
+
+	// Status is an account status.
+	Status int
+
+	internal struct{}
+)
+
+// Alias renames User.
+type Alias = User
+
+//adder:register name=CreateUser
+func Create(u User) error { return nil }
+
+func Delete(u User) error { return nil }
+`),
+}
+
+func TestRunTypes(t *testing.T) {
+	user := Item{
+		Name:       "User",
+		Kind:       "struct",
+		Package:    "model",
+		ImportPath: "example.com/m/model",
+		Dir:        "model",
+		File:       "model/model.go",
+		Line:       8,
+		Doc:        "User is a person with an account.",
+		Fields: []Field{
+			{Name: "Mutex", Type: "sync.Mutex", Embedded: true},
+			{Name: "Base", Type: "*Base", Embedded: true},
+			{Name: "ID", Type: "string", Tag: `json:"id"`},
+			{Name: "Email", Type: "string", Tag: `json:"id"`},
+			{Name: "Roles", Type: "[]string"},
+		},
+		Directives: map[string]map[string]string{"register": {"table": "users", "desc": "People with accounts"}},
+	}
+	store := Item{
+		Name: "Store", Kind: "interface", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go",
+		Line: 19, Doc: "Store saves users.", Directives: map[string]map[string]string{"register": {"table": "stores"}},
+	}
+	status := Item{Name: "Status", Kind: "type", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 22, Doc: "Status is an account status."}
+	unexported := Item{Name: "internal", Kind: "struct", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 24}
+	alias := Item{Name: "Alias", Kind: "type", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 28, Doc: "Alias renames User."}
+
+	tests := []struct {
+		name  string
+		types config.TypeMatch
+		want  []Item
+	}{
+		{name: "every type", types: config.TypeMatch{}, want: []Item{alias, status, store, user, unexported}},
+		{name: "exported only", types: config.TypeMatch{Exported: true}, want: []Item{alias, status, store, user}},
+		{name: "structs", types: config.TypeMatch{Kind: config.KindStruct}, want: []Item{user, unexported}},
+		{name: "interfaces", types: config.TypeMatch{Kind: config.KindInterface}, want: []Item{store}},
+		{name: "other types, including aliases", types: config.TypeMatch{Kind: config.KindType}, want: []Item{alias, status}},
+		{name: "by name", types: config.TypeMatch{Name: pattern("^S")}, want: []Item{status, store}},
+		{name: "by directive", types: config.TypeMatch{Directive: "register"}, want: []Item{store, user}},
+		{name: "by a directive nothing has", types: config.TypeMatch{Directive: "other"}, want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Run(t.Context(), declarations, "example.com/m", config.Scan{Dirs: []string{"model"}, Types: &tt.types})
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Run() =\n%#v\nwant\n%#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunFuncDirective(t *testing.T) {
+	tests := []struct {
+		name      string
+		directive string
+		want      []string
+	}{
+		{name: "functions with the directive", directive: "register", want: []string{"model/model.go Create"}},
+		{name: "without a directive filter", directive: "", want: []string{"model/model.go Create", "model/model.go Delete"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			items, err := Run(t.Context(), declarations, "", config.Scan{Dirs: []string{"model"}, Funcs: config.FuncMatch{Directive: tt.directive}})
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			var got []string
+			for _, it := range items {
+				got = append(got, id(it))
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Run() = %q, want %q", got, tt.want)
+			}
+			if items[0].Directives["register"]["name"] != "CreateUser" {
+				t.Errorf("Directives = %v", items[0].Directives)
+			}
+		})
+	}
+}
+
 func TestRunErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -354,6 +475,13 @@ func TestRunErrors(t *testing.T) {
 			dirs:     []string{"broken"},
 			wantCode: diag.GoSyntax,
 			wantPos:  diag.Pos{File: "broken/a.go", Line: 3, Column: 6},
+		},
+		{
+			name:     "invalid directive",
+			fsys:     fstest.MapFS{"bad/a.go": file("package bad\n\n//adder:register name\nfunc F() {}\n")},
+			dirs:     []string{"bad"},
+			wantCode: diag.InvalidDirective,
+			wantPos:  diag.Pos{File: "bad/a.go", Line: 3, Column: 1},
 		},
 		{name: "canceled", fsys: sources, dirs: []string{"jobs/*"}, canceled: true, wantIs: context.Canceled},
 	}

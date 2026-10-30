@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/TyphonHill/adder/internal/config"
@@ -33,12 +34,24 @@ type Item struct {
 	Signature  string  // parameters and results as written, such as "(ctx context.Context) error"
 	Params     []Param // parameters, one per name
 	Results    []Param // results, one per name
+	Fields     []Field // struct fields, one per name
+
+	// Directives holds the arguments of each //adder: directive in the doc comment, by directive name.
+	Directives map[string]map[string]string
 }
 
 // Param is a parameter or result of a function.
 type Param struct {
 	Name string // empty for unnamed parameters
 	Type string // as written, such as "context.Context"
+}
+
+// Field is a field of a struct.
+type Field struct {
+	Name     string // for embedded fields, the type name without its package, like Go uses
+	Type     string // as written
+	Tag      string // the tag without its quotes, such as `json:"name"`
+	Embedded bool
 }
 
 // Run returns the declarations in fsys selected by s, sorted by name. Paths in fsys are relative to the repository
@@ -103,21 +116,142 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir s
 			continue
 		}
 
-		imports := fileImports(parsed)
-		for _, decl := range parsed.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || !matches(fn, imports, s.Funcs) {
+		base := Item{Package: parsed.Name.Name, ImportPath: importPath(module, dir), Dir: dir, File: file}
+		var found []Item
+		if s.Types != nil {
+			found, err = typeItems(fset, parsed, *s.Types, base)
+		} else {
+			found, err = funcItems(fset, parsed, s.Funcs, base)
+		}
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, found...)
+	}
+	return items, nil
+}
+
+func funcItems(fset *token.FileSet, file *ast.File, m config.FuncMatch, base Item) ([]Item, error) {
+	imports := fileImports(file)
+	var items []Item
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || !matches(fn, imports, m) {
+			continue
+		}
+		found, err := directives(fset, fn.Doc)
+		if err != nil {
+			return nil, err
+		}
+		if m.Directive != "" && found[m.Directive] == nil {
+			continue
+		}
+		item := funcItem(fset, fn, base)
+		item.Directives = found
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Item) ([]Item, error) {
+	var items []Item
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			ts := spec.(*ast.TypeSpec)
+			kind := typeKind(ts)
+			switch {
+			case m.Exported && !ts.Name.IsExported(),
+				m.Name.Regexp != nil && !m.Name.MatchString(ts.Name.Name),
+				m.Kind != "" && m.Kind != kind:
 				continue
 			}
-			items = append(items, funcItem(fset, fn, Item{
-				Package:    parsed.Name.Name,
-				ImportPath: importPath(module, dir),
-				Dir:        dir,
-				File:       file,
-			}))
+
+			// A lone type declaration's comment belongs to the declaration; in a group, to each spec.
+			doc := ts.Doc
+			if doc == nil && !gen.Lparen.IsValid() {
+				doc = gen.Doc
+			}
+			found, err := directives(fset, doc)
+			if err != nil {
+				return nil, err
+			}
+			if m.Directive != "" && found[m.Directive] == nil {
+				continue
+			}
+
+			item := base
+			item.Name = ts.Name.Name
+			item.Kind = kind
+			item.Line = fset.Position(ts.Pos()).Line
+			if doc != nil {
+				item.Doc = strings.TrimSpace(doc.Text())
+			}
+			if st, ok := ts.Type.(*ast.StructType); ok && !ts.Assign.IsValid() {
+				item.Fields = structFields(st)
+			}
+			item.Directives = found
+			items = append(items, item)
 		}
 	}
 	return items, nil
+}
+
+func typeKind(ts *ast.TypeSpec) string {
+	if ts.Assign.IsValid() {
+		return config.KindType
+	}
+	switch ts.Type.(type) {
+	case *ast.StructType:
+		return config.KindStruct
+	case *ast.InterfaceType:
+		return config.KindInterface
+	}
+	return config.KindType
+}
+
+func structFields(st *ast.StructType) []Field {
+	var fields []Field
+	for _, f := range st.Fields.List {
+		field := Field{Type: written(f.Type)}
+		if f.Tag != nil {
+			field.Tag, _ = strconv.Unquote(f.Tag.Value)
+		}
+		if len(f.Names) == 0 {
+			field.Name = embeddedName(f.Type)
+			field.Embedded = true
+			fields = append(fields, field)
+			continue
+		}
+		for _, name := range f.Names {
+			field.Name = name.Name
+			fields = append(fields, field)
+		}
+	}
+	return fields
+}
+
+// embeddedName is the field name Go gives an embedded type: its type name without pointer, package, or type arguments.
+func embeddedName(expr ast.Expr) string {
+	for {
+		switch t := expr.(type) {
+		case *ast.StarExpr:
+			expr = t.X
+		case *ast.SelectorExpr:
+			return t.Sel.Name
+		case *ast.IndexExpr:
+			expr = t.X
+		case *ast.IndexListExpr:
+			expr = t.X
+		case *ast.Ident:
+			return t.Name
+		default:
+			return written(expr)
+		}
+	}
 }
 
 // funcItem fills in the fields of item that describe fn.

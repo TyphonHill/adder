@@ -54,6 +54,12 @@ func (p positions) pos(n *yaml.Node) diag.Pos {
 	return diag.Pos{File: p.file, Line: n.Line, Column: n.Column}
 }
 
+// has reports whether path appears in the file.
+func (p positions) has(path string) bool {
+	_, ok := p.byPath[path]
+	return ok
+}
+
 // at returns the position of path, or of its nearest ancestor when path itself is absent.
 func (p positions) at(path string) diag.Pos {
 	for {
@@ -80,7 +86,7 @@ func joinPath(parent, child string) string {
 }
 
 // knownFields lists the YAML keys of each configuration type, keyed by the type name the decoder reports.
-var knownFields = fieldsOf(Config{}, Derive{}, Scan{}, FuncMatch{}, Output{})
+var knownFields = fieldsOf(Config{}, Derive{}, Scan{}, FuncMatch{}, TypeMatch{}, Output{})
 
 func fieldsOf(values ...any) map[string][]string {
 	fields := make(map[string][]string, len(values))

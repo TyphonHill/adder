@@ -150,7 +150,7 @@ See [docs/design.md](docs/design.md#4-structured-diagnostics) for the full list 
 
 ### Scans
 
-Each entry under `derive.scans` selects function and method declarations. Its name becomes the template field that holds the results, so it must be a valid Go identifier.
+Each entry under `derive.scans` selects declarations: functions and methods by default, or type declarations with a `types` block. A scan uses `funcs` or `types`, not both. Its name becomes the template field that holds the results, so it must be a valid Go identifier.
 
 | Field | Description |
 | --- | --- |
@@ -163,13 +163,18 @@ Each entry under `derive.scans` selects function and method declarations. Its na
 | `funcs.receiver` | Only match methods on this type, with a value or pointer receiver. |
 | `funcs.firstParam` | Only match declarations whose first parameter has this name. |
 | `funcs.firstParamType` | Only match declarations whose first parameter has this type, written as Go writes it but with full import paths: `context.Context`, `go.temporal.io/sdk/workflow.Context`, `*Config`. |
+| `funcs.directive` | Only match declarations with this [directive](#directives) in their doc comment. |
+| `types.exported` | Only match exported type names. |
+| `types.name` | Only match type names containing a match for this regular expression. |
+| `types.kind` | `struct`, `interface`, or `type` for any other type declaration. |
+| `types.directive` | Only match types with this [directive](#directives) in their doc comment. |
 
 Every match is an item with these fields, sorted by name:
 
 | Field | Description |
 | --- | --- |
 | `.Name` | Declared name. |
-| `.Kind` | `func` or `method`. |
+| `.Kind` | `func`, `method`, `struct`, `interface`, or `type`. |
 | `.Receiver` | Receiver type for methods, empty for functions. |
 | `.Package` | Package name from the file's `package` clause. |
 | `.ImportPath` | The package's import path, empty when the repository has no `go.mod`. |
@@ -177,8 +182,31 @@ Every match is an item with these fields, sorted by name:
 | `.File` | File path relative to the root. |
 | `.Line` | Line of the declaration. |
 | `.Doc` | Doc comment, without directives. |
-| `.Signature` | Parameters and results as written, such as `(ctx context.Context) error`. |
-| `.Params`, `.Results` | Each parameter and result, with `.Name` and `.Type` as written. |
+| `.Signature` | For functions, parameters and results as written, such as `(ctx context.Context) error`. |
+| `.Params`, `.Results` | For functions, each parameter and result, with `.Name` and `.Type` as written. |
+| `.Fields` | For structs, each field with `.Name`, `.Type`, `.Tag`, and `.Embedded`. |
+| `.Directives` | The arguments of each [directive](#directives), by directive name. |
+
+Fields that do not apply to a declaration are empty.
+
+### Directives
+
+Code can opt in to a scan explicitly with a directive in its doc comment, instead of relying on naming conventions:
+
+```go
+// S3 stores objects in a bucket.
+//
+//adder:register name=s3 desc="Amazon S3"
+type S3 struct{}
+```
+
+Directives follow Go's convention for tool directives, like `//go:generate`: no space after `//`, then `adder:` and a lowercase name. Arguments are `key=value` pairs, and values with spaces are written as Go strings. A scan with `directive: register` selects only declarations that have it, and templates read the arguments from `.Directives`:
+
+```gotemplate
+{{ range .Storage }}{{ index .Directives.register "desc" }}{{ end }}
+```
+
+When a directive is optional, use `index` to look it up, which returns nothing instead of failing: `{{ with index .Directives "register" }}...{{ end }}`.
 
 ### Outputs
 
