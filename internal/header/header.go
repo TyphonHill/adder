@@ -31,23 +31,29 @@ var (
 	markup  = comment{"<!-- ", " -->"}
 )
 
-// byExt maps lowercase file extensions to their comment syntax. Go is handled separately.
-var byExt = map[string]comment{
-	".c": slashes, ".h": slashes, ".cc": slashes, ".cpp": slashes, ".cxx": slashes, ".hh": slashes, ".hpp": slashes,
-	".cs": slashes, ".dart": slashes, ".java": slashes, ".kt": slashes, ".kts": slashes, ".proto": slashes,
-	".rs": slashes, ".scala": slashes, ".swift": slashes,
-	".js": slashes, ".jsx": slashes, ".mjs": slashes, ".cjs": slashes, ".ts": slashes, ".tsx": slashes, ".mts": slashes, ".cts": slashes,
-
-	".dockerfile": hash, ".hcl": hash, ".tf": hash, ".tfvars": hash, ".mk": hash, ".nix": hash, ".pl": hash, ".pm": hash,
-	".ps1": hash, ".psm1": hash, ".py": hash, ".pyi": hash, ".r": hash, ".rb": hash, ".sh": hash, ".bash": hash, ".zsh": hash,
-	".toml": hash, ".yaml": hash, ".yml": hash,
-
-	".hs": dashes, ".lua": dashes, ".sql": dashes,
-
-	".css": block, ".scss": block, ".sass": block,
-
-	".html": markup, ".htm": markup, ".md": markup, ".markdown": markup, ".svg": markup, ".vue": markup, ".xml": markup,
+// languages lists, for each comment syntax, the lowercase file extensions that use it, in sorted order. Go is
+// handled separately. Adding an extension changes what adder writes, so it belongs in the changelog.
+var languages = []struct {
+	comment
+	exts string
+}{
+	{slashes, ".c .cc .cjs .cpp .cs .cts .cxx .dart .h .hh .hpp .java .js .jsx .kt .kts .mjs .mts .proto .rs .scala .swift .ts .tsx"},
+	{hash, ".bash .dockerfile .hcl .mk .nix .pl .pm .ps1 .psm1 .py .pyi .r .rb .sh .tf .tfvars .toml .yaml .yml .zsh"},
+	{dashes, ".hs .lua .sql"},
+	{block, ".css .sass .scss"},
+	{markup, ".htm .html .markdown .md .svg .vue .xml"},
 }
+
+// byExt maps each extension in languages to its comment syntax.
+var byExt = func() map[string]comment {
+	m := make(map[string]comment)
+	for _, lang := range languages {
+		for ext := range strings.FieldsSeq(lang.exts) {
+			m[ext] = lang.comment
+		}
+	}
+	return m
+}()
 
 // byName maps file names without a telling extension to their comment syntax.
 var byName = map[string]comment{"Dockerfile": hash, "Makefile": hash, "makefile": hash, "GNUmakefile": hash}

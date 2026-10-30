@@ -5,6 +5,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -201,5 +202,29 @@ func TestSupported(t *testing.T) {
 				t.Errorf("Supported(%q) = %v, want %v", tt.name, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLanguages(t *testing.T) {
+	seen := make(map[string]bool)
+	for _, lang := range languages {
+		t.Run(lang.open, func(t *testing.T) {
+			exts := strings.Fields(lang.exts)
+			if !slices.IsSorted(exts) {
+				t.Errorf("extensions are not sorted: %s", lang.exts)
+			}
+			for _, ext := range exts {
+				if !strings.HasPrefix(ext, ".") || ext != strings.ToLower(ext) || ext == ".go" {
+					t.Errorf("%q must be a lowercase extension other than .go, starting with a dot", ext)
+				}
+				if seen[ext] {
+					t.Errorf("%s is listed for more than one comment syntax", ext)
+				}
+				seen[ext] = true
+			}
+		})
+	}
+	if len(byExt) != len(seen) {
+		t.Errorf("byExt has %d extensions, want %d", len(byExt), len(seen))
 	}
 }
