@@ -130,10 +130,17 @@ func newFile(cfg *config.Config, src derive.Sources, gen config.Generator, set *
 		return plan.Change{}, diag.Locate(err, src.RepoDir, f.Pos)
 	}
 
+	pack := gen.Pack
+	if f.Pack != "" {
+		pack = f.Pack
+		if set, err = derive.PackTemplates(cfg, src, f.Pack); err != nil {
+			return plan.Change{}, diag.InPack(err, pack, f.Pos)
+		}
+	}
 	content, err := set.File(f.Template, target, data)
 	switch {
-	case err != nil && gen.Pack != "":
-		return plan.Change{}, diag.InPack(err, gen.Pack, f.Pos)
+	case err != nil && pack != "":
+		return plan.Change{}, diag.InPack(err, pack, f.Pos)
 	case err != nil:
 		return plan.Change{}, diag.Locate(err, src.TemplatesDir, f.Pos)
 	}

@@ -75,3 +75,39 @@ generators:
 		})
 	}
 }
+
+func TestPlanPackTemplateFile(t *testing.T) {
+	pack := fstest.MapFS{
+		"pack.yaml": {Data: []byte("version: 1\n")},
+		"doc.tmpl":  {Data: []byte("// {{ .Inputs.name }} for {{ .Vars.Team }}\npackage {{ .Inputs.name }}\n")},
+		"bad.tmpl":  {Data: []byte("{{ .Nope }}")},
+	}
+	tests := []struct {
+		name     string
+		template string
+		want     string
+		wantErrs []string
+	}{
+		{name: "the configuration's own data", template: "doc.tmpl", want: "// gcs for storage\npackage gcs\n"},
+		{name: "a problem in the pack's template", template: "bad.tmpl", wantErrs: []string{"pack store: bad.tmpl:1:3 template-exec"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := config.Parse("adder.yaml", []byte("version: 1\nvars: {Team: storage}\ngenerators:\n  doc:\n    inputs: {name: {}}\n    files: [{template: "+tt.template+", pack: store, path: \"{{ .Inputs.name }}/doc.go\"}]\n"), testPacks{"store": pack})
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, err := Plan(t.Context(), cfg, derive.Sources{Repo: fstest.MapFS{}, Templates: fstest.MapFS{}}, "doc", map[string]any{"name": "gcs"})
+			var errs []string
+			for _, d := range diag.From(err) {
+				errs = append(errs, d.Pos.String()+" "+string(d.Code))
+			}
+			if !slices.Equal(errs, tt.wantErrs) {
+				t.Fatalf("Plan() problems = %q, want %q\n%v", errs, tt.wantErrs, err)
+			}
+			if err == nil && (len(res.Plan.Changes) != 1 || string(res.Plan.Changes[0].New) != tt.want) {
+				t.Errorf("changes = %+v", res.Plan.Changes)
+			}
+		})
+	}
+}

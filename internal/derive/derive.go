@@ -65,6 +65,19 @@ func units(cfg *config.Config, src Sources) []unit {
 	return all
 }
 
+// packUnit is the unit whose templates are those of a pack the configuration's own outputs or files render. It
+// has no scans of its own.
+func packUnit(cfg *config.Config, pack string) unit {
+	pt := cfg.PackTemplates[pack]
+	return unit{cfg: &config.Config{Partials: pt.Partials}, templates: pt.FS, pack: pack}
+}
+
+// PackTemplates parses the templates and partials of a pack the configuration's own outputs or generator files
+// render.
+func PackTemplates(cfg *config.Config, src Sources, pack string) (*render.Set, error) {
+	return templates(packUnit(cfg, pack), src)
+}
+
 // locate returns the problems in err with positions in the unit's templates usable from the current directory,
 // attributing those without a position to decl.
 func (u unit) locate(err error, decl diag.Pos) diag.List {
@@ -94,6 +107,13 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 		problems = append(problems, diag.From(err)...)
 		all = append(all, prepared{u, set, data})
 	}
+	borrowed := make(map[string]prepared, len(cfg.PackTemplates))
+	for _, pack := range slices.Sorted(maps.Keys(cfg.PackTemplates)) {
+		u := packUnit(cfg, pack)
+		set, err := templates(u, src)
+		problems = append(problems, diag.From(err)...)
+		borrowed[pack] = prepared{unit: u, set: set}
+	}
 	if err := problems.Err(); err != nil {
 		return nil, err
 	}
@@ -113,11 +133,16 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
+			r := u
+			if out.Pack != "" && u.pack == "" {
+				r = borrowed[out.Pack]
+				r.data = u.data // a pack's template rendered with the configuration's own data
+			}
 			if out.Each == "" {
-				problems = append(problems, renderOutput(u, u.data, src, out, out.Path, &p)...)
+				problems = append(problems, renderOutput(r, r.data, src, out, out.Path, &p)...)
 				continue
 			}
-			found, err := planEach(ctx, u, src, out, &p, paths)
+			found, err := planEach(ctx, r, src, out, &p, paths)
 			if err != nil {
 				return nil, err
 			}

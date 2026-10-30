@@ -47,6 +47,9 @@ type Config struct {
 	Generators map[string]Generator `yaml:"generators"`
 	// Packs are the packs the configuration uses, by the name of each use.
 	Packs map[string]Use `yaml:"packs"`
+	// PackTemplates are the packs whose templates the configuration's own outputs and generator files render, by
+	// pack name. They are set when the configuration loads.
+	PackTemplates map[string]PackTemplates `yaml:"-"`
 
 	// Dir is the directory holding the configuration file; template paths resolve against it.
 	Dir string `yaml:"-"`
@@ -161,9 +164,9 @@ type Output struct {
 	Path string `yaml:"path" json:"path"`
 	// Each names a scan; the template is rendered once per item, as .Item.
 	Each string `yaml:"each" json:"each,omitempty"`
-	// Pack and Use name the pack and the use an output comes from, for an output a pack declares. Its template is
-	// in the pack.
-	Pack string `yaml:"-" json:"pack,omitempty"`
+	// Pack names the pack holding the template, for an output a pack declares or one rendering a pack's
+	// template. Use names the use an output a pack declares comes from.
+	Pack string `yaml:"pack" json:"pack,omitempty"`
 	Use  string `yaml:"-" json:"use,omitempty"`
 
 	// Pos is where the output is declared, for reporting problems found while rendering.
@@ -431,7 +434,7 @@ func (c *Config) validate(pos positions) error {
 	seen := make(map[string]bool, len(c.Derive.Outputs))
 	templates := make(map[string]int, len(c.Derive.Outputs))
 	for _, out := range c.Derive.Outputs {
-		templates[out.Template]++
+		templates[out.Source()]++
 	}
 	for i, out := range c.Derive.Outputs {
 		at := "derive.outputs." + strconv.Itoa(i)
@@ -441,7 +444,7 @@ func (c *Config) validate(pos positions) error {
 			errs = append(errs, d)
 		}
 		if out.Each != "" {
-			errs = append(errs, c.validateEach(i, out, templates[out.Template] > 1, at, pos)...)
+			errs = append(errs, c.validateEach(i, out, templates[out.Source()] > 1, at, pos)...)
 			continue
 		}
 		switch {
