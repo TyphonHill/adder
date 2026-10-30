@@ -142,7 +142,7 @@ adder supports the two most recent Go releases. `go.mod` declares the older one 
 
 Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml/v3` for configuration, `golang.org/x/mod` for reading `go.mod`, and `github.com/rogpeppe/go-internal/diff` for `--diff` previews. Anything that shapes generated output, such as template functions and case conversion, is implemented in adder itself, because a dependency upgrade must never change what people's templates produce.
 
-`golang.org/x/sys` is used only to turn on color in Windows consoles ([decision 32](#32-terminal-output)). Tests also use `github.com/rogpeppe/go-internal/testscript`, from the same module as the diff code, and `github.com/santhosh-tekuri/jsonschema/v6` to check the input schemas `adder describe` writes. Neither is built into the binary.
+`golang.org/x/sys` is used only to turn on color in Windows consoles ([decision 32](#32-terminal-output)). Planned for v0.4: `golang.org/x/tools/go/packages`, to load types for scans that ask for them ([decision 37](#37-loading-types-planned-v04)). Tests also use `github.com/rogpeppe/go-internal/testscript`, from the same module as the diff code, and `github.com/santhosh-tekuri/jsonschema/v6` to check the input schemas `adder describe` writes. Neither is built into the binary.
 
 ### 12. One configuration file at the root
 
@@ -195,6 +195,8 @@ Directives look like `//adder:register name=s3 desc="Local disk"`: no space afte
 A scan uses type information only when it sets `typeCheck: true`. Filters that need it, such as "implements this interface", fail validation on a scan without it, with a hint to enable it. Type-aware scans run the Go toolchain offline (`GOPROXY=off`, `-mod=readonly`) and report missing dependencies instead of downloading them.
 
 **Why:** type checking is much slower than parsing, needs code that compiles and dependencies in the module cache, and runs the toolchain. Enabling it automatically based on which filters are used would hide a performance and reliability cliff behind an innocent-looking change. Parsing stays the fast default.
+
+How types are loaded is [decision 37](#37-loading-types-planned-v04).
 
 ### 18. The library API arrives when it has a real consumer (planned)
 
@@ -609,6 +611,94 @@ Before then, the README and `docs/` remain the documentation.
 - **End to end:** `testscript` scripts in `cmd/adder/testdata/script` run the real command against small repositories written inline, covering each command's text and JSON output and exit codes. Today's command tests stay as unit tests for details that scripts express poorly.
 - **Fuzzing:** fuzz tests for configuration loading, header parsing, directive parsing, and import pruning check that no input panics, that problems point inside the input, and that pruning keeps gofmt-formatted Go parsing. Seed corpora run with every test run, and a weekly workflow fuzzes each target for five minutes.
 - **Performance budget:** a benchmark builds a repository of 1,000 packages and 10,000 functions and runs `derive` over it. The budget is 500 ms on GitHub's standard runners. CI fails above four times the budget, which catches a slowdown by an order of magnitude without failing on noisy timing. Parallel parsing is only added if the budget is missed.
+
+### 37. Loading types (planned, v0.4)
+
+Scans with `typeCheck: true` load their packages with `golang.org/x/tools/go/packages`, the loader gopls and staticcheck use. It runs `go list` and the compiler to build export data for dependencies, and type checks the scanned packages from source with the standard library's `go/types`, so results follow the Go release adder was built with, not the loader's version.
+
+**One environment everywhere.** Results must not depend on the machine ([decision 7](#7-deterministic-output)), so adder sets the whole environment of the `go` command instead of inheriting it:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `GOOS`, `GOARCH` | `linux`, `amd64`, or the scan's `platform`, such as `platform: windows/arm64` | Files for different platforms cannot be checked together, so one platform is chosen, the same on every machine. |
+| `CGO_ENABLED` | `0` | cgo runs a C compiler with flags from the source, and its results depend on the machine. |
+| `GOFLAGS` | `-mod=readonly`, plus `-tags` from the scan's `buildTags` | Nothing from the environment changes which files are checked. |
+| `GOPROXY`, `GOTOOLCHAIN` | `off`, `local` | Nothing is downloaded: a missing dependency or a newer toolchain is reported, not fetched. |
+| `GOWORK` | the root's `go.work` if it has one, otherwise `off` | A committed workspace is honored; a local one above the repository is not. |
+
+The parse-based rule for build constraints ([decision 27](#27-build-constraints-in-scans)) does not apply to these scans, since the platform decides. Running `go list` and the compiler never executes the repository's code, and with cgo off no C compiler runs either ([principle 7](../ROADMAP.md#principles)).
+
+**Filters.** On a scan with `typeCheck: true`:
+
+- `firstParamType` compares types, not spelling, so it matches through any import alias, a dot import, or a type alias.
+- `implements: io.Writer`, on a `types` block, selects types whose values or pointers implement the interface, written as `firstParamType` writes types, such as `example.com/m/driver.Driver`. Items gain `.Pointer`, true when only a pointer to the type implements it, so a registry can write `&{{ .Name }}{}` or `{{ .Name }}{}` as needed.
+- `implements` and the `platform` setting on a scan without `typeCheck: true` fail validation with a hint to add it.
+
+**Generators.** `adder new` passes the files it is about to create to the loader as an overlay, so type-aware scans see them before they are written, as parse-based scans do.
+
+**Problems.** Code that does not type check, a missing dependency, and a missing `go` command are `type-check` problems, at the position the toolchain reports. adder's own outputs are type checked with their package, since the code needs them, but never become items.
+
+| Considered | Why not |
+| --- | --- |
+| Our own loader on `go list -export` and `go/importer` | Reimplements what `go/packages` gets right, including overlays and test variants. |
+| The machine's `GOOS` and `GOARCH` | Output would differ between a Mac and a Linux CI runner. |
+| Checking every platform and merging the results | Several times slower, and items that exist on one platform only have no single right answer. |
+
+### 38. Constant and variable scans (planned, v0.4)
+
+A scan can select constants and variables with a `values` block, in place of `funcs` or `types`:
+
+```yaml
+scans:
+  Colors:
+    dirs: [color]
+    values: {kind: const, type: Color}
+```
+
+- Filters are `kind` (`const` or `var`), `exported`, `name`, `type`, and `directive`.
+- Each name is its own item, so `var a, b = 1, 2` gives two. A directive in the doc comment of a grouped declaration applies to every name in it; one on a single name applies to that name.
+- `.Kind` is `const` or `var`. New fields are `.Type`, the type as written, and `.Value`, the expression as written. In a `const` group, a name without a type or value repeats the previous ones, as Go does, so `.Type` is `Color` for every member of `Red Color = iota; Green; Blue`, while `.Value` stays empty for the repeated ones. `.Iota` is the name's position in its `const` group, its value of `iota`.
+- `type` matches `.Type` as written. With `typeCheck: true` it matches the declared or inferred type, so `const Red = Color(1)` counts too.
+
+**Why:** enums and lookup tables are among the most common things generators read, such as an enum's `String` method or a list of feature flags. `.Iota` covers the common `iota` enum without evaluating expressions, which needs type checking.
+
+### 39. File scans (planned, v0.4)
+
+A scan can list files that are not Go source with a `files` block, in place of `funcs`, `types`, or `values`:
+
+```yaml
+scans:
+  Migrations:
+    dirs: [db/migrations]
+    files: {name: '^[0-9]+_.*\.sql$'}
+```
+
+- `name` matches the file name, including its extension. Without it, every file in the directories is listed.
+- Items have `.Name`, the file name, `.Dir`, `.File`, and `.Kind`, which is `file`. File contents are not read.
+- Files adder generated, symbolic links, and files whose names start with `.` are skipped. `includeTests`, `buildTags`, and `typeCheck` do not apply and fail validation.
+- With `each`, an output can render one file per listed file, such as a Go wrapper per SQL migration.
+
+**Why:** generated registries often index files rather than code: migrations, fixtures, templates, schemas. Listing them needs no parser, which keeps scans to Go source and plain file lists ([non-goals](../ROADMAP.md#non-goals)).
+
+### 40. Multiple configurations (planned, v0.4)
+
+A repository can hold several `adder.yaml` files, such as one per service in a monorepo. Each stays independent, with its own directory as its root ([decision 12](#12-one-configuration-file-at-the-root)).
+
+**Boundaries.** Wildcards in scan directories, and the search for stale files, do not descend into a directory that has its own `adder.yaml` or `go.mod`, the way `./...` stops at nested modules. A directory named outright is still scanned. `.ImportPath` uses the nearest `go.mod` between an item's directory and the root, so items in a nested module get that module's path. `.Module` stays the root's.
+
+**Running several.** `derive`, `check`, `list`, and `test` accept directory patterns as `go` does: `adder check ./...` runs every `adder.yaml` at or below the current directory, skipping `testdata`, `vendor`, and hidden directories, and `adder check services/api` runs one. Without arguments, commands use the nearest configuration, as now. `--root` and `--config` cannot be combined with patterns.
+
+- Configurations run one after another, and a problem in one does not stop the others.
+- Text output prefixes each path with its configuration's directory, relative to the current directory, so `services/api/drivers/drivers.gen.go`.
+- With `--json`, the object holds `configs`, one entry per configuration with its `config` path and the command's usual fields, and a single `problems` list.
+- The exit status is the most serious across configurations: 2 for a usage mistake, then 1 for a problem, then 3 for stale outputs.
+
+`adder explain <file>` uses the configuration nearest the file rather than the current directory.
+
+| Considered | Why not |
+| --- | --- |
+| A root configuration that includes the others | Another list to keep in sync, and the nested configurations could no longer run on their own. |
+| One configuration for the whole repository | Services owned by different teams would share one file, and scans would cross module boundaries. |
 
 ## Compatibility
 
