@@ -135,6 +135,8 @@ adder supports the two most recent Go releases. `go.mod` declares the older one 
 
 Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml/v3` for configuration, and `golang.org/x/mod` for reading `go.mod`. Anything that shapes generated output, such as template functions and case conversion, is implemented in adder itself, because a dependency upgrade must never change what people's templates produce.
 
+Planned for v0.3: `golang.org/x/sys`, only to turn on color in Windows consoles ([decision 32](#32-terminal-output-planned-v03)). Tests may also use `github.com/rogpeppe/go-internal/testscript`, which is never built into the binary.
+
 ### 12. One configuration file at the root
 
 The configuration is a single, visible `adder.yaml` at the repository root. Only that name is accepted. adder finds it by walking up from the current directory, the way `go` finds `go.mod`, and its directory is the root. `--root` looks only in that directory, and `--config` names the file, making its directory the root unless `--root` is also given. Templates can live anywhere; their paths are relative to the configuration file.
@@ -155,7 +157,7 @@ Where adder needs a function neither library has, it picks a name that cannot be
 
 ### 14. Our own case conversion
 
-Word splitting and case conversion live in `internal/render/textcase.go`:
+Word splitting and case conversion live in `internal/textcase`:
 
 - Words are separated by any rune that is not a letter or digit, at a lowercase-or-digit to uppercase change (`userID`), and before the last capital of an acronym followed by lowercase (`HTTPServer` is `HTTP` and `Server`).
 - Digits stay with the word they follow (`HTTP2Server` is `HTTP2` and `Server`).
@@ -165,7 +167,9 @@ Word splitting and case conversion live in `internal/render/textcase.go`:
 
 ### 15. Stale outputs are found by header, within each output's own path (planned, v0.3)
 
-When an output produces one file per item, adder removes files it previously generated that the current plan no longer produces. It looks only at files matching that output's path pattern, and only at files whose adder header names that output's template. Files without adder's header are never touched, and outputs removed from the configuration entirely are reported by `adder check` but not deleted.
+When an output produces one file per item ([decision 24](#24-one-output-per-item-planned-v03)), adder removes files it previously generated that the current plan no longer produces. It looks only at files matching that output's path pattern, and only at files whose adder header names that output's template. Files without adder's header are never touched.
+
+Files left behind by an output that was removed from the configuration are not found, because finding them would mean reading every file in the repository. `adder explain` reports such a file as belonging to no output, so it can be deleted by hand.
 
 | Considered | Why not |
 | --- | --- |
@@ -337,6 +341,262 @@ Missing imports are not added. That needs to know which package a name like `ran
 | Pruning by type checking | Needs the packages to build, which generated code often cannot do before it exists. |
 
 **Why:** an unused import is a compile error, so removing one only changes output that was already broken, which makes it safe as a default.
+
+### 22. JSON output (planned, v0.3)
+
+Every command accepts `--json`. It writes exactly one JSON object to standard output and nothing to standard error, whether the command succeeds or not, and exit codes stay as they are. Problems go in the object instead of being printed:
+
+```json
+{
+  "changes": [
+    {"path": "drivers/drivers.gen.go", "status": "updated"},
+    {"path": "drivers/registry.gen.go", "status": "unchanged"}
+  ],
+  "problems": [
+    {
+      "code": "go-syntax",
+      "message": "expected 'IDENT', found '{'",
+      "pos": {"file": "drivers/s3/s3.go", "line": 3, "column": 6}
+    }
+  ]
+}
+```
+
+- `problems` is always present, empty on success. Problems are the same `diag.Diagnostic` values the text output prints, with positions written the same way ([decision 4](#4-structured-diagnostics)).
+- `changes` lists every file in the plan, unchanged ones included, so a tool sees the whole picture without a second command. Change paths are slash-separated and relative to the root. With `--diff`, each change that is not unchanged also has a `diff` field holding its unified diff.
+- `adder new` adds `generator` and `message`. Each other command's fields are listed with it in the documentation.
+- Mistakes in how adder was invoked, such as an unknown flag, become a problem with the new code `usage`, so a tool never has to parse help text. `--help` still prints text.
+- Field names are lowerCamelCase. From v1.0, fields are only ever added.
+
+**Why:** agents and scripts drive adder through this output ([principle 8](../ROADMAP.md#principles)). One object per run is simpler to consume than a stream, and adder plans everything before writing, so there is nothing to stream. `--json` matches `go list -json`, `go vet -json`, and `gh --json`.
+
+| Considered | Why not |
+| --- | --- |
+| `--format json` or `-o json` | Only one machine format is planned. A `--format` flag can be added later for others, such as GitHub annotations. |
+| Problems on standard error as JSON lines | Two streams to read and interleave, for no gain when the run produces one result. |
+| A version field in the object | The output follows adder's semantic versioning like everything else in the compatibility promise. |
+
+### 23. Discovering generators and outputs (planned, v0.3)
+
+Three read-only commands let people and agents learn what a repository offers without reading `adder.yaml`.
+
+**`adder list`** prints every generator with its description, and every derived output with its template and path:
+
+```console
+$ adder list
+generators
+  driver    Add a storage driver
+outputs
+  drivers/drivers.gen.go    from templates/drivers.go.tmpl
+```
+
+**`adder describe <generator>`** prints a generator's inputs, its files, and its message. Allowed values from `valuesFrom` and existing values for `unique` are computed from the scans, so they are current. With `--json`, it includes `inputSchema`, a JSON Schema (draft 2020-12) for the object `--inputs` accepts. That is the shape MCP uses for tool inputs, so an agent can fill it in directly:
+
+| Input setting | JSON Schema |
+| --- | --- |
+| `type: string` / `type: bool` | `"type": "string"` / `"type": "boolean"` |
+| `help` | `description` |
+| `default` | `default` |
+| no `default` on a string | listed in `required` |
+| `pattern` | `pattern`, anchored as adder anchors it. adder validates with Go's regular expressions, which differ from JSON Schema's ECMAScript dialect only in rarely used syntax. |
+| `values`, `valuesFrom` | `enum` |
+| `unique` | `"not": {"enum": [...]}` with the values that already exist |
+
+The schema sets `additionalProperties: false`, as `--inputs` rejects unknown keys.
+
+**`adder explain <file>`** says where a file comes from: the output in `adder.yaml` and its position, the template, the scans the template refers to by name, and whether the file is up to date. A file without adder's header is reported as not generated by adder. One whose header names a template no output uses is reported as belonging to no output ([decision 15](#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)). Scans are found by reading the template's parse tree, including its partials, for fields named after a scan. A template that reaches a scan indirectly, such as through `index`, is not attributed to it.
+
+**Why:** an agent that can list, describe, preview with `--dry-run --json`, and run a generator never has to guess a repository's conventions. `explain` answers the first question anyone asks about a generated file: what do I edit instead?
+
+### 24. One output per item (planned, v0.3)
+
+An output with `each` renders its template once for every item of a scan, with the item available as `.Item`. Its `path` is then a template rendered for each item:
+
+```yaml
+derive:
+  outputs:
+    - template: templates/mock.go.tmpl
+      each: Stores
+      path: "{{ .Item.Dir }}/{{ .Item.Name | toSnakeCase }}_mock.gen.go"
+```
+
+- `each` names a scan. Templates still see every scan, `.Vars`, and `.Module`. `Item` joins the reserved scan names.
+- Two items rendering to the same path is a `duplicate-path` problem, so a path that does not use `.Item` fails as soon as a scan has two items.
+- `path` is only a template on outputs with `each`. A single output's path is written literally, so it can never move without the configuration changing.
+- Each output with `each` must have a template no other output uses, and a path whose file type has a generated-file header ([decision 25](#25-generated-file-headers-for-other-languages-planned-v03)), because stale files are found by that header.
+
+**Stale files.** Files the output no longer produces are removed ([decision 15](#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)). The candidates are files whose path matches the output's `path` with each template action replaced by a wildcard that may span directories, and whose header names the output's template. adder searches from the longest directory in `path` before the first action, and skips `testdata`, `vendor`, and hidden directories as `**` does.
+
+The plan gains a `removed` status. `adder derive` deletes removed files, `adder check` treats them as stale, and `--diff` shows them as deletions to `/dev/null`.
+
+| Considered | Why not |
+| --- | --- |
+| A templated path on every output | A single output whose path depends on data could move and leave its old file behind. |
+| Asking for a separate glob of files the output owns | Repeats the path in a second form that can drift from it. |
+
+### 25. Generated-file headers for other languages (planned, v0.3)
+
+Outputs in languages other than Go get adder's header in their own comment syntax, chosen by file extension from a built-in table. The text is the same as the Go header, so `Code generated by adder from <template>. DO NOT EDIT.` marks every generated file:
+
+| Comment | Files |
+| --- | --- |
+| `// ...` | Go (unchanged), C, C++, C#, Dart, Java, JavaScript, Kotlin, Protocol Buffers, Rust, Scala, Swift, TypeScript |
+| `# ...` | Dockerfile, HCL and Terraform, Makefile, Nix, Perl, PowerShell, Python, R, Ruby, shell scripts, TOML, YAML |
+| `-- ...` | Haskell, Lua, SQL |
+| `/* ... */` | CSS, Sass |
+| `<!-- ... -->` | HTML, Markdown, SVG, Vue, XML |
+
+- The header goes on the first line, or after a leading `#!` line, an XML declaration, or Markdown front matter, which must stay first.
+- A file that already has a generated-code comment near its top keeps it, as Go outputs do today.
+- File types without comments, such as JSON, and extensions not in the table get no header. They cannot use `each`, and `adder explain` cannot identify them.
+- The table is part of the compatibility promise. Adding a file type changes output, so it is listed under **Changed** in the changelog.
+
+**Why:** tools from linguist to code review treat files with this marker as generated, and adder needs the header to find its own files. A built-in table keeps the configuration free of comment syntax.
+
+### 26. Symlinks (planned, v0.3)
+
+- Scans skip symbolic links to files and directories alike, as `go` skips linked directories in `./...`. This also rules out loops.
+- adder never writes, creates, or removes a file through a symbolic link. An output or new file whose path, or any directory on it, is a link inside the root is an `unsafe-path` problem. `os.Root` already rejects links that lead outside the root.
+- Templates, partials, and `adder.yaml` may be links, since reading them cannot change anything.
+
+**Why:** writing through a link changes a file somewhere else, which may be one that people own ([principle 4](../ROADMAP.md#principles)).
+
+### 27. Build constraints in scans (planned, v0.3)
+
+Scans skip files whose build constraints can never be satisfied, such as `//go:build ignore`. Constraints are evaluated the same way on every machine: custom tags are false, and `GOOS`, `GOARCH`, `unix`, `cgo`, and Go version tags may take any value. A file is skipped only when no combination of those satisfies it. `buildTags` on a scan lists custom tags to treat as true, such as `integration`. File name suffixes such as `_linux.go` are platform constraints, so they never exclude a file.
+
+**Why:** evaluating constraints for the machine adder runs on would make output differ between a Mac and a Linux CI runner ([decision 7](#7-deterministic-output)). Files for one platform belong in the scan, and files marked `ignore` or for a custom tag usually do not.
+
+### 28. More template functions (planned, v0.3)
+
+Functions Sprout also has keep its names and argument order, with the value last, so they work at the end of a pipeline:
+
+| Function | Example | Result |
+| --- | --- | --- |
+| `join` | `join ", " .Names` | `a, b` |
+| `trimPrefix` | `trimPrefix "Handle" .Name` | `Users` for `HandleUsers` |
+| `trimSuffix` | `trimSuffix "Handler" .Name` | `Users` for `UsersHandler` |
+| `replace` | `replace "-" "_" .Name` | `go_redis` for `go-redis` |
+| `quote` | `quote .Name` | `"s3"`, quoted as Go writes strings |
+| `indent`, `nindent` | `nindent 4 .Doc` | each line indented by four spaces, after a newline with `nindent` |
+
+`quote` takes exactly one value, where Sprout's joins several, so a template written for Sprout fails rather than renders differently.
+
+Functions Sprout lacks get names that do not collide with it:
+
+| Function | Example | Result |
+| --- | --- | --- |
+| `pluralize`, `singularize` | `pluralize .Name` | `Drivers` for `Driver`, `IDs` for `ID` |
+| `groupBy` | `groupBy "Dir" .Handlers` | a list of `.Key` and `.Items`, sorted by key |
+
+- `pluralize` and `singularize` use English rules with a built-in list of irregular words, and keep the case of the word: an all-capitals word gets a lowercase suffix, as Go writes `IDs`. Sprout's `plural` instead picks one of two given words by a count, and is not included.
+- `groupBy` takes a string field, like `fieldValues`, and returns a list rather than a map, so groups keep a stable order and work with `range` and `fieldValues`.
+
+### 29. Prompts for missing inputs (planned, v0.3)
+
+When `adder new` is missing a required input, standard input and standard error are both terminals, and neither `--json` nor `--inputs -` is given, adder asks for the value instead of failing:
+
+```console
+$ adder new driver
+name: Driver name, used as the package name
+  must match ^[a-z][a-z0-9]*$, and not be one of: disk, s3
+> gcs
+```
+
+- Only required inputs are asked for. Optional inputs and bools keep their defaults, so the result is the same as running with flags.
+- Inputs with `values` or `valuesFrom` list the choices, numbered, and accept a number or a value.
+- A value that fails validation is explained and asked for again. Nothing is written until every input is valid, and Ctrl-C cancels.
+- Prompts are plain lines, with no arrow-key menus.
+
+**Why:** a person running a generator by hand should not have to look up its flags first, while scripts, CI, and agents, which have no terminal, keep getting a `missing-input` problem.
+
+| Considered | Why not |
+| --- | --- |
+| A prompt library such as huh or survey | Several dependencies, raw terminal handling, and Windows differences, for menus that line prompts cover. |
+| Asking for every input | Tedious for generators with many optional inputs, and gives a different result than the same command with flags. |
+
+### 30. Generator tests (planned, v0.3)
+
+A generator can declare tests: sample inputs and the files it should create.
+
+```yaml
+generators:
+  driver:
+    # inputs, files, and message as before
+    tests:
+      - name: with-cache
+        inputs: {name: example, cache: true}
+        want: testdata/generators/driver/with-cache
+```
+
+`adder test` runs every test, or only those of the generators it is given. Each test plans its generator against the repository like `--dry-run` and compares the files the generator creates with the files under `want`, which mirror their paths in the repository. A missing, extra, or different file fails the test with a diff and the new code `golden-mismatch`, and `adder test` exits with status 1. `adder test --update` rewrites the `want` directories instead.
+
+- `want` is relative to the configuration file's directory. Under a `testdata` directory, `**` scans and Go tooling ignore it.
+- Inputs are validated like an `--inputs` file, against the generator's inputs.
+- Derived outputs are not compared, because they depend on everything in the repository and would fail whenever unrelated code changed.
+- Tests run against the real repository, so `unique` and existing files still apply. Test inputs should use names that will not exist, such as `example`.
+
+**Why:** a generator is code that a team relies on, and templates break silently when a scan field or function changes. Golden files make a generator's output reviewable in pull requests.
+
+### 31. Checking the configuration (planned, after v1.0)
+
+**A JSON Schema for `adder.yaml`.** The schema lives at `schema/v1.json` for `version: 1`, written in draft-07, which editors support best. `adder init` writes a `# yaml-language-server: $schema=` line pointing at the file on `main`, `https://raw.githubusercontent.com/TyphonHill/adder/main/schema/v1.json`, so the path must never move. A SchemaStore listing for files named `adder.yaml` waits until after v1.0, when the schema is stable. The schema is written by hand, so it can carry descriptions and examples, and a test checks that its properties match the configuration types exactly. It is a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings.
+
+**`adder validate`** checks everything except whether outputs are up to date: the configuration, every template and partial, generator paths and tests, the scans, and rendering every derived output. It writes nothing and exits with status 0 or 1.
+
+**Why:** `adder check` needs outputs to be committed to say anything. Repositories that generate outputs at build time still want CI to catch a broken template, and people editing `adder.yaml` want a quick answer.
+
+### 32. Terminal output (planned, v0.3)
+
+- `--quiet` prints only problems. `--verbose` also lists unchanged files and how many items each scan found. They cannot be combined.
+- Status words and problem codes are colored when the stream is a terminal, `NO_COLOR` is unset or empty, `TERM` is not `dumb`, and `--json` is not given. On Windows, adder enables the console's color support through `golang.org/x/sys`, and prints without color if that fails.
+- `adder completion bash|zsh|fish|powershell` prints a completion script. It completes generator names with their descriptions, the flags of each generator, input values from `values` and `valuesFrom`, and generated files for `adder explain`. Completion reads `adder.yaml` and runs scans, but never writes. It completes nothing when the configuration does not load, rather than printing errors into the shell.
+
+**Why:** these follow what people expect from a modern command line, and none of them changes what adder writes.
+
+### 33. Releases (planned, after v1.0)
+
+Pushing a `v*` tag runs GoReleaser in GitHub Actions:
+
+- **Binaries:** builds for Linux, macOS, and Windows on amd64 and arm64, with `-trimpath`, `CGO_ENABLED=0`, and file times taken from the commit, so rebuilding a tag produces identical archives. The version comes from the build information Go embeds from the tag, as `adder --version` already reads it, so no linker flags are needed.
+- **Integrity:** `checksums.txt` is signed with keyless cosign, as a Sigstore bundle. Each archive has an SPDX SBOM and a GitHub artifact attestation with SLSA build provenance, which `gh attestation verify` checks.
+- **Homebrew:** a cask in `TyphonHill/homebrew-tap`, pushed with a fine-grained token that can write only to that repository.
+- **Release notes:** the changelog's section for the tag. The release fails when that section is missing, so no release ships without its changelog.
+- **Permissions:** the release job alone gets `contents: write`, `id-token: write`, and `attestations: write`.
+
+`go install` and `go get -tool` keep working from source as before.
+
+| Considered | Why not |
+| --- | --- |
+| The SLSA GitHub generator | GitHub's artifact attestations give the same provenance natively, with less workflow. |
+| A Homebrew formula | GoReleaser now publishes prebuilt binaries to Homebrew as casks and has deprecated formulas for them. |
+| Version set with `-ldflags -X` | Duplicates what Go's build information already records. |
+
+### 34. Integrations and coding agents (planned, after v1.0)
+
+- **`go generate`:** one `//go:generate go tool adder derive` directive anywhere in the module is enough, since adder finds `adder.yaml` from any directory ([decision 12](#12-one-configuration-file-at-the-root)) and `derive` regenerates every output.
+- **pre-commit:** `.pre-commit-hooks.yaml` defines `adder-check` and `adder-derive`, built from source with `language: golang`. They run on every commit and ignore the changed file names, because a change anywhere can affect a scan.
+- **GitHub Action:** `action.yml` at the repository root runs `adder check` by default, or another command. It uses `go tool adder` when `go.mod` declares the tool, and otherwise runs the action's own version with `go run`. Downloading a signed binary instead waits for published releases ([decision 33](#33-releases-planned-after-v10)). Problems become annotations on the pull request, read from `--json`.
+- **GitLab CI:** a documented job that runs `adder check` and turns `--json` problems into a Code Quality report.
+- **Coding agents:** a guide in `docs/agents.md`, and an `AGENTS.md` section to copy into a repository. It tells agents to discover generators with `adder list --json` and `adder describe`, preview with `--dry-run --json`, run `adder derive` after adding code, never edit files marked `DO NOT EDIT`, and use `adder explain` to find the template to change instead.
+
+### 35. Documentation and examples (planned, after v1.0)
+
+- **Site:** built with Hugo and the Hextra theme from `site/` and deployed to GitHub Pages from `main`. Hugo is a single Go binary and Hextra installs as a Hugo module, so the documentation needs no Node toolchain. The site holds guides, references, recipes, a comparison with other tools, and a guide to migrating from a hand-rolled generator.
+- **References are generated:** the configuration reference comes from the JSON Schema and the function reference from the function table, by a program in `internal/tools/docgen`. Function examples run as tests, and a test fails when the generated pages are out of date, the same way `adder check` does.
+- **Examples:** `examples/` holds complete repositories, each its own module with `adder.yaml`, templates, Go code, and committed outputs: a driver registry, HTTP routes, CLI commands, and workflow engine wiring. CI runs `adder check` and `go build ./...` in each with adder built from the same commit. Recipes on the site walk through them.
+- **Comparisons** state the version of each tool compared and the date, and link to its documentation.
+- **Issues and pull requests** use templates: bug reports ask for `adder --version`, the relevant `adder.yaml`, the command, and its output.
+
+Before then, the README and `docs/` remain the documentation.
+
+**Why:** each example is its own module, so `.Module` and `.ImportPath` work as they do in a real repository, and adder's own module stays free of example code.
+
+### 36. Testing adder itself (planned, v0.3)
+
+- **End to end:** `testscript` scripts in `cmd/adder/testdata/script` run the real command against small repositories written inline, covering each command's text and JSON output and exit codes. Today's command tests stay as unit tests for details that scripts express poorly.
+- **Fuzzing:** fuzz tests for configuration loading, header parsing, directive parsing, and import pruning check that no input panics, that problems point inside the input, and that pruning keeps gofmt-formatted Go parsing. Seed corpora run with every test run, and a weekly workflow fuzzes each target for five minutes.
+- **Performance budget:** a benchmark builds a repository of 1,000 packages and 10,000 functions and runs `derive` over it. The budget is 500 ms on GitHub's standard runners. CI fails above four times the budget, which catches a slowdown by an order of magnitude without failing on noisy timing. Parallel parsing is only added if the budget is missed.
 
 ## Compatibility
 
