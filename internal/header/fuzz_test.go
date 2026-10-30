@@ -1,13 +1,12 @@
 package header
 
 import (
-	"go/ast"
 	"go/parser"
 	"go/token"
 	"testing"
 )
 
-// FuzzEnsure checks that Parse finds the header Ensure adds, and that files already marked as generated are
+// FuzzEnsure checks that Parse finds the header Ensure adds, and that files that already have adder's header are
 // left alone.
 func FuzzEnsure(f *testing.F) {
 	for _, seed := range []struct{ src, source string }{
@@ -44,9 +43,9 @@ func FuzzEnsure(f *testing.F) {
 		if err != nil {
 			t.Fatalf("Ensure() error = %v for a file that parses", err)
 		}
-		if ast.IsGenerated(file) {
+		if _, ours := Source(file); ours {
 			if string(out) != src {
-				t.Errorf("Ensure() changed a file already marked as generated:\n%s", out)
+				t.Errorf("Ensure() changed a file that already has adder's header:\n%s", out)
 			}
 			return
 		}

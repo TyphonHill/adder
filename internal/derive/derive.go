@@ -98,12 +98,11 @@ func renderOutput(set *render.Set, data map[string]any, src Sources, out config.
 	return nil
 }
 
-// replaceable reports whether derive may overwrite a file with an output. A file whose new content carries
-// adder's header must already carry one, naming any template so that templates can be renamed. When the new
-// content has none, because the file type has no comments or the template writes its own generated-code
-// comment, adder cannot tell its files apart and replaces them as before.
+// replaceable reports whether derive may overwrite a file with an output: only when the file has adder's header,
+// naming any template so that templates can be renamed. Files of a type without comments, such as JSON, get no
+// header, so adder cannot tell its own apart and replaces them as before.
 func replaceable(c plan.Change) bool {
-	if _, ours := header.Parse(c.Path, c.New); !ours {
+	if !header.Supported(c.Path) {
 		return true
 	}
 	_, ours := header.Parse(c.Path, c.Old)

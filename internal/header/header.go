@@ -75,7 +75,8 @@ func Supported(name string) bool {
 }
 
 // Ensure adds adder's header, naming source, to src, the content of the output called name, unless src already
-// has a generated-code comment. Files without a known comment syntax are returned unchanged.
+// has adder's header. Another tool's generated-code comment does not count, since adder finds its own files by
+// its header. Files without a known comment syntax are returned unchanged.
 func Ensure(name string, src []byte, source string) ([]byte, error) {
 	if isGo(name) {
 		return ensureGo(src, source)
@@ -84,10 +85,10 @@ func Ensure(name string, src []byte, source string) ([]byte, error) {
 	if !ok {
 		return src, nil
 	}
-	start := preambleEnd(name, src)
-	if hasMarker(c, src[start:]) {
+	if _, ours := Parse(name, src); ours {
 		return src, nil
 	}
+	start := preambleEnd(name, src)
 	out := make([]byte, 0, len(src)+len(prefix)+len(source)+len(suffix)+16)
 	out = append(out, src[:start]...)
 	if start > 0 && src[start-1] != '\n' {
@@ -102,7 +103,7 @@ func ensureGo(src []byte, source string) ([]byte, error) {
 	if err != nil {
 		return nil, diag.Wrap(diag.InvalidOutput, diag.Pos{File: source}, err)
 	}
-	if ast.IsGenerated(file) {
+	if _, ours := Source(file); ours {
 		return src, nil
 	}
 	// The blank line keeps the header from becoming the package doc comment.
@@ -173,39 +174,4 @@ func preambleEnd(name string, src []byte) int {
 		}
 	}
 	return 0
-}
-
-// hasMarker reports whether the comments at the top of src, before its first line of content, include a
-// "Code generated ... DO NOT EDIT." line in syntax c. This is Go's rule, which only counts such a comment before
-// the package clause.
-func hasMarker(c comment, src []byte) bool {
-	open, close := strings.TrimSpace(c.open), strings.TrimSpace(c.close)
-	inBlock := false // inside a comment that runs until close
-	for line := range strings.Lines(string(src)) {
-		text := strings.TrimSpace(line)
-		switch {
-		case inBlock:
-			text = strings.TrimSpace(strings.TrimPrefix(text, "*")) // as in /*\n * text\n */
-		case text == "":
-			continue
-		case strings.HasPrefix(text, open):
-			text = strings.TrimSpace(strings.TrimPrefix(text, open))
-			inBlock = close != ""
-		default:
-			return false
-		}
-		content := false // text after the comment closes, on the same line
-		if inBlock {
-			if before, after, found := strings.Cut(text, close); found {
-				text, inBlock, content = strings.TrimSpace(before), false, strings.TrimSpace(after) != ""
-			}
-		}
-		if strings.HasPrefix(text, "Code generated ") && strings.HasSuffix(text, "DO NOT EDIT.") {
-			return true
-		}
-		if content {
-			return false
-		}
-	}
-	return false
 }

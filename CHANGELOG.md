@@ -12,13 +12,16 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ### Changed
 
-- Outputs in languages other than Go now get adder's generated-code header. Outputs that already have one keep it.
+- Outputs in languages other than Go now get adder's generated-code header.
+- adder's header is added even when a template writes another tool's generated-code comment, which used to suppress it. Only adder's own header is kept as is.
 - `adder derive` no longer replaces a file without adder's header with an output that has one, and reports `file-exists` instead. Non-Go outputs written by earlier versions have no header, so delete them once and run `adder derive` to regenerate them.
 - `Item` is reserved and can no longer be used as a scan name.
 - adder refuses to write or remove a file through a symbolic link, with an `unsafe-path` problem.
 - Scans no longer follow a symbolic link named directly in `dirs`, matching how wildcards already skipped them.
 
 ### Fixed
+
+- A Go output whose template wrote another tool's generated-code comment was scanned on the next run, so it could feed back into its own scans.
 
 - An unused import on the same line as the end of a block comment is removed without breaking the comment.
 
