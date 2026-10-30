@@ -4,6 +4,10 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Fixed
+
+- An unused import on the same line as the end of a block comment is removed without breaking the comment.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added

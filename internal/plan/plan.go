@@ -11,8 +11,9 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/rogpeppe/go-internal/diff"
+
 	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/diff"
 )
 
 // Status is what applying a change does to its file.

@@ -1,0 +1,250 @@
+# Generators are listed when none is named.
+exec adder new
+cmp stdout list.out
+
+# --dry-run plans the new files and the registry update without writing.
+exec adder new driver --name gcs --dry-run
+cmp stdout dryrun.out
+! exists drivers/gcs
+
+# A generator creates its files, updates the registry, and prints its message.
+exec adder new driver --name gcs --cache
+cmp stdout new.out
+cmp drivers/gcs/gcs.go want/gcs.go
+exists drivers/gcs/cache.go
+exec adder check
+
+# Inputs can come from standard input as JSON, and existing files marked skip are left alone.
+stdin inputs.json
+exec adder new driver --inputs -
+cmp stdout stdin.out
+grep 'driver that keeps objects in memory' drivers/mem/mem.go
+
+# --diff shows new files as additions from /dev/null.
+exec adder new driver --name blob --diff
+cmp stdout diff.out
+! exists drivers/blob
+
+# Invocation mistakes exit with status 2.
+exits 2 adder new driver
+cmp stderr missing.err
+exits 2 adder new driver --name Bad
+cmp stderr invalid.err
+exits 2 adder new driver --name s3
+cmp stderr unique.err
+exits 2 adder new drivr
+cmp stderr unknown.err
+exits 2 adder new driver --name x --nope
+cmp stderr flag.err
+
+# A file that already exists exits with status 1 and nothing is written.
+mkdir drivers/taken
+cp want/gcs.go drivers/taken/taken.go
+exits 1 adder new driver --name taken
+stderr '^drivers[/\\]taken[/\\]taken\.go: file already exists \[file-exists\]$'
+! exists drivers/taken/cache.go
+
+-- list.out --
+new creates files from a generator declared under generators in adder.yaml.
+
+Each generator is a subcommand with a flag for each of its inputs. Run 'adder new' to list the
+generators and 'adder new <generator> --help' to see its inputs. Existing files are never overwritten,
+and derived outputs are updated in the same run.
+
+Usage:
+  adder new <generator> [flags]
+  adder new [command]
+
+Available Commands:
+  driver      Add a storage driver
+
+Flags:
+  -h, --help   help for new
+
+Global Flags:
+  -c, --config string   configuration file (default <root>/adder.yaml)
+      --root string     repository root that scans and outputs are relative to (default: the directory holding adder.yaml, found from the current directory)
+
+Use "adder new [command] --help" for more information about a command.
+-- dryrun.out --
+would be created    drivers/gcs/gcs.go
+would be created    drivers/README.md
+would be created    drivers/drivers.gen.go
+-- new.out --
+created    drivers/gcs/gcs.go
+created    drivers/gcs/cache.go
+created    drivers/README.md
+created    drivers/drivers.gen.go
+
+Next, implement New in drivers/gcs/gcs.go.
+-- stdin.out --
+created    drivers/mem/mem.go
+skipped    drivers/README.md
+updated    drivers/drivers.gen.go
+
+Next, implement New in drivers/mem/mem.go.
+-- diff.out --
+would be created    drivers/blob/blob.go
+skipped    drivers/README.md
+would be updated    drivers/drivers.gen.go
+
+diff /dev/null b/drivers/blob/blob.go
+--- /dev/null
++++ b/drivers/blob/blob.go
+@@ -0,0 +1,7 @@
++// Package blob is a driver that stores objects. Licensed under Apache-2.0.
++package blob
++
++import "example.com/storage/driver"
++
++// New returns a blob driver.
++func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+
+diff a/drivers/drivers.gen.go b/drivers/drivers.gen.go
+--- a/drivers/drivers.gen.go
++++ b/drivers/drivers.gen.go
+@@ -4,6 +4,7 @@
+ 
+ import (
+ 	"example.com/storage/driver"
++	"example.com/storage/drivers/blob"
+ 	"example.com/storage/drivers/gcs"
+ 	"example.com/storage/drivers/local"
+ 	"example.com/storage/drivers/mem"
+@@ -12,6 +13,7 @@
+ 
+ // All maps each driver name to its constructor.
+ var All = map[string]driver.Factory{
++	"blob":  blob.New,
+ 	"gcs":   gcs.New,
+ 	"local": local.New,
+ 	"mem":   mem.New,
+-- missing.err --
+adder: --name is required [missing-input]
+	hint: Driver name, used as the package name
+-- invalid.err --
+adder: --name "Bad" does not match [a-z][a-z0-9]* [invalid-input]
+	hint: Driver name, used as the package name
+-- unique.err --
+adder: --name "s3" already exists in Drivers.Package [invalid-input]
+	hint: Driver name, used as the package name
+-- unknown.err --
+adder: unknown generator "drivr" [unknown-generator]
+	hint: did you mean driver?
+-- flag.err --
+adder: unknown flag: --nope
+Run 'adder new driver --help' for usage.
+-- want/gcs.go --
+// Package gcs is a driver that stores objects. Licensed under Apache-2.0.
+package gcs
+
+import "example.com/storage/driver"
+
+// New returns a gcs driver.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+-- inputs.json --
+{"name": "mem", "summary": "keeps objects in memory"}
+-- adder.yaml --
+version: 1
+vars:
+  License: Apache-2.0
+derive:
+  scans:
+    Drivers:
+      dirs: ["drivers/*"]
+      funcs:
+        exported: true
+        name: ^New$
+  outputs:
+    - template: templates/drivers.go.tmpl
+      path: drivers/drivers.gen.go
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name:
+        help: Driver name, used as the package name
+        pattern: "[a-z][a-z0-9]*"
+        unique: Drivers.Package
+      summary:
+        help: One-line description for the package documentation
+        default: stores objects
+      cache:
+        type: bool
+        help: Add an in-memory cache in front of the driver
+    files:
+      - template: templates/new/driver.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go
+      - template: templates/new/cache.go.tmpl
+        path: drivers/{{ .Inputs.name }}/cache.go
+        when: cache
+      - template: templates/new/README.md.tmpl
+        path: drivers/README.md
+        ifExists: skip
+    message: |
+      Next, implement New in drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
+-- driver/driver.go --
+package driver
+
+// Driver stores and retrieves objects.
+type Driver interface {
+	Get(key string) ([]byte, error)
+}
+
+// Factory creates a Driver from its configuration.
+type Factory func(config map[string]string) (Driver, error)
+-- drivers/local/local.go --
+package local
+
+import "example.com/storage/driver"
+
+// New returns a driver backed by the local filesystem.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+
+// NewOptions is not a constructor and is not registered.
+func NewOptions() {}
+-- drivers/s3/s3.go --
+package s3
+
+import "example.com/storage/driver"
+
+// New returns a driver backed by an S3 bucket.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+
+func newClient() {}
+-- go.mod --
+module example.com/storage
+
+go 1.26.0
+-- templates/drivers.go.tmpl --
+package drivers
+
+import (
+	"{{ .Module }}/driver"
+{{- range .Drivers }}
+	"{{ .ImportPath }}"
+{{- end }}
+)
+
+// All maps each driver name to its constructor.
+var All = map[string]driver.Factory{
+{{- range .Drivers }}
+	"{{ .Package }}": {{ .Package }}.New,
+{{- end }}
+}
+-- templates/new/README.md.tmpl --
+# Drivers
+
+Each directory holds one driver.
+-- templates/new/cache.go.tmpl --
+package {{ .Inputs.name }}
+
+type cache struct{ entries map[string][]byte }
+-- templates/new/driver.go.tmpl --
+// Package {{ .Inputs.name }} is a driver that {{ .Inputs.summary }}. Licensed under {{ .Vars.License }}.
+package {{ .Inputs.name }}
+
+import "{{ .Module }}/driver"
+
+// New returns a {{ .Inputs.name }} driver.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }

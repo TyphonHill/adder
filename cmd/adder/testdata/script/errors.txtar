@@ -1,0 +1,84 @@
+# Without adder.yaml in the directory or any parent, commands fail with a hint.
+exits 1 adder check
+cmp stderr noconfig.err
+
+# Validation problems in adder.yaml point at their line and column, all reported together.
+cp bad.yaml adder.yaml
+exits 1 adder derive
+cmp stderr config.err
+
+# Unknown fields are reported before validation.
+cp typo.yaml adder.yaml
+exits 1 adder derive
+cmp stderr typo.err
+
+# A Go file that does not parse is reported relative to the current directory.
+cp good.yaml adder.yaml
+mkdir pkg/a pkg/b
+cp broken.go pkg/a/a.go
+cd pkg/b
+exits 1 adder derive
+stderr '^\.\.[/\\]\.\.[/\\]pkg[/\\]a[/\\]a\.go:3:6: expected .IDENT., found .\{. \[go-syntax\]$'
+cd $WORK
+
+# Usage mistakes exit with status 2 and point at the command's help.
+exits 2 adder derive extra
+cmp stderr args.err
+exits 2 adder nope
+cmp stderr command.err
+exits 2 adder check --nope
+cmp stderr flag.err
+
+# Help and version succeed.
+exec adder --help
+stdout '^Usage:$'
+exec adder --version
+stdout '^adder version '
+
+-- noconfig.err --
+adder: no adder.yaml in . or any parent directory [io]
+	hint: run adder init to create one, or pass --root or --config
+-- config.err --
+adder.yaml:5:14: scan "drivers": dirs pattern "/abs" must be relative and stay inside its root [unsafe-path]
+adder.yaml:7:7: output 0: path is required [missing-field]
+-- typo.err --
+adder.yaml:5: unknown field "paht" [unknown-field]
+	hint: known fields: template, path
+-- args.err --
+adder: unknown command "extra" for "adder derive"
+Run 'adder derive --help' for usage.
+-- command.err --
+adder: unknown command "nope" for "adder"
+Run 'adder --help' for usage.
+-- flag.err --
+adder: unknown flag: --nope
+Run 'adder check --help' for usage.
+-- bad.yaml --
+version: 1
+derive:
+  scans:
+    drivers:
+      dirs: [/abs]
+  outputs:
+    - template: x.tmpl
+-- typo.yaml --
+version: 1
+derive:
+  outputs:
+    - template: x.tmpl
+      paht: out.go
+-- good.yaml --
+version: 1
+derive:
+  scans:
+    Pkgs:
+      dirs: ["pkg/*"]
+  outputs:
+    - template: x.tmpl
+      path: out.go
+-- x.tmpl --
+package out
+-- broken.go --
+package a
+
+func {

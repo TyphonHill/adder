@@ -46,6 +46,17 @@ jobs:
           # Built with go.mod's toolchain, since golangci-lint refuses to lint code targeting a newer Go than it was built with.
           install-mode: goinstall
 
+  budget:
+    name: Performance budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Derive a large repository within budget
+        run: go test ./internal/derive -run '^TestBudget$' -budget -v
+
   vulncheck:
     runs-on: ubuntu-latest
     steps:
