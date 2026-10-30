@@ -38,7 +38,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | The schema listed in SchemaStore, so editors find it without a modeline | 🔜 after v1.0 |
 | `adder validate`: check the configuration and templates without writing anything ([design 31](docs/design.md#31-checking-the-configuration-planned-after-v10)) | 🔜 after v1.0 |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
-| Multiple configurations in one repository, for monorepos and nested modules | 🔜 v0.4 |
+| Multiple configurations in one repository, for monorepos and nested modules ([design 40](docs/design.md#40-multiple-configurations-planned-v04)) | 🔜 v0.4 |
 | `adder migrate`: upgrade a configuration to a newer schema version | 🔜 v1.0 |
 
 ### Scanning
@@ -57,9 +57,9 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | ✅ |
 | Comment directives in Go's directive syntax, such as `//adder:register name=s3`: a `directive` filter and `.Directives` on items ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax)) | ✅ |
 | Scan type declarations with a `types` block: structs, interfaces, and other types, with `.Fields` for structs | ✅ |
-| Type-aware matching, opted into per scan with `typeCheck: true`: types that implement an interface, and type matches that survive any import alias ([design 17](docs/design.md#17-type-aware-scans-are-an-explicit-opt-in-planned-v04)) | 🔜 v0.4 |
-| Scan constants and variables, for enums and lookup tables | 🔜 v0.4 |
-| File scans: list non-Go files such as SQL migrations or JSON fixtures | 🔜 v0.4 |
+| Type-aware matching, opted into per scan with `typeCheck: true`: types that implement an interface, and type matches that survive any import alias ([design 17](docs/design.md#17-type-aware-scans-are-an-explicit-opt-in-planned-v04), [37](docs/design.md#37-loading-types-planned-v04)) | 🔜 v0.4 |
+| Scan constants and variables, for enums and lookup tables ([design 38](docs/design.md#38-constant-and-variable-scans-planned-v04)) | 🔜 v0.4 |
+| File scans: list non-Go files such as SQL migrations or JSON fixtures ([design 39](docs/design.md#39-file-scans-planned-v04)) | 🔜 v0.4 |
 | Parallel parsing and caching for very large repositories | 💡 |
 
 ### Rendering and outputs
