@@ -134,7 +134,7 @@ Problems are reported with their location and a stable code, and adder reports e
 
 ```
 templates/drivers.go.tmpl:12:4: <.Drivrs>: map has no entry for key "Drivrs" [template-exec]
-	hint: available fields: Drivers, Module
+	hint: available fields: Drivers, Module, Vars
 ```
 
 | Exit code | Meaning |
@@ -150,7 +150,7 @@ See [docs/design.md](docs/design.md#4-structured-diagnostics) for the full list 
 
 ### Scans
 
-Each entry under `derive.scans` selects declarations: functions and methods by default, or type declarations with a `types` block. A scan uses `funcs` or `types`, not both. Its name becomes the template field that holds the results, so it must be a valid Go identifier.
+Each entry under `derive.scans` selects declarations: functions and methods by default, or type declarations with a `types` block. A scan uses `funcs` or `types`, not both. Its name becomes the template field that holds the results, so it must be a valid Go identifier other than `Module`, `Vars`, or `Inputs`, which adder provides.
 
 | Field | Description |
 | --- | --- |
@@ -220,7 +220,38 @@ Go outputs are formatted with `gofmt` and marked as generated with Go's [standar
 
 If a template already writes its own `// Code generated ... DO NOT EDIT.` line, adder keeps it as is.
 
-Templates also receive `.Module`, the module path from the root's `go.mod`. Referencing a field that does not exist is an error, so typos fail loudly.
+Templates also receive `.Module`, the module path from the root's `go.mod`, and `.Vars`. Referencing a field that does not exist is an error, so typos fail loudly.
+
+### Vars and partials
+
+`vars` holds strings every template can read, and `partials` lists templates whose `{{ define }}` blocks every template can use. Both sit at the top level of `adder.yaml`:
+
+```yaml
+version: 1
+vars:
+  Owner: Example Inc.
+  License: Apache-2.0
+partials:
+  - templates/partials/*.tmpl
+```
+
+```gotemplate
+{{/* templates/partials/license.tmpl */}}
+{{ define "license" -}}
+// Copyright {{ .Vars.Owner }}. Licensed under {{ .Vars.License }}.
+{{ end }}
+```
+
+```gotemplate
+{{/* templates/drivers.go.tmpl */}}
+{{ template "license" . }}
+package drivers
+```
+
+- Var names are Go identifiers, read as `.Vars.<name>`. Values are strings.
+- Partial patterns are relative to the directory holding `adder.yaml` and use [`path.Match`](https://pkg.go.dev/path#Match) syntax, without `**`. Each pattern must match at least one file.
+- Only the `{{ define }}` blocks in a partial are used; text outside them is ignored. Pass data along with `{{ template "name" . }}`, since a partial sees only what it is given.
+- Two partials cannot define the same name. A template can redefine a partial's block for itself, which leaves other templates unaffected.
 
 ### Template functions
 

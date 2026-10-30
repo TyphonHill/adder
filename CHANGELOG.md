@@ -11,6 +11,12 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Scan item fields `.Kind`, `.ImportPath`, `.Line`, `.Doc`, `.Signature`, `.Params`, and `.Results`.
 - `//adder:` directives in doc comments, a `directive` filter, and `.Directives` on items.
 - Type declaration scans with a `types` block, filtering by export, name, kind, and directive, with `.Fields` for structs.
+- Top-level `vars`, available to every template as `.Vars`, and `partials`, templates whose `{{ define }}` blocks every template can use.
+- Hints for missing fields in nested maps, such as `.Vars.Licence`, and for undefined templates, listing the names that exist.
+
+### Changed
+
+- `Vars` and `Inputs` are reserved and can no longer be used as scan names.
 
 ## [0.1.0] - 2026-10-29
 

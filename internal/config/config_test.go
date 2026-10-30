@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -114,6 +115,44 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestParseShared(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantVars     map[string]string
+		wantPartials []Partial
+	}{
+		{name: "neither", input: "version: 1\n"},
+		{
+			name:     "vars are strings",
+			input:    "version: 1\nvars:\n  License: Apache-2.0\n  Year: 2026\n  Empty:\n",
+			wantVars: map[string]string{"License": "Apache-2.0", "Year": "2026", "Empty": ""},
+		},
+		{
+			name:  "partials are cleaned and positioned",
+			input: "version: 1\npartials:\n  - ./templates/_*.tmpl\n  - partials/license.tmpl\n",
+			wantPartials: []Partial{
+				{Pattern: "templates/_*.tmpl", Pos: diag.Pos{File: "adder.yaml", Line: 3, Column: 5}},
+				{Pattern: "partials/license.tmpl", Pos: diag.Pos{File: "adder.yaml", Line: 4, Column: 5}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := Parse("adder.yaml", []byte(tt.input))
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if !maps.Equal(cfg.Vars, tt.wantVars) {
+				t.Errorf("Vars = %v, want %v", cfg.Vars, tt.wantVars)
+			}
+			if !slices.Equal(cfg.Partials, tt.wantPartials) {
+				t.Errorf("Partials = %v, want %v", cfg.Partials, tt.wantPartials)
+			}
+		})
+	}
+}
+
 // want is the code and position expected for one diagnostic.
 type want struct {
 	code   diag.Code
@@ -144,6 +183,25 @@ func TestParseErrors(t *testing.T) {
 		{name: "invalid pattern", input: "version: 1\nderive:\n  scans:\n    A:\n      dirs: [a]\n      funcs: {name: \"(\"}", want: []want{{diag.InvalidValue, 6, 21}}},
 		{name: "scan name not identifier", input: "version: 1\nderive:\n  scans:\n    my-scan: {dirs: [a]}", want: []want{{diag.InvalidName, 4, 5}}},
 		{name: "scan name reserved", input: "version: 1\nderive:\n  scans:\n    Module: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
+		{name: "scan name reserved for inputs", input: "version: 1\nderive:\n  scans:\n    Inputs: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
+		{name: "scan name reserved for vars", input: "version: 1\nderive:\n  scans:\n    Vars: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
+		{
+			name:     "var name not identifier",
+			input:    "version: 1\nvars:\n  license-name: MIT",
+			want:     []want{{diag.InvalidName, 3, 3}},
+			wantHint: "templates read vars as .Vars.<name>, such as .Vars.License",
+		},
+		{name: "var value not a string", input: "version: 1\nvars:\n  Authors: [a, b]", want: []want{{diag.InvalidValue, 3, 0}}},
+		{name: "partial empty", input: "version: 1\npartials: ['']", want: []want{{diag.MissingField, 2, 12}}},
+		{name: "partial escapes root", input: "version: 1\npartials: [../shared/*.tmpl]", want: []want{{diag.UnsafePath, 2, 12}}},
+		{
+			name:     "partial with double star",
+			input:    "version: 1\npartials: [templates/**/*.tmpl]",
+			want:     []want{{diag.InvalidValue, 2, 12}},
+			wantHint: "list each directory, such as templates/partials/*.tmpl",
+		},
+		{name: "partial bad glob", input: "version: 1\npartials: ['templates/[']", want: []want{{diag.InvalidValue, 2, 12}}},
+		{name: "partial not a string", input: "version: 1\npartials: [{a: b}]", want: []want{{diag.InvalidValue, 2, 0}}},
 		{name: "scan without dirs", input: "version: 1\nderive:\n  scans:\n    A: {}", want: []want{{diag.MissingField, 4, 5}}},
 		{name: "dirs escape root", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [../a]}", want: []want{{diag.UnsafePath, 4, 16}}},
 		{

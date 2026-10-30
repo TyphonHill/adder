@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"os"
@@ -39,18 +40,23 @@ type Sources struct {
 // Plan computes every derived output and how it differs from the existing files, without writing anything.
 // It reports every problem it finds rather than stopping at the first.
 func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, error) {
+	set, err := templates(cfg, src)
+	problems := diag.From(err)
 	data, err := templateData(ctx, cfg, src)
-	if err != nil {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return nil, err
+	}
+	problems = append(problems, diag.From(err)...)
+	if err := problems.Err(); err != nil {
 		return nil, err
 	}
 
 	var p plan.Plan
-	var problems diag.List
 	for _, out := range cfg.Derive.Outputs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		content, err := render.File(src.Templates, out.Template, out.Path, data)
+		content, err := set.File(out.Template, out.Path, data)
 		if err == nil && path.Ext(out.Path) == ".go" {
 			content, err = header.Ensure(content, out.Template)
 		}
@@ -68,9 +74,51 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 	return &p, nil
 }
 
-// templateData runs every scan and adds the module path when the repository has a go.mod.
+// templates parses the configured partials into the set every output renders with.
+func templates(cfg *config.Config, src Sources) (*render.Set, error) {
+	var files []string
+	var problems diag.List
+	for _, partial := range cfg.Partials {
+		matches, err := fs.Glob(src.Templates, partial.Pattern)
+		if err != nil {
+			problems = append(problems, diag.Wrap(diag.InvalidValue, partial.Pos, err))
+			continue
+		}
+		matches = slices.DeleteFunc(matches, func(name string) bool {
+			info, err := fs.Stat(src.Templates, name)
+			return err == nil && info.IsDir()
+		})
+		if len(matches) == 0 {
+			problems = append(problems, &diag.Diagnostic{
+				Code:    diag.NoMatch,
+				Pos:     partial.Pos,
+				Message: fmt.Sprintf("partial %q matches no files", partial.Pattern),
+				Hint:    "partial patterns are relative to the directory holding adder.yaml",
+			})
+			continue
+		}
+		files = append(files, matches...)
+	}
+
+	slices.Sort(files)
+	set, err := render.NewSet(src.Templates, slices.Compact(files))
+	if err != nil {
+		problems = append(problems, locate(err, src.TemplatesDir, diag.Pos{})...)
+	}
+	if err := problems.Err(); err != nil {
+		return nil, err
+	}
+	return set, nil
+}
+
+// templateData runs every scan and adds the vars, and the module path when the repository has a go.mod.
 func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[string]any, error) {
-	data := make(map[string]any, len(cfg.Derive.Scans)+1)
+	data := make(map[string]any, len(cfg.Derive.Scans)+2)
+	vars := cfg.Vars
+	if vars == nil {
+		vars = map[string]string{}
+	}
+	data["Vars"] = vars
 
 	gomod, err := fs.ReadFile(src.Repo, "go.mod")
 	switch {
