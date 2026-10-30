@@ -47,14 +47,14 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Directory globs, exported names, first parameter name, name pattern | ✅ |
 | Optional `_test.go` files | ✅ |
 | Items with `.Name`, `.Receiver`, `.Package` (from the `package` clause), `.Dir`, `.File` | ✅ |
-| `.ImportPath` on every item, so templates stop assembling import paths by hand ([design 20](docs/design.md#20-richer-scans-without-type-checking-planned-v02)) | ✅ |
+| `.ImportPath` on every item, so templates stop assembling import paths by hand ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | Skip files adder generated, so outputs never feed back into scans; other generators' files are still scanned | ✅ |
 | `exclude` patterns and recursive `**` globs that skip `testdata`, `vendor`, and hidden directories like `./...` | ✅ |
 | Skip files excluded by build constraints such as `//go:build ignore` | 🔜 v0.3 |
 | Match on `kind` (functions or methods) and `receiver` | ✅ |
-| `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking-planned-v02)) | ✅ |
+| `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | ✅ |
-| Comment directives in Go's directive syntax, such as `//adder:register name=s3`: a `directive` filter and `.Directives` on items ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax-planned-v02)) | ✅ |
+| Comment directives in Go's directive syntax, such as `//adder:register name=s3`: a `directive` filter and `.Directives` on items ([design 16](docs/design.md#16-comment-directives-use-gos-directive-syntax)) | ✅ |
 | Scan type declarations with a `types` block: structs, interfaces, and other types, with `.Fields` for structs | ✅ |
 | Type-aware matching, opted into per scan with `typeCheck: true`: types that implement an interface, and type matches that survive any import alias ([design 17](docs/design.md#17-type-aware-scans-are-an-explicit-opt-in-planned-v04)) | 🔜 v0.4 |
 | Scan constants and variables, for enums and lookup tables | 🔜 v0.4 |
@@ -89,7 +89,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 
 | Feature | Status |
 | --- | --- |
-| Generators that create new files from templates, as `adder new <generator>` ([design 19](docs/design.md#19-scaffolding-with-adder-new-planned-v02)) | ✅ |
+| Generators that create new files from templates, as `adder new <generator>` ([design 19](docs/design.md#19-scaffolding-with-adder-new)) | ✅ |
 | String and bool inputs with `help`, `default`, `pattern`, and `values`; a string without a default is required | ✅ |
 | `valuesFrom`: choices taken from a scan, such as "package must be an existing directory under `drivers/`" | ✅ |
 | `unique`: reject values a scan already has, such as "no driver with this name already exists" | ✅ |
