@@ -7,10 +7,12 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 ### Added
 
 - Custom template functions: a repository builds its own adder from a small `main` package that calls `adder.Main` with an `adder.Pack` of functions, and runs it with `go tool adder`. The root package `github.com/TyphonHill/adder` is the first public Go API, experimental until v1.0. A new diagnostic code `invalid-pack` reports a pack that cannot be registered, such as a function named like a built-in one.
+- Packs: a Go package can share derive outputs and their templates, embedded with a `pack.yaml` that declares typed `options`. A repository uses a pack under `packs` in `adder.yaml`, once or several times, giving its options under `with`, and builds its own adder with the pack. Problems in a pack's files carry the pack's name, as `pack` in JSON, and a new diagnostic code `unknown-pack` reports a configuration that uses a pack adder was not built with.
 
 ### Changed
 
 - Function names in output and generator paths are checked when the path renders rather than when `adder.yaml` loads, so paths can use a repository's own functions.
+- `Options` is reserved and can no longer be used as a scan name.
 
 ## [0.4.0] - 2026-10-30
 

@@ -30,7 +30,7 @@ func copyRepo(t *testing.T, fixture string) (string, *config.Config) {
 	if err := os.CopyFS(root, os.DirFS(filepath.Join("testdata", fixture, "repo"))); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.Load(filepath.Join(root, config.FileName))
+	cfg, err := config.Load(filepath.Join(root, config.FileName), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

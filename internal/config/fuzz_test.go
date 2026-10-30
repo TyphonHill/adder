@@ -33,7 +33,7 @@ func FuzzParse(f *testing.F) {
 		// YAML ends lines at \n, \r\n, or a lone \r.
 		normalized := bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 		lines := bytes.Count(normalized, []byte("\n")) + bytes.Count(normalized, []byte("\r")) + 1
-		_, err := Parse(FileName, data)
+		_, err := Parse(FileName, data, nil)
 		for _, d := range diag.From(err) {
 			if d.Message == "" {
 				t.Errorf("problem %#v has no message", d)

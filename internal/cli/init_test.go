@@ -24,7 +24,7 @@ func TestStarterConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := config.Parse(config.FileName, []byte(tt.data))
+			cfg, err := config.Parse(config.FileName, []byte(tt.data), nil)
 			if err != nil {
 				t.Fatalf("Parse() error = %v\n%s", err, tt.data)
 			}

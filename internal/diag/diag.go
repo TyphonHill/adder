@@ -39,17 +39,25 @@ const (
 	GoldenMismatch     Code = "golden-mismatch"
 	TypeCheck          Code = "type-check"
 	InvalidPack        Code = "invalid-pack"
+	UnknownPack        Code = "unknown-pack"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.
 type Pos struct {
+	// Pack names the pack whose file this is, with File relative to the pack's root. It is empty for files in
+	// the repository.
+	Pack   string `json:"pack,omitempty"`
 	File   string `json:"file,omitempty"`
 	Line   int    `json:"line,omitempty"`
 	Column int    `json:"column,omitempty"`
 }
 
-// String formats the position as file:line:column, leaving out unknown parts.
+// String formats the position as file:line:column, leaving out unknown parts, after "pack <name>: " for a file
+// in a pack.
 func (p Pos) String() string {
+	if p.Pack != "" {
+		return strings.TrimSuffix("pack "+p.Pack+": "+Pos{File: p.File, Line: p.Line, Column: p.Column}.String(), ": ")
+	}
 	parts := make([]string, 0, 3)
 	if p.File != "" {
 		parts = append(parts, p.File)
@@ -127,6 +135,21 @@ func From(err error) List {
 	return List{{Code: Other, Message: err.Error(), Err: err}}
 }
 
+// InPack returns the diagnostics carried by err with positions in the named pack's files, and problems without a
+// position attributed to decl.
+func InPack(err error, pack string, decl Pos) List {
+	list := From(err)
+	for _, d := range list {
+		switch {
+		case d.Pos == (Pos{}):
+			d.Pos = decl
+		case d.Pos.Pack == "" && d.Pos.File != "":
+			d.Pos.Pack = pack
+		}
+	}
+	return list
+}
+
 // Prefix attributes the problems in err that have no position to decl and starts every message with prefix.
 func Prefix(err error, decl Pos, prefix string) List {
 	list := Locate(err, "", decl)
@@ -145,7 +168,7 @@ func Locate(err error, dir string, decl Pos) List {
 		switch {
 		case d.Pos == (Pos{}):
 			d.Pos = decl
-		case dir != "" && d.Pos.File != "" && !filepath.IsAbs(d.Pos.File):
+		case dir != "" && d.Pos.File != "" && d.Pos.Pack == "" && !filepath.IsAbs(d.Pos.File):
 			d.Pos.File = filepath.Join(dir, filepath.FromSlash(d.Pos.File))
 		}
 	}

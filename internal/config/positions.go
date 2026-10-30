@@ -13,15 +13,23 @@ import (
 // positions maps dotted field paths, such as "derive.outputs.0.path", to where they appear in a file.
 type positions struct {
 	file   string
+	pack   string // the pack the file belongs to, if any
 	byPath map[string]diag.Pos
+	// overrides holds positions elsewhere for paths whose values came from there, such as a pack's options.
+	overrides map[string]diag.Pos
 }
 
 func indexPositions(file string, data []byte) positions {
-	idx := positions{file: file, byPath: make(map[string]diag.Pos)}
 	var root yaml.Node
 	if err := yaml.Unmarshal(data, &root); err != nil {
-		return idx
+		return positions{file: file, byPath: make(map[string]diag.Pos)}
 	}
+	return indexNode(file, "", &root)
+}
+
+// indexNode indexes the positions in a parsed file, which belongs to pack when it is not empty.
+func indexNode(file, pack string, root *yaml.Node) positions {
+	idx := positions{file: file, pack: pack, byPath: make(map[string]diag.Pos), overrides: make(map[string]diag.Pos)}
 
 	var walk func(n *yaml.Node, path string)
 	walk = func(n *yaml.Node, path string) {
@@ -46,12 +54,12 @@ func indexPositions(file string, data []byte) positions {
 			}
 		}
 	}
-	walk(&root, "")
+	walk(root, "")
 	return idx
 }
 
 func (p positions) pos(n *yaml.Node) diag.Pos {
-	return diag.Pos{File: p.file, Line: n.Line, Column: n.Column}
+	return diag.Pos{Pack: p.pack, File: p.file, Line: n.Line, Column: n.Column}
 }
 
 // has reports whether path appears in the file.
@@ -60,22 +68,34 @@ func (p positions) has(path string) bool {
 	return ok
 }
 
-// at returns the position of path, or of its nearest ancestor when path itself is absent.
+// at returns the position of path, or of its nearest ancestor when path itself is absent. A path at or below an
+// override takes the override's position.
 func (p positions) at(path string) diag.Pos {
+	for up := path; len(p.overrides) > 0; up = parent(up) {
+		if pos, ok := p.overrides[up]; ok {
+			return pos
+		}
+		if up == "" {
+			break
+		}
+	}
 	for {
 		if pos, ok := p.byPath[path]; ok {
 			return pos
 		}
 		if path == "" {
-			return diag.Pos{File: p.file}
+			return diag.Pos{Pack: p.pack, File: p.file}
 		}
-		i := strings.LastIndexByte(path, '.')
-		if i < 0 {
-			path = ""
-		} else {
-			path = path[:i]
-		}
+		path = parent(path)
 	}
+}
+
+func parent(path string) string {
+	i := strings.LastIndexByte(path, '.')
+	if i < 0 {
+		return ""
+	}
+	return path[:i]
 }
 
 func joinPath(parent, child string) string {
@@ -86,7 +106,7 @@ func joinPath(parent, child string) string {
 }
 
 // knownFields lists the YAML keys of each configuration type, keyed by the type name the decoder reports.
-var knownFields = fieldsOf(Config{}, Derive{}, Scan{}, FuncMatch{}, TypeMatch{}, ValueMatch{}, FileMatch{}, Output{}, Generator{}, Input{}, File{}, GeneratorTest{})
+var knownFields = fieldsOf(Config{}, Derive{}, Scan{}, FuncMatch{}, TypeMatch{}, ValueMatch{}, FileMatch{}, Output{}, Generator{}, Input{}, File{}, GeneratorTest{}, Use{}, Option{}, packFile{})
 
 func fieldsOf(values ...any) map[string][]string {
 	fields := make(map[string][]string, len(values))

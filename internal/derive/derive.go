@@ -45,36 +45,84 @@ type Sources struct {
 	Packs *pack.Registry
 }
 
+// unit is the scans and outputs of a configuration, or of one use of a pack, with where its templates are.
+type unit struct {
+	cfg       *config.Config
+	templates fs.FS
+	dir       string // the directory behind templates, for the configuration's own
+	pack      string // the pack, for a use
+	use       string
+	options   map[string]any
+}
+
+// units returns the configuration's own unit, then one for each use of a pack, in name order.
+func units(cfg *config.Config, src Sources) []unit {
+	all := []unit{{cfg: cfg, templates: src.Templates, dir: src.TemplatesDir}}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Packs)) {
+		use := cfg.Packs[name]
+		all = append(all, unit{cfg: use.Config, templates: use.FS, pack: use.Pack, use: name, options: use.Options})
+	}
+	return all
+}
+
+// locate returns the problems in err with positions in the unit's templates usable from the current directory,
+// attributing those without a position to decl.
+func (u unit) locate(err error, decl diag.Pos) diag.List {
+	if u.pack != "" {
+		return diag.InPack(err, u.pack, decl)
+	}
+	return diag.Locate(err, u.dir, decl)
+}
+
+// prepared is a unit with its templates parsed and its scans run.
+type prepared struct {
+	unit
+	set  *render.Set
+	data map[string]any
+}
+
 // Plan computes every derived output and how it differs from the existing files, without writing anything.
 // It reports every problem it finds rather than stopping at the first.
 func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, error) {
-	set, data, err := Prepare(ctx, cfg, src)
-	if err != nil {
+	var all []prepared
+	var problems diag.List
+	for _, u := range units(cfg, src) {
+		set, data, err := prepare(ctx, u, src)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		problems = append(problems, diag.From(err)...)
+		all = append(all, prepared{u, set, data})
+	}
+	if err := problems.Err(); err != nil {
 		return nil, err
 	}
 
 	// Single outputs claim their paths first, so an item rendering onto one is reported wherever it appears.
-	paths := make(map[string]bool, len(cfg.Derive.Outputs))
-	for _, out := range cfg.Derive.Outputs {
-		if out.Each == "" {
-			paths[out.Path] = true
+	paths := make(map[string]bool)
+	for _, u := range all {
+		for _, out := range u.cfg.Derive.Outputs {
+			if out.Each == "" {
+				paths[out.Path] = true
+			}
 		}
 	}
-	var problems diag.List
 	var p plan.Plan
-	for _, out := range cfg.Derive.Outputs {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	for _, u := range all {
+		for _, out := range u.cfg.Derive.Outputs {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if out.Each == "" {
+				problems = append(problems, renderOutput(u, u.data, src, out, out.Path, &p)...)
+				continue
+			}
+			found, err := planEach(ctx, u, src, out, &p, paths)
+			if err != nil {
+				return nil, err
+			}
+			problems = append(problems, found...)
 		}
-		if out.Each == "" {
-			problems = append(problems, renderOutput(set, data, src, out, out.Path, &p)...)
-			continue
-		}
-		found, err := planEach(ctx, set, data, src, out, &p, paths)
-		if err != nil {
-			return nil, err
-		}
-		problems = append(problems, found...)
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err
@@ -83,13 +131,13 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 }
 
 // renderOutput adds the output rendered to target to p.
-func renderOutput(set *render.Set, data map[string]any, src Sources, out config.Output, target string, p *plan.Plan) diag.List {
-	content, err := set.File(out.Template, target, data)
+func renderOutput(u prepared, data map[string]any, src Sources, out config.Output, target string, p *plan.Plan) diag.List {
+	content, err := u.set.File(out.Template, target, data)
 	if err == nil {
-		content, err = header.Ensure(target, content, out.Template)
+		content, err = header.Ensure(target, content, out.Source())
 	}
 	if err != nil {
-		return diag.Locate(err, src.TemplatesDir, out.Pos)
+		return u.locate(err, out.Pos)
 	}
 	if err := p.Add(src.Existing, target, content); err != nil {
 		return diag.Locate(err, src.ExistingDir, out.Pos)
@@ -99,7 +147,7 @@ func renderOutput(set *render.Set, data map[string]any, src Sources, out config.
 		return diag.Locate(&diag.Diagnostic{
 			Code:    diag.FileExists,
 			Pos:     diag.Pos{File: target},
-			Message: fmt.Sprintf("file already exists and adder did not generate it, so it is not replaced by %s", out.Template),
+			Message: fmt.Sprintf("file already exists and adder did not generate it, so it is not replaced by %s", out.Source()),
 			Hint:    "adder never overwrites files people own; move or delete the file, or write the output somewhere else",
 		}, src.ExistingDir, out.Pos)
 	}
@@ -119,23 +167,23 @@ func replaceable(c plan.Change) bool {
 
 // planEach adds the output rendered for each item of its scan to p, then the files it generated before that it
 // no longer produces. Paths holds every path planned so far.
-func planEach(ctx context.Context, set *render.Set, data map[string]any, src Sources, out config.Output, p *plan.Plan, paths map[string]bool) (diag.List, error) {
-	items, _ := data[out.Each].([]scan.Item)
+func planEach(ctx context.Context, u prepared, src Sources, out config.Output, p *plan.Plan, paths map[string]bool) (diag.List, error) {
+	items, _ := u.data[out.Each].([]scan.Item)
 	produced := make(map[string]bool, len(items))
 	var problems diag.List
 	for _, item := range items {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		itemData := maps.Clone(data)
+		itemData := maps.Clone(u.data)
 		itemData["Item"] = item
-		target, err := itemPath(set, out, item, itemData, paths)
+		target, err := itemPath(u.set, out, item, itemData, paths)
 		if err != nil {
 			problems = append(problems, diag.From(err)...)
 			continue
 		}
 		paths[target], produced[target] = true, true
-		problems = append(problems, renderOutput(set, itemData, src, out, target, p)...)
+		problems = append(problems, renderOutput(u, itemData, src, out, target, p)...)
 	}
 	if len(problems) > 0 {
 		return problems, nil
@@ -212,7 +260,7 @@ func staleFiles(ctx context.Context, existing fs.FS, out config.Output, produced
 		if err != nil {
 			return diag.Wrap(diag.IO, diag.Pos{File: name}, err)
 		}
-		if source, ok := header.Parse(name, content); ok && source == out.Template {
+		if source, ok := header.Parse(name, content); ok && source == out.Source() {
 			stale = append(stale, plan.Change{Path: name, Status: plan.Removed, Old: content})
 		}
 		return nil
@@ -220,11 +268,22 @@ func staleFiles(ctx context.Context, existing fs.FS, out config.Output, produced
 	return stale, err
 }
 
-// Prepare parses the partials and runs every scan, returning the templates and the data they render with.
-func Prepare(ctx context.Context, cfg *config.Config, src Sources) (*render.Set, map[string]any, error) {
-	set, err := templates(cfg, src)
+// Prepare parses the configuration's own partials and runs its scans, returning the templates and the data they
+// render with. With use set, it does the same for that use of a pack instead.
+func Prepare(ctx context.Context, cfg *config.Config, src Sources, use string) (*render.Set, map[string]any, error) {
+	all := units(cfg, src)
+	i := slices.IndexFunc(all, func(u unit) bool { return u.use == use })
+	if i < 0 {
+		return nil, nil, fmt.Errorf("no pack use %q", use)
+	}
+	return prepare(ctx, all[i], src)
+}
+
+// prepare parses a unit's partials and runs its scans.
+func prepare(ctx context.Context, u unit, src Sources) (*render.Set, map[string]any, error) {
+	set, err := templates(u, src)
 	problems := diag.From(err)
-	data, err := templateData(ctx, cfg, src)
+	data, err := templateData(ctx, u, src)
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return nil, nil, err
 	}
@@ -235,18 +294,18 @@ func Prepare(ctx context.Context, cfg *config.Config, src Sources) (*render.Set,
 	return set, data, nil
 }
 
-// templates parses the configured partials into the set every output renders with.
-func templates(cfg *config.Config, src Sources) (*render.Set, error) {
+// templates parses a unit's partials into the set its outputs render with.
+func templates(u unit, src Sources) (*render.Set, error) {
 	var files []string
 	var problems diag.List
-	for _, partial := range cfg.Partials {
-		matches, err := fs.Glob(src.Templates, partial.Pattern)
+	for _, partial := range u.cfg.Partials {
+		matches, err := fs.Glob(u.templates, partial.Pattern)
 		if err != nil {
 			problems = append(problems, diag.Wrap(diag.InvalidValue, partial.Pos, err))
 			continue
 		}
 		matches = slices.DeleteFunc(matches, func(name string) bool {
-			info, err := fs.Stat(src.Templates, name)
+			info, err := fs.Stat(u.templates, name)
 			return err == nil && info.IsDir()
 		})
 		if len(matches) == 0 {
@@ -254,7 +313,7 @@ func templates(cfg *config.Config, src Sources) (*render.Set, error) {
 				Code:    diag.NoMatch,
 				Pos:     partial.Pos,
 				Message: fmt.Sprintf("partial %q matches no files", partial.Pattern),
-				Hint:    "partial patterns are relative to the directory holding adder.yaml",
+				Hint:    partialsHint(u),
 			})
 			continue
 		}
@@ -262,9 +321,9 @@ func templates(cfg *config.Config, src Sources) (*render.Set, error) {
 	}
 
 	slices.Sort(files)
-	set, err := render.NewSet(src.Templates, slices.Compact(files), src.Packs.Funcs())
+	set, err := render.NewSet(u.templates, slices.Compact(files), src.Packs.Funcs())
 	if err != nil {
-		problems = append(problems, diag.Locate(err, src.TemplatesDir, diag.Pos{})...)
+		problems = append(problems, u.locate(err, diag.Pos{})...)
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err
@@ -272,14 +331,20 @@ func templates(cfg *config.Config, src Sources) (*render.Set, error) {
 	return set, nil
 }
 
-// templateData runs every scan and adds the vars, and the module path when the repository has a go.mod.
-func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[string]any, error) {
+// templateData runs a unit's scans and adds the module path when the repository has a go.mod, and the vars of
+// the configuration's own unit or the options of a use.
+func templateData(ctx context.Context, u unit, src Sources) (map[string]any, error) {
+	cfg := u.cfg
 	data := make(map[string]any, len(cfg.Derive.Scans)+2)
-	vars := cfg.Vars
-	if vars == nil {
-		vars = map[string]string{}
+	if u.pack != "" {
+		data["Options"] = u.options
+	} else {
+		vars := cfg.Vars
+		if vars == nil {
+			vars = map[string]string{}
+		}
+		data["Vars"] = vars
 	}
-	data["Vars"] = vars
 
 	gomod, err := fs.ReadFile(src.Repo, "go.mod")
 	switch {
@@ -314,6 +379,13 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 		return nil, err
 	}
 	return data, nil
+}
+
+func partialsHint(u unit) string {
+	if u.pack != "" {
+		return "partial patterns in pack.yaml are relative to the pack's root"
+	}
+	return "partial patterns are relative to the directory holding adder.yaml"
 }
 
 // Open returns sources for the repository at root, whose existing outputs are in the root too, and a function

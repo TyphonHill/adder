@@ -87,7 +87,7 @@ func (o *globalOptions) loadFrom(dir string) (*config.Config, string, error) {
 	case root == "":
 		root = filepath.Dir(path)
 	}
-	cfg, err := config.Load(path)
+	cfg, err := config.Load(path, o.packs)
 	return cfg, root, err
 }
 

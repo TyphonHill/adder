@@ -90,7 +90,7 @@ func (p *printer) diffs(changes []plan.Change) {
 
 // scans prints how many items each scan found, with --verbose.
 func (p *printer) scans(ctx context.Context, cfg *config.Config, root string) error {
-	if !p.verbose || len(cfg.Derive.Scans) == 0 {
+	if !p.verbose {
 		return nil
 	}
 	src, closeSources, err := derive.Open(cfg, root, p.packs)
@@ -98,21 +98,33 @@ func (p *printer) scans(ctx context.Context, cfg *config.Config, root string) er
 		return err
 	}
 	defer closeSources()
-	_, data, err := derive.Prepare(ctx, cfg, src)
-	if err != nil {
-		return err
-	}
-	for _, name := range slices.Sorted(maps.Keys(cfg.Derive.Scans)) {
-		n := len(data[name].([]scan.Item))
-		items := "items"
-		if n == 1 {
-			items = "item"
+	for _, use := range append([]string{""}, slices.Sorted(maps.Keys(cfg.Packs))...) {
+		scans := cfg.Derive.Scans
+		if use != "" {
+			scans = cfg.Packs[use].Config.Derive.Scans
 		}
-		where := ""
-		if p.prefix != "" {
-			where = " in " + p.prefix
+		if len(scans) == 0 {
+			continue
 		}
-		fmt.Fprintf(p.w, "%s  scan %s%s found %d %s\n", p.paint(dim, fmt.Sprintf("%-9s", "scanned")), name, where, n, items)
+		_, data, err := derive.Prepare(ctx, cfg, src, use)
+		if err != nil {
+			return err
+		}
+		for _, name := range slices.Sorted(maps.Keys(scans)) {
+			n := len(data[name].([]scan.Item))
+			items := "items"
+			if n == 1 {
+				items = "item"
+			}
+			where := ""
+			if use != "" {
+				where = " for " + use
+			}
+			if p.prefix != "" {
+				where += " in " + p.prefix
+			}
+			fmt.Fprintf(p.w, "%s  scan %s%s found %d %s\n", p.paint(dim, fmt.Sprintf("%-9s", "scanned")), name, where, n, items)
+		}
 	}
 	return nil
 }
