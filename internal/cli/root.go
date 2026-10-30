@@ -13,6 +13,7 @@ import (
 
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/plan"
 )
 
 // Exit codes returned by Main.
@@ -118,6 +119,13 @@ func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
 	})
 	cmd.PersistentFlags().StringVar(&opts.root, "root", ".", "repository root that scans and outputs are relative to")
 	cmd.PersistentFlags().StringVarP(&opts.config, "config", "c", "", "configuration file (default <root>/"+config.FileName+")")
+}
+
+// printDiffs writes each pending change as a unified diff, after a blank line.
+func printDiffs(w io.Writer, changes []plan.Change) {
+	for _, c := range changes {
+		fmt.Fprintf(w, "\n%s", c.Diff())
+	}
 }
 
 // printError writes err for a person to read, one line per problem.

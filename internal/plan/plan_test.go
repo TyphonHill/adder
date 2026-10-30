@@ -179,6 +179,34 @@ func TestApply(t *testing.T) {
 	}
 }
 
+func TestChangeDiff(t *testing.T) {
+	tests := []struct {
+		name   string
+		change Change
+		want   string
+	}{
+		{
+			name:   "created",
+			change: Change{Path: "a/b.go", Status: Created, New: []byte("package b\n")},
+			want:   "diff /dev/null b/a/b.go\n--- /dev/null\n+++ b/a/b.go\n@@ -0,0 +1,1 @@\n+package b\n",
+		},
+		{
+			name:   "updated",
+			change: Change{Path: "x.txt", Status: Updated, Old: []byte("one\ntwo\n"), New: []byte("one\n2\n")},
+			want:   "diff a/x.txt b/x.txt\n--- a/x.txt\n+++ b/x.txt\n@@ -1,2 +1,2 @@\n one\n-two\n+2\n",
+		},
+		{name: "unchanged", change: Change{Path: "x.txt", Status: Unchanged, Old: []byte("x\n"), New: []byte("x\n")}},
+		{name: "skipped", change: Change{Path: "x.txt", Status: Skipped, New: []byte("x\n")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(tt.change.Diff()); got != tt.want {
+				t.Errorf("Diff() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStatus(t *testing.T) {
 	tests := []struct {
 		name       string

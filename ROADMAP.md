@@ -95,7 +95,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Templated file paths, and files included with `when` or `unless` on a bool input | ✅ |
 | Existing-file policy: `fail` or `skip`, never overwrite | ✅ |
 | `--dry-run` with the planned changes | ✅ |
-| `--diff` for a unified diff of each change | 🔜 v0.2 |
+| `--diff` for a unified diff of each change | ✅ |
 | New files and the derived outputs they change computed as one plan, so registries update in the same run | ✅ |
 | A message after generating, with next steps for the person who ran it | ✅ |
 | Inputs from flags, from a JSON file, or from standard input | ✅ |

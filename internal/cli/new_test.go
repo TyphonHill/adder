@@ -18,6 +18,7 @@ func TestNew(t *testing.T) {
 		wantCode       int
 		wantStdout     string // exact, when set
 		stdoutContains []string
+		stdoutExcludes []string
 		stderrContains []string
 		wantFile       string // a file that must exist afterwards, relative to the root
 		wantNoFile     string // a file that must not exist afterwards, relative to the root
@@ -45,6 +46,33 @@ func TestNew(t *testing.T) {
 			wantStdout: "would be created    drivers/gcs/gcs.go\nwould be created    drivers/gcs/cache.go\n" +
 				"would be created    drivers/README.md\nwould be created    drivers/drivers.gen.go\n",
 			wantNoFile: gcs,
+		},
+		{
+			name: "diff previews every change as a patch",
+			args: func(root string) []string {
+				return []string{"--root", root, "new", "driver", "--name", "gcs", "--diff"}
+			},
+			wantCode: ExitOK,
+			stdoutContains: []string{
+				"would be created    drivers/gcs/gcs.go\n",
+				"\ndiff /dev/null b/drivers/gcs/gcs.go\n--- /dev/null\n+++ b/drivers/gcs/gcs.go\n@@ -0,0 +1,7 @@\n+// Package gcs",
+				"\ndiff /dev/null b/drivers/drivers.gen.go\n",
+				"+\t\"gcs\":   gcs.New,\n",
+			},
+			stdoutExcludes: []string{"README.md\n--- a/", "Next, implement"},
+			wantNoFile:     gcs,
+		},
+		{
+			name: "diff leaves skipped files out",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "drivers", "README.md"), "mine\n")
+			},
+			args: func(root string) []string {
+				return []string{"--root", root, "new", "driver", "--name", "gcs", "--diff"}
+			},
+			wantCode:       ExitOK,
+			stdoutContains: []string{"skipped    drivers/README.md\n"},
+			stdoutExcludes: []string{"b/drivers/README.md"},
 		},
 		{
 			name: "skipped files",
@@ -183,6 +211,11 @@ func TestNew(t *testing.T) {
 			for _, want := range tt.stdoutContains {
 				if !strings.Contains(stdout, want) {
 					t.Errorf("stdout = %q, want it to contain %q", stdout, want)
+				}
+			}
+			for _, unwanted := range tt.stdoutExcludes {
+				if strings.Contains(stdout, unwanted) {
+					t.Errorf("stdout = %q, want it not to contain %q", stdout, unwanted)
 				}
 			}
 			for _, want := range tt.stderrContains {
