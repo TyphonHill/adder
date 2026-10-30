@@ -63,6 +63,14 @@ func (in Input) Required() bool {
 	return in.Type == InputString && in.Default == nil
 }
 
+// Anchored returns the input's pattern anchored to match whole values, as adder applies it, or "" without one.
+func (in Input) Anchored() string {
+	if in.whole == nil {
+		return ""
+	}
+	return in.whole.String()
+}
+
 // MatchesPattern reports whether value satisfies the input's pattern, which must match all of it.
 func (in Input) MatchesPattern(value string) bool {
 	return in.whole == nil || in.whole.MatchString(value)

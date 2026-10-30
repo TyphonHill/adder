@@ -253,3 +253,85 @@ func PathPattern(text string) (*regexp.Regexp, string, error) {
 	}
 	return regexp.MustCompile(pattern.String()), dir, nil
 }
+
+// References returns which of names the template name refers to as fields of the top-level data, such as
+// .Drivers or $.Drivers, including in the partials it calls. Fields reached indirectly, such as through index,
+// are not found, and a field of an item with one of the names is counted too.
+func (s *Set) References(name string, names []string) ([]string, error) {
+	src, err := readTemplate(s.fsys, name)
+	if err != nil {
+		return nil, err
+	}
+	tmpl, err := s.partials.Clone()
+	if err != nil {
+		return nil, diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
+	}
+	if tmpl, err = tmpl.New(name).Parse(src); err != nil {
+		return nil, templateError(diag.TemplateSyntax, name, err, nil)
+	}
+
+	found := make(map[string]bool)
+	visited := make(map[string]bool)
+	var walk func(parse.Node)
+	walkTemplate := func(name string) {
+		if t := tmpl.Lookup(name); t != nil && t.Tree != nil && !visited[name] {
+			visited[name] = true
+			walk(t.Root)
+		}
+	}
+	walk = func(node parse.Node) {
+		switch n := node.(type) {
+		case *parse.ListNode:
+			if n != nil {
+				for _, child := range n.Nodes {
+					walk(child)
+				}
+			}
+		case *parse.ActionNode:
+			walk(n.Pipe)
+		case *parse.PipeNode:
+			if n != nil {
+				for _, cmd := range n.Cmds {
+					walk(cmd)
+				}
+			}
+		case *parse.CommandNode:
+			for _, arg := range n.Args {
+				walk(arg)
+			}
+		case *parse.ChainNode:
+			walk(n.Node)
+		case *parse.FieldNode:
+			found[n.Ident[0]] = true
+		case *parse.VariableNode:
+			if len(n.Ident) > 1 && n.Ident[0] == "$" {
+				found[n.Ident[1]] = true
+			}
+		case *parse.IfNode:
+			walkBranch(walk, &n.BranchNode)
+		case *parse.RangeNode:
+			walkBranch(walk, &n.BranchNode)
+		case *parse.WithNode:
+			walkBranch(walk, &n.BranchNode)
+		case *parse.TemplateNode:
+			walk(n.Pipe)
+			walkTemplate(n.Name)
+		}
+	}
+	walkTemplate(name)
+
+	var refs []string
+	for _, n := range names {
+		if found[n] {
+			refs = append(refs, n)
+		}
+	}
+	slices.Sort(refs)
+	return refs, nil
+}
+
+func walkBranch(walk func(parse.Node), b *parse.BranchNode) {
+	walk(b.Pipe)
+	walk(b.List)
+	walk(b.ElseList)
+}

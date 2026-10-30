@@ -579,3 +579,151 @@ func TestPlanSkipsOwnOutputs(t *testing.T) {
 		})
 	}
 }
+
+func TestExplain(t *testing.T) {
+	templates := fstest.MapFS{
+		"list.go.tmpl": {Data: []byte("package cmds\n\n// {{ len .Cmds }} commands, {{ .Vars }}\n")},
+		"mock.go.tmpl": {Data: []byte("package {{ .Item.Package }}\n")},
+	}
+	repo := fstest.MapFS{
+		"go.mod":               {Data: []byte("module example.com/m\n")},
+		"cmds/a/a.go":          {Data: []byte("package a\n\nfunc Run() {}\n")},
+		"cmds/b/b.go":          {Data: []byte("package b\n\nfunc Run() {}\n")},
+		"handwritten":          {Data: []byte("text\n")},
+		"cmds/list.go":         {Data: []byte(header.Format("list.go.tmpl") + "\n\npackage cmds\n\n// 2 commands, map[]\n")},
+		"cmds/old.go":          {Data: []byte(header.Format("list.go.tmpl") + "\n\npackage cmds\n")},
+		"gone.go":              {Data: []byte(header.Format("removed.go.tmpl") + "\n\npackage gone\n")},
+		"cmds/a/mock.gen.go":   {Data: []byte(header.Format("mock.go.tmpl") + "\n\npackage a\n")},
+		"cmds/z/mock.gen.go":   {Data: []byte(header.Format("mock.go.tmpl") + "\n\npackage z\n")},
+		"testdata/mock.gen.go": {Data: []byte(header.Format("mock.go.tmpl") + "\n\npackage testdata\n")},
+	}
+	at := diag.Pos{File: "adder.yaml", Line: 7}
+	cfg := func() *config.Config {
+		return &config.Config{Version: 1, Derive: config.Derive{
+			Scans: map[string]config.Scan{"Cmds": {Dirs: []string{"cmds/*"}}},
+			Outputs: []config.Output{
+				{Template: "list.go.tmpl", Path: "cmds/list.go", Pos: at},
+				{Template: "mock.go.tmpl", Path: "{{ .Item.Dir }}/mock.gen.go", Each: "Cmds", Pos: at},
+			},
+		}}
+	}
+	status := func(s plan.Status) *plan.Status { return &s }
+
+	tests := []struct {
+		name          string
+		file          string
+		setup         func(cfg *config.Config)
+		wantGenerated bool
+		wantTemplate  string
+		wantOutput    string // the output's path, empty when none writes the file
+		wantScans     []string
+		wantStatus    *plan.Status
+		wantCode      diag.Code
+		noTemplates   bool // the template files are missing
+	}{
+		{name: "a file adder did not generate", file: "handwritten"},
+		{
+			name: "an output that is up to date", file: "cmds/list.go",
+			wantGenerated: true, wantTemplate: "list.go.tmpl", wantOutput: "cmds/list.go", wantScans: []string{"Cmds"}, wantStatus: status(plan.Unchanged),
+		},
+		{
+			name: "an output that is out of date", file: "cmds/list.go",
+			setup:         func(cfg *config.Config) { cfg.Vars = map[string]string{"A": "1"} },
+			wantGenerated: true, wantTemplate: "list.go.tmpl", wantOutput: "cmds/list.go", wantScans: []string{"Cmds"}, wantStatus: status(plan.Updated),
+		},
+		{
+			name: "a file per item", file: "cmds/a/mock.gen.go",
+			wantGenerated: true, wantTemplate: "mock.go.tmpl", wantOutput: "{{ .Item.Dir }}/mock.gen.go", wantScans: []string{}, wantStatus: status(plan.Unchanged),
+		},
+		{
+			name: "a file per item for an item that is gone", file: "cmds/z/mock.gen.go",
+			wantGenerated: true, wantTemplate: "mock.go.tmpl", wantOutput: "{{ .Item.Dir }}/mock.gen.go", wantScans: []string{}, wantStatus: status(plan.Removed),
+		},
+		{name: "a template no output uses", file: "gone.go", wantGenerated: true, wantTemplate: "removed.go.tmpl"},
+		{name: "a matching file where stale cleanup never looks", file: "testdata/mock.gen.go", wantGenerated: true, wantTemplate: "mock.go.tmpl"},
+		{name: "an output's template at another path", file: "cmds/old.go", wantGenerated: true, wantTemplate: "list.go.tmpl"},
+		{name: "a missing file", file: "missing.go", wantCode: diag.IO},
+		{name: "a missing template", file: "cmds/list.go", noTemplates: true, wantCode: diag.IO},
+		{
+			name:     "partials that do not load",
+			file:     "cmds/list.go",
+			setup:    func(cfg *config.Config) { cfg.Partials = []config.Partial{{Pattern: "partials/*.tmpl", Pos: at}} },
+			wantCode: diag.NoMatch,
+		},
+		{
+			name: "a plan that fails", file: "cmds/list.go",
+			setup: func(cfg *config.Config) {
+				cfg.Derive.Scans["Extra"] = config.Scan{Dirs: []string{"missing/*"}, Pos: at}
+			},
+			wantCode: diag.NoMatch,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := cfg()
+			if tt.setup != nil {
+				tt.setup(c)
+			}
+			src := Sources{Repo: repo, Templates: templates, Existing: repo}
+			if tt.noTemplates {
+				src.Templates = fstest.MapFS{}
+			}
+			e, err := Explain(t.Context(), c, src, tt.file)
+			if tt.wantCode != "" {
+				if list := diag.From(err); len(list) == 0 || list[0].Code != tt.wantCode {
+					t.Errorf("Explain() error = %v, want %s", err, tt.wantCode)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output string
+			if e.Output != nil {
+				output = e.Output.Path
+			}
+			if e.Path != tt.file || e.Generated != tt.wantGenerated || e.Template != tt.wantTemplate || output != tt.wantOutput ||
+				!slices.Equal(e.Scans, tt.wantScans) || (e.Status == nil) != (tt.wantStatus == nil) || (e.Status != nil && *e.Status != *tt.wantStatus) {
+				t.Errorf("Explain() = %+v (status %v), want generated %v from %q by %q, scans %v, status %v",
+					e, e.Status, tt.wantGenerated, tt.wantTemplate, tt.wantOutput, tt.wantScans, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestOpen(t *testing.T) {
+	root, cfg := copyRepo(t, "basic")
+	tests := []struct {
+		name     string
+		root     string
+		dir      string // the configuration's directory
+		wantFile string // the file named by the problem, empty for none
+	}{
+		{name: "the repository and its templates", root: root, dir: cfg.Dir},
+		{name: "a missing root", root: filepath.Join(root, "missing"), dir: cfg.Dir, wantFile: filepath.Join(root, "missing")},
+		{name: "a missing template directory", root: root, dir: filepath.Join(root, "missing"), wantFile: filepath.Join(root, "missing")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := *cfg
+			c.Dir = tt.dir
+			src, closeSources, err := Open(&c, tt.root)
+			if tt.wantFile != "" {
+				if list := diag.From(err); len(list) != 1 || list[0].Code != diag.IO || list[0].Pos.File != tt.wantFile {
+					t.Errorf("Open() error = %v, want an io problem for %s", err, tt.wantFile)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeSources()
+			if _, err := Plan(t.Context(), &c, src); err != nil {
+				t.Errorf("Plan() over the opened sources: %v", err)
+			}
+			if src.RepoDir != root || src.ExistingDir != root || src.TemplatesDir != cfg.Dir {
+				t.Errorf("directories = %q, %q, %q", src.RepoDir, src.ExistingDir, src.TemplatesDir)
+			}
+		})
+	}
+}

@@ -110,11 +110,11 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 
 | Feature | Status |
 | --- | --- |
-| `adder list`: every generator and derived output ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | 🔜 v0.3 |
-| `adder describe <generator>` with a JSON Schema of its inputs ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | 🔜 v0.3 |
+| `adder list`: every generator and derived output ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | ✅ |
+| `adder describe <generator>` with a JSON Schema of its inputs ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | ✅ |
 | Structured diagnostics with stable codes, positions, and hints | ✅ |
 | JSON output for every command ([design 22](docs/design.md#22-json-output-planned-v03)) | ✅ |
-| `adder explain <file>`: which configuration and template produced a generated file ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | 🔜 v0.3 |
+| `adder explain <file>`: which configuration and template produced a generated file ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | ✅ |
 | A guide and a ready-made `AGENTS.md` section for repositories that use coding agents ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
 | `adder mcp`: an MCP server exposing generators as tools, read-only unless asked to write | 💡 |
 

@@ -1,0 +1,92 @@
+package derive
+
+import (
+	"context"
+	"io/fs"
+	"maps"
+	"slices"
+
+	"github.com/TyphonHill/adder/internal/config"
+	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/header"
+	"github.com/TyphonHill/adder/internal/plan"
+	"github.com/TyphonHill/adder/internal/render"
+)
+
+// Explanation says where a file comes from, for adder explain.
+type Explanation struct {
+	// Path is the file's slash-separated path relative to the repository root.
+	Path string `json:"path"`
+	// Generated reports whether the file has adder's header.
+	Generated bool `json:"generated"`
+	// Template is the template the header names.
+	Template string `json:"template,omitempty"`
+	// Output is the output that writes or removes the file, nil when none does.
+	Output *config.Output `json:"output"`
+	// Scans are the scans the output's template refers to by name.
+	Scans []string `json:"scans"`
+	// Status is what derive would do to the file: unchanged, updated, or removed. It is set when Output is.
+	Status *plan.Status `json:"status,omitempty"`
+}
+
+// Explain reports where the file name, a slash-separated path relative to the repository root, comes from: the
+// output and template that write it, the scans the template refers to, and whether it is up to date.
+func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) (*Explanation, error) {
+	content, err := fs.ReadFile(src.Repo, name)
+	if err != nil {
+		return nil, diag.Locate(diag.Wrap(diag.IO, diag.Pos{File: name}, err), src.RepoDir, diag.Pos{})
+	}
+	e := &Explanation{Path: name}
+	e.Template, e.Generated = header.Parse(name, content)
+	if !e.Generated {
+		return e, nil
+	}
+	var output *config.Output
+	for i, out := range cfg.Derive.Outputs {
+		if out.Template == e.Template && writes(out, name) {
+			output = &cfg.Derive.Outputs[i]
+			break
+		}
+	}
+	if output == nil {
+		return e, nil
+	}
+
+	// The output only manages the file if the plan writes or removes it: a matching file in a directory that
+	// stale cleanup skips, such as testdata, belongs to no output.
+	p, err := Plan(ctx, cfg, src)
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(p.Changes, func(c plan.Change) bool { return c.Path == name })
+	if i < 0 {
+		return e, nil
+	}
+	set, err := templates(cfg, src)
+	if err != nil {
+		return nil, err
+	}
+	scans, err := set.References(output.Template, slices.Sorted(maps.Keys(cfg.Derive.Scans)))
+	if err != nil {
+		return nil, diag.Locate(err, src.TemplatesDir, output.Pos)
+	}
+	e.Output, e.Scans, e.Status = output, nonNil(scans), &p.Changes[i].Status
+	return e, nil
+}
+
+// writes reports whether out could write the file name: its path, or for outputs with each, a path matching
+// its path template.
+func writes(out config.Output, name string) bool {
+	if out.Each == "" {
+		return out.Path == name
+	}
+	pattern, _, err := render.PathPattern(out.Path)
+	return err == nil && pattern.MatchString(name)
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
