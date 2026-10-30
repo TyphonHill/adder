@@ -319,6 +319,16 @@ func TestParseErrors(t *testing.T) {
 		{name: "files with Go settings", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      includeTests: true\n      buildTags: [x]\n      files: {}\n", want: []want{{diag.InvalidValue, 6, 7}, {diag.InvalidValue, 7, 7}}},
 		{name: "files and funcs together", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      funcs: {}\n      files: {name: x}\n", want: []want{{diag.InvalidValue, 7, 7}}},
 		{name: "files with an invalid name pattern", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      files: {name: \"(\"}\n", want: []want{{diag.InvalidValue, 6, 21}}},
+		{
+			name:     "implements without typeCheck",
+			input:    "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      types: {implements: io.Writer}\n",
+			want:     []want{{diag.InvalidValue, 6, 15}},
+			wantHint: "add typeCheck: true to the scan, which runs the Go toolchain offline to load types",
+		},
+		{name: "implements without an import path", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      typeCheck: true\n      types: {implements: Writer}\n", want: []want{{diag.InvalidValue, 7, 15}}},
+		{name: "platform without typeCheck", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      platform: windows/amd64\n", want: []want{{diag.InvalidValue, 6, 7}}},
+		{name: "platform that is not GOOS/GOARCH", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      typeCheck: true\n      platform: windows\n", want: []want{{diag.InvalidValue, 7, 7}}},
+		{name: "typeCheck on a file scan", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      typeCheck: true\n      files: {}\n", want: []want{{diag.InvalidValue, 6, 7}}},
 		{name: "scan name reserved for items", input: "version: 1\nderive:\n  scans:\n    Item: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
 			name:     "templated path without each",

@@ -39,6 +39,7 @@ type Item struct {
 	Type       string  // for constants and variables, the type as written, repeated through a const group
 	Value      string  // for constants and variables, the value as written
 	Iota       int     // for constants, the position in their const group, which is their value of iota
+	Pointer    bool    // for types selected by implements, true when only a pointer to the type implements it
 
 	// Directives holds the arguments of each //adder: directive in the doc comment, by directive name.
 	Directives map[string]map[string]string
@@ -78,6 +79,12 @@ func Run(ctx context.Context, fsys fs.FS, module string, s config.Scan) ([]Item,
 		items = append(items, found...)
 	}
 
+	sortItems(items)
+	return items, nil
+}
+
+// sortItems orders items by name, file, and receiver, the same for every scan.
+func sortItems(items []Item) {
 	slices.SortFunc(items, func(a, b Item) int {
 		return cmp.Or(
 			cmp.Compare(a.Name, b.Name),
@@ -85,7 +92,6 @@ func Run(ctx context.Context, fsys fs.FS, module string, s config.Scan) ([]Item,
 			cmp.Compare(a.Receiver, b.Receiver),
 		)
 	})
-	return items, nil
 }
 
 func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir string, s config.Scan) ([]Item, error) {
@@ -131,15 +137,7 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir s
 		}
 
 		base := Item{Package: parsed.Name.Name, ImportPath: importPath(module, dir), Dir: dir, File: file}
-		var found []Item
-		switch {
-		case s.Types != nil:
-			found, err = typeItems(fset, parsed, *s.Types, base)
-		case s.Values != nil:
-			found, err = valueItems(fset, parsed, *s.Values, base)
-		default:
-			found, err = funcItems(fset, parsed, s.Funcs, base)
-		}
+		found, err := declItems(fset, parsed, s, base, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -148,12 +146,25 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir s
 	return items, nil
 }
 
-func funcItems(fset *token.FileSet, file *ast.File, m config.FuncMatch, base Item) ([]Item, error) {
+// declItems returns the declarations in file that the scan selects. Typed applies the filters that compare
+// types, and is nil for scans that only parse.
+func declItems(fset *token.FileSet, file *ast.File, s config.Scan, base Item, typed *typeFilter) ([]Item, error) {
+	switch {
+	case s.Types != nil:
+		return typeItems(fset, file, *s.Types, base, typed)
+	case s.Values != nil:
+		return valueItems(fset, file, *s.Values, base, typed)
+	default:
+		return funcItems(fset, file, s.Funcs, base, typed)
+	}
+}
+
+func funcItems(fset *token.FileSet, file *ast.File, m config.FuncMatch, base Item, typed *typeFilter) ([]Item, error) {
 	imports := fileImports(file)
 	var items []Item
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || !matches(fn, imports, m) {
+		if !ok || !matches(fn, imports, m, typed) {
 			continue
 		}
 		found, err := directives(fset, fn.Doc)
@@ -170,7 +181,7 @@ func funcItems(fset *token.FileSet, file *ast.File, m config.FuncMatch, base Ite
 	return items, nil
 }
 
-func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Item) ([]Item, error) {
+func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Item, typed *typeFilter) ([]Item, error) {
 	var items []Item
 	for _, decl := range file.Decls {
 		gen, ok := decl.(*ast.GenDecl)
@@ -199,10 +210,18 @@ func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Ite
 			if m.Directive != "" && found[m.Directive] == nil {
 				continue
 			}
+			pointer := false
+			if m.Implements != "" {
+				var ok bool
+				if ok, pointer = typed.implements(ts); !ok {
+					continue
+				}
+			}
 
 			item := base
 			item.Name = ts.Name.Name
 			item.Kind = kind
+			item.Pointer = pointer
 			item.Line = fset.Position(ts.Pos()).Line
 			if doc != nil {
 				item.Doc = strings.TrimSpace(doc.Text())
@@ -243,7 +262,7 @@ func fileItems(ctx context.Context, fsys fs.FS, dir string, entries []fs.DirEntr
 	return items, nil
 }
 
-func valueItems(fset *token.FileSet, file *ast.File, m config.ValueMatch, base Item) ([]Item, error) {
+func valueItems(fset *token.FileSet, file *ast.File, m config.ValueMatch, base Item, typed *typeFilter) ([]Item, error) {
 	var items []Item
 	for _, decl := range file.Decls {
 		gen, ok := decl.(*ast.GenDecl)
@@ -297,7 +316,7 @@ func valueItems(fset *token.FileSet, file *ast.File, m config.ValueMatch, base I
 				case name.Name == "_",
 					m.Exported && !name.IsExported(),
 					m.Name.Regexp != nil && !m.Name.MatchString(name.Name),
-					m.Type != "" && m.Type != typ,
+					m.Type != "" && !typed.valueTypeIs(name, m.Type, typ),
 					m.Directive != "" && found[m.Directive] == nil:
 					continue
 				}
@@ -437,7 +456,7 @@ func syntaxError(file string, err error) error {
 	return diag.Wrap(diag.GoSyntax, diag.Pos{File: file}, err)
 }
 
-func matches(fn *ast.FuncDecl, imports map[string]string, m config.FuncMatch) bool {
+func matches(fn *ast.FuncDecl, imports map[string]string, m config.FuncMatch, typed *typeFilter) bool {
 	switch {
 	case m.Exported && !fn.Name.IsExported():
 		return false
@@ -449,6 +468,8 @@ func matches(fn *ast.FuncDecl, imports map[string]string, m config.FuncMatch) bo
 		return false
 	case m.FirstParam != "" && firstParamName(fn) != m.FirstParam:
 		return false
+	case m.FirstParamType != "" && typed != nil:
+		return typed.firstParamIs(fn, m.FirstParamType)
 	case m.FirstParamType != "":
 		first := firstParam(fn)
 		return first != nil && sameType(qualifiedType(first.Type, imports), m.FirstParamType)
