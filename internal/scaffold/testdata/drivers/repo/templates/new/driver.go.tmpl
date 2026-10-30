@@ -1,0 +1,7 @@
+// Package {{ .Inputs.name }} is a driver that {{ .Inputs.summary }}. Licensed under {{ .Vars.License }}.
+package {{ .Inputs.name }}
+
+import "{{ .Module }}/driver"
+
+// New returns a {{ .Inputs.name }} driver.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }

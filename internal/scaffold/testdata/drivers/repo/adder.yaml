@@ -1,0 +1,38 @@
+version: 1
+vars:
+  License: Apache-2.0
+derive:
+  scans:
+    Drivers:
+      dirs: ["drivers/*"]
+      funcs:
+        exported: true
+        name: ^New$
+  outputs:
+    - template: templates/drivers.go.tmpl
+      path: drivers/drivers.gen.go
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name:
+        help: Driver name, used as the package name
+        pattern: "[a-z][a-z0-9]*"
+        unique: Drivers.Package
+      summary:
+        help: One-line description for the package documentation
+        default: stores objects
+      cache:
+        type: bool
+        help: Add an in-memory cache in front of the driver
+    files:
+      - template: templates/new/driver.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go
+      - template: templates/new/cache.go.tmpl
+        path: drivers/{{ .Inputs.name }}/cache.go
+        when: cache
+      - template: templates/new/README.md.tmpl
+        path: drivers/README.md
+        ifExists: skip
+    message: |
+      Next, implement New in drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go.

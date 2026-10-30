@@ -4,6 +4,7 @@ package diag
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -30,6 +31,10 @@ const (
 	TemplateExec       Code = "template-exec"
 	InvalidOutput      Code = "invalid-output"
 	InvalidDirective   Code = "invalid-directive"
+	UnknownGenerator   Code = "unknown-generator"
+	MissingInput       Code = "missing-input"
+	InvalidInput       Code = "invalid-input"
+	FileExists         Code = "file-exists"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.
@@ -116,4 +121,20 @@ func From(err error) List {
 		return List{d}
 	}
 	return List{{Code: Other, Message: err.Error(), Err: err}}
+}
+
+// Locate returns the diagnostics carried by err with positions usable from the current directory. Positions
+// inside a file system are joined to dir, the directory behind it, and problems without a position are
+// attributed to decl, the declaration they concern.
+func Locate(err error, dir string, decl Pos) List {
+	list := From(err)
+	for _, d := range list {
+		switch {
+		case d.Pos == (Pos{}):
+			d.Pos = decl
+		case dir != "" && d.Pos.File != "" && !filepath.IsAbs(d.Pos.File):
+			d.Pos.File = filepath.Join(dir, filepath.FromSlash(d.Pos.File))
+		}
+	}
+	return list
 }

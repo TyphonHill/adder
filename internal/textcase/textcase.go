@@ -1,4 +1,5 @@
-package render
+// Package textcase converts between the ways words are joined in names, such as snake_case and PascalCase.
+package textcase
 
 import (
 	"strings"
@@ -78,15 +79,22 @@ func joinWords(s, sep string, transform func(i int, word string) string) string 
 func lowerWord(_ int, w string) string { return strings.ToLower(w) }
 func upperWord(_ int, w string) string { return strings.ToUpper(w) }
 
-func toSnakeCase(s string) string    { return joinWords(s, "_", lowerWord) }
-func toKebabCase(s string) string    { return joinWords(s, "-", lowerWord) }
-func toConstantCase(s string) string { return joinWords(s, "_", upperWord) }
+// Snake joins the words of s in lowercase with underscores, as in user_id.
+func Snake(s string) string { return joinWords(s, "_", lowerWord) }
 
-func toPascalCase(s string) string {
+// Kebab joins the words of s in lowercase with hyphens, as in user-id.
+func Kebab(s string) string { return joinWords(s, "-", lowerWord) }
+
+// Constant joins the words of s in uppercase with underscores, as in USER_ID.
+func Constant(s string) string { return joinWords(s, "_", upperWord) }
+
+// Pascal joins the words of s with each word capitalized, as in UserId.
+func Pascal(s string) string {
 	return joinWords(s, "", func(_ int, w string) string { return capitalize(w) })
 }
 
-func toCamelCase(s string) string {
+// Camel joins the words of s with each word but the first capitalized, as in userId.
+func Camel(s string) string {
 	return joinWords(s, "", func(i int, w string) string {
 		if i == 0 {
 			return strings.ToLower(w)
@@ -95,11 +103,13 @@ func toCamelCase(s string) string {
 	})
 }
 
-func toGoPascalCase(s string) string {
+// GoPascal joins the words of s in Go style with each word capitalized, as in UserID.
+func GoPascal(s string) string {
 	return joinWords(s, "", func(_ int, w string) string { return goWord(w) })
 }
 
-func toGoCamelCase(s string) string {
+// GoCamel joins the words of s in Go style with each word but the first capitalized, as in userID.
+func GoCamel(s string) string {
 	return joinWords(s, "", func(i int, w string) string {
 		if i == 0 {
 			return strings.ToLower(w)

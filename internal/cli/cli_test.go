@@ -10,15 +10,23 @@ import (
 )
 
 func run(ctx context.Context, args ...string) (code int, stdout, stderr string) {
+	return runWithInput(ctx, "", args...)
+}
+
+func runWithInput(ctx context.Context, stdin string, args ...string) (code int, stdout, stderr string) {
 	var out, errOut bytes.Buffer
-	code = Main(ctx, "v0.0.0-test", args, &out, &errOut)
+	code = Main(ctx, "v0.0.0-test", args, strings.NewReader(stdin), &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 
 func copyFixture(t *testing.T) string {
 	t.Helper()
+	return copyDir(t, filepath.Join("..", "derive", "testdata", "basic", "repo"))
+}
+
+func copyDir(t *testing.T, src string) string {
+	t.Helper()
 	root := t.TempDir()
-	src := filepath.Join("..", "derive", "testdata", "basic", "repo")
 	if err := os.CopyFS(root, os.DirFS(src)); err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +234,7 @@ func TestCLI(t *testing.T) {
 			name:           "unexpected argument",
 			args:           func(string) []string { return []string{"derive", "extra"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{`unknown command "extra"`, "Run 'adder --help' for usage."},
+			stderrContains: []string{`unknown command "extra"`, "Run 'adder derive --help' for usage."},
 		},
 		{
 			name:           "unknown flag",

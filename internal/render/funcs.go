@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+
+	"github.com/TyphonHill/adder/internal/textcase"
 )
 
 // Funcs returns the functions available to every template. Names follow Sprout
@@ -14,21 +16,21 @@ func Funcs() template.FuncMap {
 	return template.FuncMap{
 		"toLower":        strings.ToLower,
 		"toUpper":        strings.ToUpper,
-		"toCamelCase":    toCamelCase,
-		"toPascalCase":   toPascalCase,
-		"toSnakeCase":    toSnakeCase,
-		"toKebabCase":    toKebabCase,
-		"toConstantCase": toConstantCase,
-		"toGoCamelCase":  toGoCamelCase,
-		"toGoPascalCase": toGoPascalCase,
-		"fieldValues":    fieldValues,
+		"toCamelCase":    textcase.Camel,
+		"toPascalCase":   textcase.Pascal,
+		"toSnakeCase":    textcase.Snake,
+		"toKebabCase":    textcase.Kebab,
+		"toConstantCase": textcase.Constant,
+		"toGoCamelCase":  textcase.GoCamel,
+		"toGoPascalCase": textcase.GoPascal,
+		"fieldValues":    FieldValues,
 		"uniq":           uniq,
 		"sortAlpha":      sortAlpha,
 	}
 }
 
-// fieldValues returns the named string field of every struct in list.
-func fieldValues(field string, list any) ([]string, error) {
+// FieldValues returns the named string field of every struct in list.
+func FieldValues(field string, list any) ([]string, error) {
 	v := reflect.ValueOf(list)
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
 		return nil, fmt.Errorf("fieldValues: want a list, got %T", list)

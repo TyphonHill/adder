@@ -10,7 +10,6 @@ import (
 	"maps"
 	"os"
 	"path"
-	"path/filepath"
 	"slices"
 
 	"golang.org/x/mod/modfile"
@@ -40,17 +39,12 @@ type Sources struct {
 // Plan computes every derived output and how it differs from the existing files, without writing anything.
 // It reports every problem it finds rather than stopping at the first.
 func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, error) {
-	set, err := templates(cfg, src)
-	problems := diag.From(err)
-	data, err := templateData(ctx, cfg, src)
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return nil, err
-	}
-	problems = append(problems, diag.From(err)...)
-	if err := problems.Err(); err != nil {
+	set, data, err := Prepare(ctx, cfg, src)
+	if err != nil {
 		return nil, err
 	}
 
+	var problems diag.List
 	var p plan.Plan
 	for _, out := range cfg.Derive.Outputs {
 		if err := ctx.Err(); err != nil {
@@ -61,17 +55,32 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 			content, err = header.Ensure(content, out.Template)
 		}
 		if err != nil {
-			problems = append(problems, locate(err, src.TemplatesDir, out.Pos)...)
+			problems = append(problems, diag.Locate(err, src.TemplatesDir, out.Pos)...)
 			continue
 		}
 		if err := p.Add(src.Existing, out.Path, content); err != nil {
-			problems = append(problems, locate(err, src.ExistingDir, out.Pos)...)
+			problems = append(problems, diag.Locate(err, src.ExistingDir, out.Pos)...)
 		}
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err
 	}
 	return &p, nil
+}
+
+// Prepare parses the partials and runs every scan, returning the templates and the data they render with.
+func Prepare(ctx context.Context, cfg *config.Config, src Sources) (*render.Set, map[string]any, error) {
+	set, err := templates(cfg, src)
+	problems := diag.From(err)
+	data, err := templateData(ctx, cfg, src)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return nil, nil, err
+	}
+	problems = append(problems, diag.From(err)...)
+	if err := problems.Err(); err != nil {
+		return nil, nil, err
+	}
+	return set, data, nil
 }
 
 // templates parses the configured partials into the set every output renders with.
@@ -103,7 +112,7 @@ func templates(cfg *config.Config, src Sources) (*render.Set, error) {
 	slices.Sort(files)
 	set, err := render.NewSet(src.Templates, slices.Compact(files))
 	if err != nil {
-		problems = append(problems, locate(err, src.TemplatesDir, diag.Pos{})...)
+		problems = append(problems, diag.Locate(err, src.TemplatesDir, diag.Pos{})...)
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err
@@ -124,7 +133,7 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
-		return nil, locate(diag.Wrap(diag.IO, diag.Pos{File: "go.mod"}, err), src.RepoDir, diag.Pos{})
+		return nil, diag.Locate(diag.Wrap(diag.IO, diag.Pos{File: "go.mod"}, err), src.RepoDir, diag.Pos{})
 	}
 	module := modfile.ModulePath(gomod)
 	if module != "" {
@@ -139,7 +148,7 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 			return nil, err
 		}
 		if err != nil {
-			problems = append(problems, locate(err, src.RepoDir, s.Pos)...)
+			problems = append(problems, diag.Locate(err, src.RepoDir, s.Pos)...)
 			continue
 		}
 		data[name] = items
@@ -148,21 +157,6 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 		return nil, err
 	}
 	return data, nil
-}
-
-// locate makes diagnostic positions usable from the current directory. Positions inside a file system are
-// joined to the directory behind it, and problems without a position are attributed to the declaration at decl.
-func locate(err error, dir string, decl diag.Pos) diag.List {
-	list := diag.From(err)
-	for _, d := range list {
-		switch {
-		case d.Pos == (diag.Pos{}):
-			d.Pos = decl
-		case dir != "" && d.Pos.File != "" && !filepath.IsAbs(d.Pos.File):
-			d.Pos.File = filepath.Join(dir, filepath.FromSlash(d.Pos.File))
-		}
-	}
-	return list
 }
 
 // Options locate the directories Run works in.
