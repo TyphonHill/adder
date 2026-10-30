@@ -1,12 +1,9 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/TyphonHill/adder/internal/derive"
-	"github.com/TyphonHill/adder/internal/plan"
 )
 
 func newDeriveCommand(opts *globalOptions) *cobra.Command {
@@ -36,15 +33,15 @@ Files whose content has not changed are left untouched.`,
 			if opts.json {
 				return nil
 			}
+			out := opts.printer(cmd.OutOrStdout())
+			if err := out.scans(cmd.Context(), cfg, root); err != nil {
+				return err
+			}
 			for _, c := range p.Changes {
-				verb := ""
-				if derived.DryRun && c.Status != plan.Unchanged {
-					verb = "would be "
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s%-9s  %s\n", verb, c.Status, c.Path)
+				out.change(c, derived.DryRun)
 			}
 			if showDiff {
-				printDiffs(cmd.OutOrStdout(), p.Pending())
+				out.diffs(p.Pending())
 			}
 			return nil
 		},

@@ -107,7 +107,7 @@ var All = map[string]driver.Factory{
 }
 ```
 
-Running it again reports `unchanged` and leaves the file alone. Add a `drivers/gcs` package and the registry follows. This example is the test fixture in [`internal/derive/testdata/basic`](internal/derive/testdata/basic).
+Running it again leaves the file alone and prints nothing, or `unchanged` with `--verbose`. Add a `drivers/gcs` package and the registry follows. This example is the test fixture in [`internal/derive/testdata/basic`](internal/derive/testdata/basic).
 
 ## Commands
 
@@ -129,8 +129,14 @@ Global flags:
 | `--root` | the directory holding `adder.yaml` | Repository root that scans and outputs are relative to. |
 | `-c`, `--config` | `<root>/adder.yaml` | Configuration file. Template paths resolve against its directory. |
 | `--json` | off | Print the result and any problems as one JSON object on standard output. See [JSON output](#json-output). |
+| `-q`, `--quiet` | off | Print only problems, and diffs asked for with `--diff`. |
+| `-v`, `--verbose` | off | Also print unchanged files and, for `derive` and `check`, how many items each scan found. |
 
 Without either flag, adder finds `adder.yaml` in the current directory or the nearest parent that has one, the way `go` finds `go.mod`, so commands work from anywhere in the repository. With only `--config`, the root is that file's directory.
+
+In a terminal, statuses and problem codes are in color. Set `NO_COLOR` to turn color off; it is also off when output is not a terminal, when `TERM` is `dumb`, and with `--json`.
+
+`adder completion bash`, `zsh`, `fish`, or `powershell` prints a completion script, which completes generator names, each generator's flags, input values from `values` and `valuesFrom`, and generated files for `adder explain`. For zsh, for example, run `adder completion zsh > "${fpath[1]}/_adder"`; `adder completion <shell> --help` explains each shell.
 
 `derive` flags:
 

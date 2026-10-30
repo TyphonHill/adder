@@ -64,7 +64,9 @@ Flags:
 Global Flags:
   -c, --config string   configuration file (default <root>/adder.yaml)
       --json            print the result and any problems as one JSON object on standard output
+  -q, --quiet           print only problems
       --root string     repository root that scans and outputs are relative to (default: the directory holding adder.yaml, found from the current directory)
+  -v, --verbose         also print unchanged files and how many items each scan found
 
 Use "adder new [command] --help" for more information about a command.
 -- dryrun.out --

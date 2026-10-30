@@ -128,8 +128,8 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Documented exit codes for success, error, usage, and stale outputs | ✅ |
 | `adder check`: exit with status 3 when derived files are stale, for CI and repositories that commit them | ✅ |
 | `adder init`: create a starter `adder.yaml` with commented examples of each section | ✅ |
-| Shell completion for commands, generator names, and inputs ([design 32](docs/design.md#32-terminal-output-planned-v03)) | 🔜 v0.3 |
-| `--quiet`, `--verbose`, and `NO_COLOR` support ([design 32](docs/design.md#32-terminal-output-planned-v03)) | 🔜 v0.3 |
+| Shell completion for commands, generator names, and inputs ([design 32](docs/design.md#32-terminal-output-planned-v03)) | ✅ |
+| `--quiet`, `--verbose`, and `NO_COLOR` support ([design 32](docs/design.md#32-terminal-output-planned-v03)) | ✅ |
 | `adder derive --watch` for a fast edit loop | 💡 |
 | `adder graph`: a Mermaid diagram of which outputs depend on which scans and templates | 💡 |
 

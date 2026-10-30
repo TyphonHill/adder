@@ -123,6 +123,7 @@ func TestPrompt(t *testing.T) {
 			if tt.config != "" {
 				writeFile(t, filepath.Join(root, "adder.yaml"), tt.config)
 			}
+			t.Setenv("NO_COLOR", "1") // the fake terminal would color problem codes
 			terminal := isTerminal
 			isTerminal = func(any) bool { return tt.terminal }
 			t.Cleanup(func() { isTerminal = terminal })

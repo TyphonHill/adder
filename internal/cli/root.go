@@ -13,7 +13,6 @@ import (
 
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/plan"
 )
 
 // Exit codes returned by Main.
@@ -49,9 +48,11 @@ func usageArgs(validate cobra.PositionalArgs) cobra.PositionalArgs {
 // globalOptions holds the flags shared by every subcommand, and the report of the command that ran. Empty means
 // the flag was not given.
 type globalOptions struct {
-	root   string
-	config string
-	json   bool
+	root    string
+	config  string
+	json    bool
+	quiet   bool
+	verbose bool
 
 	report report // set by a command when it starts running, for --json
 }
@@ -90,7 +91,7 @@ func Main(ctx context.Context, version string, args []string, stdin io.Reader, s
 	if opts.json {
 		writeReport(stdout, opts.report, err)
 	} else if err != nil {
-		printError(stderr, err)
+		printError(stderr, err, useColor(stderr))
 	}
 	if err == nil {
 		return ExitOK
@@ -147,17 +148,21 @@ func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
 	cmd.PersistentFlags().StringVar(&opts.root, "root", "", "repository root that scans and outputs are relative to (default: the directory holding "+config.FileName+", found from the current directory)")
 	cmd.PersistentFlags().StringVarP(&opts.config, "config", "c", "", "configuration file (default <root>/"+config.FileName+")")
 	cmd.PersistentFlags().BoolVar(&opts.json, "json", opts.json, "print the result and any problems as one JSON object on standard output")
-}
-
-// printDiffs writes each pending change as a unified diff, after a blank line.
-func printDiffs(w io.Writer, changes []plan.Change) {
-	for _, c := range changes {
-		fmt.Fprintf(w, "\n%s", c.Diff())
+	cmd.PersistentFlags().BoolVarP(&opts.quiet, "quiet", "q", opts.quiet, "print only problems")
+	cmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", opts.verbose, "also print unchanged files and how many items each scan found")
+	_ = cmd.MarkPersistentFlagDirname("root")
+	_ = cmd.MarkPersistentFlagFilename("config", "yaml", "yml")
+	cmd.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
+		if opts.quiet && opts.verbose {
+			return &usageError{errors.New("--quiet and --verbose cannot be combined"), c.CommandPath()}
+		}
+		return nil
 	}
 }
 
-// printError writes err for a person to read, one line per problem.
-func printError(w io.Writer, err error) {
+// printError writes err for a person to read, one line per problem, with codes in color when color is set.
+func printError(w io.Writer, err error, color bool) {
+	p := &printer{w: w, color: color}
 	if usage, ok := errors.AsType[*usageError](err); ok {
 		fmt.Fprintf(w, "adder: %v\nRun '%s --help' for usage.\n", usage.err, usage.command())
 		return
@@ -175,9 +180,9 @@ func printError(w io.Writer, err error) {
 		if d.Pos.File != "" {
 			prefix = ""
 		}
-		fmt.Fprintf(w, "%s%s [%s]\n", prefix, d.Error(), d.Code)
+		fmt.Fprintf(w, "%s%s %s\n", prefix, d.Error(), p.paint(red, "["+string(d.Code)+"]"))
 		if d.Hint != "" {
-			fmt.Fprintf(w, "\thint: %s\n", d.Hint)
+			fmt.Fprintf(w, "\t%s %s\n", p.paint(dim, "hint:"), d.Hint)
 		}
 	}
 }
