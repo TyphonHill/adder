@@ -371,4 +371,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build and test adder and the c
 
 ## License
 
-[Apache License 2.0](LICENSE). [`internal/diff`](internal/diff) is copied from the Go project and keeps its [BSD-3-Clause license](internal/diff/LICENSE).
+[Apache License 2.0](LICENSE).

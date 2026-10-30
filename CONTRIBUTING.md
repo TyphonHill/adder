@@ -57,6 +57,28 @@ func TestToSnakeCase(t *testing.T) {
 - Generated output is compared with golden files. Run `go test ./internal/derive -update` to accept an intended change, and review the diff.
 - The README quick start is the `basic` fixture. Change both together.
 
+### Test the command line end to end
+
+Scripts in `cmd/adder/testdata/script` run the real `adder` binary against small repositories written inline, using [testscript](https://pkg.go.dev/github.com/rogpeppe/go-internal/testscript). Add a script, or a section to one, for any change to what a command prints or how it exits.
+
+- `exits 3 adder check` runs a command and checks its exit status. `exec` and `! exec` only tell success from failure.
+- Compare output with `cmp stdout name.out` against a file in the script. Run `go test ./cmd/adder -update` to fill in or rewrite those files, then review the diff.
+- Positions in problems use the operating system's separator, so match them with a pattern such as `stderr '^drivers[/\\]x\.go'` rather than `cmp`.
+
+### Fuzz parsers
+
+Fuzz tests cover configuration loading, header parsing, directive parsing, and import pruning. Their seed inputs run with every `go test`, and a weekly workflow fuzzes each for five minutes. To fuzz locally:
+
+```sh
+go test ./internal/imports -run '^$' -fuzz '^FuzzPrune$' -fuzztime 1m
+```
+
+A failure is saved under the package's `testdata/fuzz`. Commit it with the fix, so it stays a regression test.
+
+### Keep derive fast
+
+`BenchmarkDerive` runs `derive` over a generated repository of 1,000 packages. Its budget is 500 ms on GitHub's runners, and CI fails above four times that with `go test ./internal/derive -run '^TestBudget$' -budget`. Compare a change that may affect speed with `go test ./internal/derive -run '^$' -bench BenchmarkDerive -count 10` before and after, using `benchstat`.
+
 ## Code
 
 - Run `gofmt`; `golangci-lint run` checks formatting and imports.

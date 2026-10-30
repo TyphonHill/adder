@@ -74,7 +74,11 @@ func Prune(src []byte) ([]byte, error) {
 		switch {
 		case len(unused) == 0:
 		case len(unused) == len(gen.Specs):
-			cuts = append(cuts, lines(file, src, gen.Pos(), gen.End(), gen.Doc, nil))
+			var comment *ast.CommentGroup
+			if !gen.Lparen.IsValid() {
+				comment = gen.Specs[0].(*ast.ImportSpec).Comment
+			}
+			cuts = append(cuts, lines(file, src, gen.Pos(), gen.End(), gen.Doc, comment))
 		default:
 			cuts = append(cuts, unused...)
 		}
@@ -108,7 +112,8 @@ func isUsed(spec *ast.ImportSpec, used map[string]bool) bool {
 // span is a range of bytes in a file.
 type span struct{ start, end int }
 
-// lines returns the whole lines from pos to end, extended to the doc comment above and the comment after.
+// lines returns the range from pos to end, extended to the doc comment above and the comment after, and to whole
+// lines when nothing else shares them, such as the end of a block comment.
 func lines(file *token.File, src []byte, pos, end token.Pos, doc, comment *ast.CommentGroup) span {
 	if doc != nil {
 		pos = doc.Pos()
@@ -116,12 +121,20 @@ func lines(file *token.File, src []byte, pos, end token.Pos, doc, comment *ast.C
 	if comment != nil {
 		end = comment.End()
 	}
-	start := file.Offset(file.LineStart(file.Line(pos)))
-	stop := file.Offset(end)
+	start, stop := file.Offset(pos), file.Offset(end)
+	if lineStart := file.Offset(file.LineStart(file.Line(pos))); isBlank(src[lineStart:start]) {
+		start = lineStart
+	}
+	lineEnd := len(src)
 	if i := bytes.IndexByte(src[stop:], '\n'); i >= 0 {
-		stop += i + 1
-	} else {
-		stop = len(src)
+		lineEnd = stop + i + 1
+	}
+	if isBlank(src[stop:lineEnd]) {
+		stop = lineEnd
 	}
 	return span{start, stop}
+}
+
+func isBlank(b []byte) bool {
+	return len(bytes.TrimSpace(b)) == 0
 }

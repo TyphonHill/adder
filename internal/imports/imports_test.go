@@ -88,6 +88,16 @@ func TestPrune(t *testing.T) {
 			name: "a name used only by a local variable is kept",
 			src:  "package p\n\nimport \"os\"\n\nfunc f(os struct{ X int }) int { return os.X }\n",
 		},
+		{
+			name: "a single import with a trailing comment",
+			src:  "package p\n\nimport \"fmt\" // print\n\nfunc F() {}\n",
+			want: "package p\n\nfunc F() {}\n",
+		},
+		{
+			name: "an import sharing a line with the end of a comment",
+			src:  "package p /* a\n*/ import \"os\"\n\nvar X = 1\n",
+			want: "package p /* a\n */\nvar X = 1\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

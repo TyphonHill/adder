@@ -1,0 +1,21 @@
+# init writes a starter configuration that loads as written.
+exec adder init
+cmp stdout init.out
+exists adder.yaml
+exec adder check
+! stdout .
+
+# init never overwrites an existing configuration.
+exits 1 adder init
+cmp stderr exists.err
+
+# --root writes the configuration into another directory.
+mkdir sub
+exec adder init --root sub
+exists sub/adder.yaml
+
+-- init.out --
+created    adder.yaml
+-- exists.err --
+adder.yaml: file already exists [file-exists]
+	hint: adder never overwrites it; edit it instead

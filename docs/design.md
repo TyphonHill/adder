@@ -22,7 +22,6 @@ adder.yaml ──► config ──► scan ──► render ──► plan ─�
 | `internal/scaffold` | Resolve a generator's inputs, plan its new files, and derive outputs over them for `adder new`. |
 | `internal/textcase` | Case conversion, shared by template functions and input flag names. |
 | `internal/imports` | Package names for import paths, and removing unused imports from rendered Go. |
-| `internal/diff` | Unified diffs for previews, copied from the Go toolchain. |
 | `internal/diag` | Structured problems shared by every package. |
 | `internal/cli` | Commands, flags, output, and exit codes. |
 | `cmd/adder` | The binary: signal handling and build information only. |
@@ -133,9 +132,9 @@ All packages live under `internal/`, so their APIs can change freely until v0.5,
 
 adder supports the two most recent Go releases. `go.mod` declares the older one in its `go` line, the minimum anyone importing adder needs, and the newest in its `toolchain` line for development. CI tests both.
 
-Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml/v3` for configuration, and `golang.org/x/mod` for reading `go.mod`. Anything that shapes generated output, such as template functions and case conversion, is implemented in adder itself, because a dependency upgrade must never change what people's templates produce.
+Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml/v3` for configuration, `golang.org/x/mod` for reading `go.mod`, and `github.com/rogpeppe/go-internal/diff` for `--diff` previews. Anything that shapes generated output, such as template functions and case conversion, is implemented in adder itself, because a dependency upgrade must never change what people's templates produce.
 
-Planned for v0.3: `golang.org/x/sys`, only to turn on color in Windows consoles ([decision 32](#32-terminal-output-planned-v03)). Tests may also use `github.com/rogpeppe/go-internal/testscript`, which is never built into the binary.
+Planned for v0.3: `golang.org/x/sys`, only to turn on color in Windows consoles ([decision 32](#32-terminal-output-planned-v03)). Tests also use `github.com/rogpeppe/go-internal/testscript`, from the same module as the diff code, which is never built into the binary.
 
 ### 12. One configuration file at the root
 
@@ -272,7 +271,7 @@ Next, implement New in drivers/gcs/gcs.go.
 
 **One plan for everything.** `adder new` builds a single plan containing the new files and every derived output that changes because of them. Derived outputs are recomputed against the repository with the new files overlaid in memory, so registries pick up the new code in the same run. Nothing is written unless the whole plan succeeds. `derive: false` on a generator opts out of the derive step.
 
-**Previewing.** `--dry-run` prints the plan without writing. `--diff` also prints a unified diff of every change, with new files shown as additions, and implies `--dry-run`, like `gofmt -d`. Paths use `a/` and `b/` prefixes and new files come from `/dev/null`, so the output is a patch that `git apply` and `patch -p1` accept. The diff code is copied from the Go toolchain's `internal/diff` (BSD-3-Clause, about 250 lines) into `internal/diff`, with its license header, rather than added as a dependency.
+**Previewing.** `--dry-run` prints the plan without writing. `--diff` also prints a unified diff of every change, with new files shown as additions, and implies `--dry-run`, like `gofmt -d`. Paths use `a/` and `b/` prefixes and new files come from `/dev/null`, so the output is a patch that `git apply` and `patch -p1` accept. Diffs come from `github.com/rogpeppe/go-internal/diff`, which exports the Go toolchain's own `internal/diff`, so previews match `gofmt -d`. It is an anchored diff: it matches regions around lines that appear once in both texts, so it never pairs unrelated blank lines or closing braces, and it always runs in O(n log n) time.
 
 **Command line.** Generators define their own flags, so `adder new` loads `adder.yaml` before parsing the rest of the command line, and builds a subcommand for each generator. Each one gets its own `--help`, flag parsing, and suggestions for mistyped names from the same library as every other command. Inputs cannot use a flag `adder new` defines itself (`--config`, `--diff`, `--dry-run`, `--help`, `--inputs`, `--root`), and two inputs cannot map to the same flag. In a JSON inputs file, keys are input names, not flags, so `{"packageName": "x"}`.
 
@@ -294,7 +293,8 @@ Next, implement New in drivers/gcs/gcs.go.
 | A `required` setting | Redundant: a string without a default is required. |
 | Conditions written as template expressions | Turns `adder.yaml` into a programming language. |
 | An `overwrite` file policy | Breaks the promise that files people own are never rewritten. |
-| A diff library | A small, stable algorithm is better copied than depended on. |
+| Copying Go's `internal/diff` into adder | go-internal already exports the same code and keeps it in step with Go, so a copy only adds maintenance. adder copied it in v0.2, before depending on go-internal. |
+| Other diff libraries | Myers diffs that differ from `gofmt -d`, Python difflib semantics, or character-level diffs that `git apply` cannot read. |
 
 ### 20. Richer scans without type checking
 

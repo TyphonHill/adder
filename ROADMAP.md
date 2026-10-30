@@ -164,9 +164,9 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Secret scanning with push protection, and private vulnerability reporting | ✅ |
 | Repository hardening: branch and tag rulesets with required checks | 🔜 after v1.0 |
 | A test that keeps README examples in sync with the test fixtures, once the documentation site has many examples | 💡 |
-| End-to-end CLI tests with `testscript` ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | 🔜 v0.3 |
-| Fuzz tests for configuration parsing and header detection ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | 🔜 v0.3 |
-| Benchmarks on large repositories with a performance budget ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | 🔜 v0.3 |
+| End-to-end CLI tests with `testscript` ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
+| Fuzz tests for configuration parsing, header detection, directives, and import pruning ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
+| Benchmarks on large repositories with a performance budget ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
 | A symlink policy for scans and outputs ([design 26](docs/design.md#26-symlinks-planned-v03)) | 🔜 v0.3 |
 | CodeQL | ✅ |
 | OpenSSF Scorecard | 🔜 after v1.0 |
