@@ -23,7 +23,7 @@ These keep adder small enough to learn in an afternoon and maintain for years. A
 
 ## Features
 
-Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not a commitment.
+Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0 · 💡 idea, not a commitment.
 
 ### Configuration
 
@@ -34,8 +34,9 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Every validation problem reported at once, with its line and column | ✅ |
 | Paths are slash-separated, relative, confined to their root, and cleaned on load | ✅ |
 | Find `adder.yaml` by walking up from the current directory, like `go` finds `go.mod` (one file name, [design 12](docs/design.md#12-one-configuration-file-at-the-root)) | ✅ |
-| JSON Schema for `adder.yaml`, published to SchemaStore for editor completion and validation | 🔜 v0.3 |
-| `adder validate`: check the configuration and templates without writing anything | 🔜 v0.3 |
+| JSON Schema for `adder.yaml`, for editor completion and validation ([design 31](docs/design.md#31-checking-the-configuration-planned-after-v10)) | 🔜 after v1.0 |
+| The schema listed in SchemaStore, so editors find it without a modeline | 🔜 after v1.0 |
+| `adder validate`: check the configuration and templates without writing anything ([design 31](docs/design.md#31-checking-the-configuration-planned-after-v10)) | 🔜 after v1.0 |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
 | Multiple configurations in one repository, for monorepos and nested modules | 🔜 v0.4 |
 | `adder migrate`: upgrade a configuration to a newer schema version | 🔜 v1.0 |
@@ -50,7 +51,7 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | `.ImportPath` on every item, so templates stop assembling import paths by hand ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | Skip files adder generated, so outputs never feed back into scans; other generators' files are still scanned | ✅ |
 | `exclude` patterns and recursive `**` globs that skip `testdata`, `vendor`, and hidden directories like `./...` | ✅ |
-| Skip files excluded by build constraints such as `//go:build ignore` | 🔜 v0.3 |
+| Skip files excluded by build constraints such as `//go:build ignore` ([design 27](docs/design.md#27-build-constraints-in-scans-planned-v03)) | 🔜 v0.3 |
 | Match on `kind` (functions or methods) and `receiver` | ✅ |
 | `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | ✅ |
@@ -79,10 +80,10 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Remove unused imports from Go output, so templates need not guard each one ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)) | ✅ |
 | Add missing imports from a built-in table of the standard library | 💡 |
 | Shared template partials, such as `templates/partials/license.tmpl` | ✅ |
-| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` | 🔜 v0.3 |
-| One output per item, with a templated path, for example a file per interface | 🔜 v0.3 |
+| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `pluralize`, `singularize`, `groupBy` ([design 28](docs/design.md#28-more-template-functions-planned-v03)) | 🔜 v0.3 |
+| One output per item, with a templated path, for example a file per interface ([design 24](docs/design.md#24-one-output-per-item-planned-v03)) | 🔜 v0.3 |
 | Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)) | 🔜 v0.3 |
-| Generated-file headers for other languages, using their comment syntax | 🔜 v0.3 |
+| Generated-file headers for other languages, using their comment syntax ([design 25](docs/design.md#25-generated-file-headers-for-other-languages-planned-v03)) | 🔜 v0.3 |
 | `--stdout` to print a single output instead of writing it | 💡 |
 
 ### Scaffolding: `adder new`
@@ -100,8 +101,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | New files and the derived outputs they change computed as one plan, so registries update in the same run | ✅ |
 | A message after generating, with next steps for the person who ran it | ✅ |
 | Inputs from flags, from a JSON file, or from standard input | ✅ |
-| Interactive prompts for missing inputs when running in a terminal | 🔜 v0.3 |
-| Generator tests: render a generator with sample inputs and compare to golden files | 🔜 v0.3 |
+| Interactive prompts for missing inputs when running in a terminal ([design 29](docs/design.md#29-prompts-for-missing-inputs-planned-v03)) | 🔜 v0.3 |
+| Generator tests: render a generator with sample inputs and compare to golden files ([design 30](docs/design.md#30-generator-tests-planned-v03)) | 🔜 v0.3 |
 | Composing generators, where one generator runs another | 💡 |
 | Inserting code into existing files through the syntax tree, for cases deriving cannot cover | 💡 |
 
@@ -109,12 +110,12 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 
 | Feature | Status |
 | --- | --- |
-| `adder list`: every generator and derived output | 🔜 v0.3 |
-| `adder describe <generator>` with a JSON Schema of its inputs | 🔜 v0.3 |
+| `adder list`: every generator and derived output ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | 🔜 v0.3 |
+| `adder describe <generator>` with a JSON Schema of its inputs ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | 🔜 v0.3 |
 | Structured diagnostics with stable codes, positions, and hints | ✅ |
-| JSON output for every command | 🔜 v0.3 |
-| `adder explain <file>`: which configuration and template produced a generated file | 🔜 v0.3 |
-| A guide and a ready-made `AGENTS.md` section for repositories that use coding agents | 🔜 v0.3 |
+| JSON output for every command ([design 22](docs/design.md#22-json-output-planned-v03)) | 🔜 v0.3 |
+| `adder explain <file>`: which configuration and template produced a generated file ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | 🔜 v0.3 |
+| A guide and a ready-made `AGENTS.md` section for repositories that use coding agents ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
 | `adder mcp`: an MCP server exposing generators as tools, read-only unless asked to write | 💡 |
 
 ### Command line
@@ -127,8 +128,8 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Documented exit codes for success, error, usage, and stale outputs | ✅ |
 | `adder check`: exit with status 3 when derived files are stale, for CI and repositories that commit them | ✅ |
 | `adder init`: create a starter `adder.yaml` with commented examples of each section | ✅ |
-| Shell completion for commands, generator names, and inputs | 🔜 v0.3 |
-| `--quiet`, `--verbose`, and `NO_COLOR` support | 🔜 v0.3 |
+| Shell completion for commands, generator names, and inputs ([design 32](docs/design.md#32-terminal-output-planned-v03)) | 🔜 v0.3 |
+| `--quiet`, `--verbose`, and `NO_COLOR` support ([design 32](docs/design.md#32-terminal-output-planned-v03)) | 🔜 v0.3 |
 | `adder derive --watch` for a fast edit loop | 💡 |
 | `adder graph`: a Mermaid diagram of which outputs depend on which scans and templates | 💡 |
 
@@ -137,10 +138,10 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Feature | Status |
 | --- | --- |
 | `go get -tool` and `go tool adder` | ✅ |
-| Documented `//go:generate go tool adder derive` usage | 🔜 v0.3 |
-| A pre-commit hook definition (`.pre-commit-hooks.yaml`) | 🔜 v0.3 |
-| A GitHub Action that runs `adder check` on pull requests | 🔜 v0.3 |
-| A GitLab CI example | 🔜 v0.3 |
+| Documented `//go:generate go tool adder derive` usage ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
+| A pre-commit hook definition (`.pre-commit-hooks.yaml`) ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
+| A GitHub Action that runs `adder check` on pull requests ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
+| A GitLab CI example ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
 | Generator packs: generators shared across repositories as versioned Go modules | 🔜 v0.5 |
 
 ### Library API
@@ -160,21 +161,23 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | Tests on the two supported Go releases | ✅ |
 | CI on Linux, macOS, and Windows, since paths and line endings differ | ✅ |
 | GitHub Actions pinned to commit SHAs and updated by Dependabot | ✅ |
-| Repository hardening: branch and tag rulesets, required checks, secret scanning, private vulnerability reporting | 🔜 v0.1 |
+| Secret scanning with push protection, and private vulnerability reporting | ✅ |
+| Repository hardening: branch and tag rulesets with required checks | 🔜 after v1.0 |
 | A test that keeps README examples in sync with the test fixtures, once the documentation site has many examples | 💡 |
-| End-to-end CLI tests with `testscript` | 🔜 v0.3 |
-| Fuzz tests for configuration parsing and header detection | 🔜 v0.3 |
-| Benchmarks on large repositories with a performance budget | 🔜 v0.3 |
-| A symlink policy for scans and outputs | 🔜 v0.3 |
-| OpenSSF Scorecard and CodeQL | 🔜 v0.3 |
+| End-to-end CLI tests with `testscript` ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | 🔜 v0.3 |
+| Fuzz tests for configuration parsing and header detection ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | 🔜 v0.3 |
+| Benchmarks on large repositories with a performance budget ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | 🔜 v0.3 |
+| A symlink policy for scans and outputs ([design 26](docs/design.md#26-symlinks-planned-v03)) | 🔜 v0.3 |
+| CodeQL | ✅ |
+| OpenSSF Scorecard | 🔜 after v1.0 |
 
 ### Distribution
 
 | Feature | Status |
 | --- | --- |
-| Release automation with GoReleaser and reproducible builds (`-trimpath`), for published binaries | 🔜 v0.3 |
-| Signed checksums, SBOMs, and build provenance | 🔜 v0.3 |
-| Homebrew tap | 🔜 v0.3 |
+| Release automation with GoReleaser and reproducible builds (`-trimpath`), for published binaries ([design 33](docs/design.md#33-releases-planned-after-v10)) | 🔜 after v1.0 |
+| Signed checksums, SBOMs, and build provenance ([design 33](docs/design.md#33-releases-planned-after-v10)) | 🔜 after v1.0 |
+| Homebrew tap ([design 33](docs/design.md#33-releases-planned-after-v10)) | 🔜 after v1.0 |
 | A container image for CI systems without Go | 💡 |
 
 ### Documentation and community
@@ -186,14 +189,14 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | `CONTRIBUTING.md` with build, test, and code conventions | ✅ |
 | `SECURITY.md` with private vulnerability reporting | ✅ |
 | `CODE_OF_CONDUCT.md` | 🔜 v1.0 |
-| Issue and pull request templates | 🔜 v0.3 |
-| Runnable `examples/` directory, tested in CI | 🔜 v0.3 |
-| Documentation site: guides, configuration reference generated from the schema, function reference | 🔜 v0.3 |
-| Recipes: driver and plugin registries, HTTP routes, CLI commands, gRPC wiring, workflow engines | 🔜 v0.3 |
-| Comparison page: adder versus `go generate`, stencil, plop, hygen, and hand-rolled generators | 🔜 v0.3 |
-| Migration guide from a hand-rolled generator | 🔜 v0.3 |
+| Issue and pull request templates | 🔜 after v1.0 |
+| Runnable `examples/` directory, tested in CI ([design 35](docs/design.md#35-documentation-and-examples-planned-after-v10)) | 🔜 after v1.0 |
+| Documentation site: guides, configuration reference generated from the schema, function reference ([design 35](docs/design.md#35-documentation-and-examples-planned-after-v10)) | 🔜 after v1.0 |
+| Recipes: driver and plugin registries, HTTP routes, CLI commands, gRPC wiring, workflow engines | 🔜 after v1.0 |
+| Comparison page: adder versus `go generate`, stencil, plop, hygen, and hand-rolled generators | 🔜 after v1.0 |
+| Migration guide from a hand-rolled generator | 🔜 after v1.0 |
 | Support and deprecation policy for configuration fields and Go versions | 🔜 v1.0 |
-| Launch: announcement post, Gophers Slack, r/golang | 🔜 v0.3 |
+| Launch: announcement post, Gophers Slack, r/golang | 🔜 after v1.0 |
 
 ## Milestones
 
@@ -201,10 +204,11 @@ Status: ✅ available · 🔜 planned for the milestone shown · 💡 idea, not 
 | --- | --- | --- |
 | **v0.1 derive** | Derived files that are safe to rely on in CI | `adder derive` and `adder check` pass end to end on Linux, macOS, and Windows with both supported Go releases, and a hand-rolled registry generator can be reproduced from configuration alone. |
 | **v0.2 new** | Scaffolding with validated inputs | A new component can be added with one `adder new` command, and its registries update automatically. |
-| **v0.3 discover** | People and agents can find and drive generators without reading the configuration | An agent can list generators, read their input schema, preview, and run one, using only adder's JSON output, and releases publish signed binaries. |
+| **v0.3 discover** | People and agents can find and drive generators without reading the configuration | An agent can list generators, read their input schema, preview, and run one, using only adder's JSON output. |
 | **v0.4 types** | Scans that understand Go types, not only names | Registries can be built from "every type that implements this interface". |
 | **v0.5 packs** | Reuse across repositories, plus a public library API | Two unrelated repositories share a generator pack. |
 | **v1.0** | Stability | The configuration schema and library API carry compatibility guarantees. |
+| **After v1.0** | Distribution, integrations, and documentation | Releases publish signed binaries and a Homebrew cask, editors and CI systems integrate with adder, a documentation site covers every feature, and adder is announced. |
 
 ## Open questions
 
