@@ -143,7 +143,7 @@ adder supports the two most recent Go releases. `go.mod` declares the older one 
 
 Dependencies are kept to a minimum: cobra for the command line, `go.yaml.in/yaml/v3` for configuration, `golang.org/x/mod` for reading `go.mod`, and `github.com/rogpeppe/go-internal/diff` for `--diff` previews. Anything that shapes generated output, such as template functions and case conversion, is implemented in adder itself, because a dependency upgrade must never change what people's templates produce.
 
-`golang.org/x/sys` is used only to turn on color in Windows consoles ([decision 32](#32-terminal-output)). Planned for v0.4: `golang.org/x/tools/go/packages`, to load types for scans that ask for them ([decision 37](#37-loading-types-planned-v04)). Tests also use `github.com/rogpeppe/go-internal/testscript`, from the same module as the diff code, and `github.com/santhosh-tekuri/jsonschema/v6` to check the input schemas `adder describe` writes. Neither is built into the binary.
+`golang.org/x/sys` is used only to turn on color in Windows consoles ([decision 32](#32-terminal-output)), and `golang.org/x/tools/go/packages` only to load types for scans that ask for them ([decision 37](#37-loading-types)). Tests also use `github.com/rogpeppe/go-internal/testscript`, from the same module as the diff code, and `github.com/santhosh-tekuri/jsonschema/v6` to check the input schemas `adder describe` writes. Neither is built into the binary.
 
 ### 12. One configuration file at the root
 
@@ -191,13 +191,13 @@ Directives look like `//adder:register name=s3 desc="Local disk"`: no space afte
 
 **Why:** Go's doc comment rules treat `//name:value` lines as directives, which godoc hides and gofmt keeps together, and the tools Go developers use most follow the same form: `//go:generate`, `//go:embed`, `//nolint:`, `//lint:ignore`. The `// +marker:` style from Kubernetes generators appears as text in documentation and is rarely used outside that ecosystem.
 
-### 17. Type-aware scans are an explicit opt-in (planned, v0.4)
+### 17. Type-aware scans are an explicit opt-in
 
 A scan uses type information only when it sets `typeCheck: true`. Filters that need it, such as "implements this interface", fail validation on a scan without it, with a hint to enable it. Type-aware scans run the Go toolchain offline (`GOPROXY=off`, `-mod=readonly`) and report missing dependencies instead of downloading them.
 
 **Why:** type checking is much slower than parsing, needs code that compiles and dependencies in the module cache, and runs the toolchain. Enabling it automatically based on which filters are used would hide a performance and reliability cliff behind an innocent-looking change. Parsing stays the fast default.
 
-How types are loaded is [decision 37](#37-loading-types-planned-v04).
+How types are loaded is [decision 37](#37-loading-types).
 
 ### 18. The library API arrives when it has a real consumer (planned)
 
@@ -614,7 +614,7 @@ Before then, the README and `docs/` remain the documentation.
 - **Fuzzing:** fuzz tests for configuration loading, header parsing, directive parsing, and import pruning check that no input panics, that problems point inside the input, and that pruning keeps gofmt-formatted Go parsing. Seed corpora run with every test run, and a weekly workflow fuzzes each target for five minutes.
 - **Performance budget:** a benchmark builds a repository of 1,000 packages and 10,000 functions and runs `derive` over it. The budget is 500 ms on GitHub's standard runners. CI fails above four times the budget, which catches a slowdown by an order of magnitude without failing on noisy timing. Parallel parsing is only added if the budget is missed.
 
-### 37. Loading types (planned, v0.4)
+### 37. Loading types
 
 Scans with `typeCheck: true` load their packages with `golang.org/x/tools/go/packages`, the loader gopls and staticcheck use. It runs `go list` and the compiler to build export data for dependencies, and type checks the scanned packages from source with the standard library's `go/types`, so results follow the Go release adder was built with, not the loader's version.
 
@@ -647,7 +647,7 @@ The parse-based rule for build constraints ([decision 27](#27-build-constraints-
 | The machine's `GOOS` and `GOARCH` | Output would differ between a Mac and a Linux CI runner. |
 | Checking every platform and merging the results | Several times slower, and items that exist on one platform only have no single right answer. |
 
-### 38. Constant and variable scans (planned, v0.4)
+### 38. Constant and variable scans
 
 A scan can select constants and variables with a `values` block, in place of `funcs` or `types`:
 
@@ -665,7 +665,7 @@ scans:
 
 **Why:** enums and lookup tables are among the most common things generators read, such as an enum's `String` method or a list of feature flags. `.Iota` covers the common `iota` enum without evaluating expressions, which needs type checking, and `sortBy "Iota"` lists an enum in declaration order while items keep one order for every scan ([decision 7](#7-deterministic-output)).
 
-### 39. File scans (planned, v0.4)
+### 39. File scans
 
 A scan can list files that are not Go source with a `files` block, in place of `funcs`, `types`, or `values`:
 
@@ -683,7 +683,7 @@ scans:
 
 **Why:** generated registries often index files rather than code: migrations, fixtures, templates, schemas. Listing them needs no parser, which keeps scans to Go source and plain file lists ([non-goals](../ROADMAP.md#non-goals)).
 
-### 40. Multiple configurations (planned, v0.4)
+### 40. Multiple configurations
 
 A repository can hold several `adder.yaml` files, such as one per service in a monorepo. Each stays independent, with its own directory as its root ([decision 12](#12-one-configuration-file-at-the-root)).
 

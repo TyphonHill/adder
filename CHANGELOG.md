@@ -4,6 +4,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
 ### Added
 
 - Constant and variable scans, with a `values` block filtering by `kind`, `exported`, `name`, `type`, and `directive`. Items gain `.Type`, `.Value`, and `.Iota`, and a `const` group's type carries to the names that repeat it, so `iota` enums work.
@@ -90,7 +92,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Diagnostics with stable codes, file positions, and hints; every problem is reported at once.
 - Exit codes: 0 for success, 1 for problems, 2 for usage mistakes, and 3 for stale outputs.
 
-[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/TyphonHill/adder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TyphonHill/adder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TyphonHill/adder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/TyphonHill/adder/releases/tag/v0.1.0
