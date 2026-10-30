@@ -3,7 +3,6 @@ package cli
 import (
 	"cmp"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -70,7 +69,7 @@ func newInitCommand(opts *globalOptions) *cobra.Command {
 			}
 			rep.Changes = []changeReport{{Path: filepath.ToSlash(path), Status: plan.Created}}
 			if !opts.json {
-				fmt.Fprintf(cmd.OutOrStdout(), "%-9s  %s\n", plan.Created, filepath.ToSlash(path))
+				opts.printer(cmd.OutOrStdout()).change(plan.Change{Path: filepath.ToSlash(path), Status: plan.Created}, false)
 			}
 			return nil
 		},

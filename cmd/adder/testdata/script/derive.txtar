@@ -7,9 +7,12 @@ exec adder check
 ! stdout .
 ! stderr .
 
-# Running derive again leaves the unchanged registry alone.
+# Running derive again leaves the unchanged registry alone and prints nothing, unless asked.
 exec adder derive
-cmp stdout unchanged.out
+! stdout .
+exec adder derive --verbose
+stdout '^unchanged  drivers/drivers.gen.go$'
+stdout '^scanned    scan Drivers found 2 items$'
 
 # A new driver makes the registry stale, and check exits with status 3.
 mkdir drivers/gcs
@@ -58,8 +61,6 @@ var All = map[string]driver.Factory{
 	"local": local.New,
 	"s3":    s3.New,
 }
--- unchanged.out --
-unchanged  drivers/drivers.gen.go
 -- check.out --
 would be updated    drivers/drivers.gen.go
 -- check.err --

@@ -10,6 +10,9 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Template functions `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `nindent`, and `plural`, with Sprout's names and argument order, and `groupBy`.
 - `adder new` asks for missing required inputs when run in a terminal, listing allowed values and asking again until an answer is valid.
 - Generator `tests` and `adder test`, which compares the files a generator creates from sample inputs with golden files, and `adder test --update` to rewrite them. A new diagnostic code `golden-mismatch` reports failures.
+- `--quiet` prints only problems, and `--verbose` also prints unchanged files and how many items each scan found.
+- Statuses and problem codes are in color in a terminal, unless `NO_COLOR` is set or `TERM` is `dumb`.
+- Shell completion for generator names, their flags, input values from `values` and `valuesFrom`, and generated files for `adder explain`, through `adder completion`.
 - `adder list` shows the generators and derived outputs, `adder describe <generator>` shows a generator's inputs with the values its scans allow now and, with `--json`, a JSON Schema of its inputs, and `adder explain <file>` shows which output and template produced a file and whether it is up to date.
 - `each` on an output renders it once per scan item, as `.Item`, with a templated path. Files it generated that it no longer produces are removed, and `adder check` reports them as stale. Changes gain a `removed` status.
 - Generated-file headers for other languages, in each one's comment syntax: YAML, TOML, shell, Python, TypeScript, SQL, CSS, Markdown, HTML, and more.
@@ -21,6 +24,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - adder's header is added even when a template writes another tool's generated-code comment, which used to suppress it. Only adder's own header is kept as is.
 - `adder derive` no longer replaces a file without adder's header with an output that has one, and reports `file-exists` instead. Non-Go outputs written by earlier versions have no header, so delete them once and run `adder derive` to regenerate them.
 - `Item` is reserved and can no longer be used as a scan name.
+- `adder derive` no longer lists unchanged outputs unless `--verbose` is given, so a run that changes nothing prints nothing.
+- `-v` is now `--verbose`. Use `--version` to print the version.
 - Scans skip files that no platform can build, such as `//go:build ignore` or a custom tag `buildTags` does not list, so derived outputs that included them change.
 - adder refuses to write or remove a file through a symbolic link, with an `unsafe-path` problem.
 - Scans no longer follow a symbolic link named directly in `dirs`, matching how wildcards already skipped them.

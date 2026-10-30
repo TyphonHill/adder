@@ -69,6 +69,7 @@ func TestCLI(t *testing.T) {
 		wantCode int
 		// wantStdout and wantStderr are exact; the contains fields are used when the output has variable parts.
 		wantStdout     string
+		wantNoStdout   bool
 		wantStderr     func(root string) string
 		stderrPrefix   func(root string) string
 		stdoutContains string
@@ -94,9 +95,60 @@ func TestCLI(t *testing.T) {
 					t.Fatal(errOut)
 				}
 			},
-			args:       func(root string) []string { return []string{"--root", root, "derive"} },
+			args:       func(root string) []string { return []string{"--root", root, "derive", "--verbose"} },
 			wantCode:   ExitOK,
-			wantStdout: "unchanged  drivers/drivers.gen.go\n",
+			wantStdout: "scanned    scan Drivers found 2 items\nunchanged  drivers/drivers.gen.go\n",
+		},
+		{
+			name: "derive prints nothing when nothing changes",
+			setup: func(t *testing.T, root string) {
+				if code, _, errOut := run(t.Context(), "--root", root, "derive"); code != ExitOK {
+					t.Fatal(errOut)
+				}
+			},
+			args:         func(root string) []string { return []string{"--root", root, "derive"} },
+			wantCode:     ExitOK,
+			wantNoStdout: true,
+		},
+		{
+			name:         "quiet prints nothing but problems",
+			args:         func(root string) []string { return []string{"--root", root, "derive", "-q"} },
+			wantCode:     ExitOK,
+			wantNoStdout: true,
+			after: func(t *testing.T, root string) {
+				if !exists(t, filepath.Join(root, output)) {
+					t.Error("quiet did not write the output")
+				}
+			},
+		},
+		{
+			name:           "quiet still prints diffs that were asked for",
+			args:           func(root string) []string { return []string{"--root", root, "derive", "-q", "--diff"} },
+			wantCode:       ExitOK,
+			stdoutContains: "\ndiff /dev/null b/drivers/drivers.gen.go\n",
+		},
+		{
+			name: "check is verbose about scans and current outputs",
+			setup: func(t *testing.T, root string) {
+				if code, _, errOut := run(t.Context(), "--root", root, "derive"); code != ExitOK {
+					t.Fatal(errOut)
+				}
+			},
+			args:       func(root string) []string { return []string{"--root", root, "check", "-v"} },
+			wantCode:   ExitOK,
+			wantStdout: "scanned    scan Drivers found 2 items\nunchanged  drivers/drivers.gen.go\n",
+		},
+		{
+			name:         "quiet discovery prints nothing",
+			args:         func(root string) []string { return []string{"--root", root, "list", "--quiet"} },
+			wantCode:     ExitOK,
+			wantNoStdout: true,
+		},
+		{
+			name:           "quiet and verbose together",
+			args:           func(root string) []string { return []string{"--root", root, "derive", "-q", "-v"} },
+			wantCode:       ExitUsage,
+			stderrContains: []string{"--quiet and --verbose cannot be combined", "Run 'adder derive --help' for usage."},
 		},
 		{
 			name:       "dry run shows pending changes and writes nothing",
@@ -173,9 +225,9 @@ func TestCLI(t *testing.T) {
 					t.Fatal(errOut)
 				}
 			},
-			args:       func(root string) []string { return []string{"--root", root, "derive", "-n"} },
-			wantCode:   ExitOK,
-			wantStdout: "unchanged  drivers/drivers.gen.go\n",
+			args:         func(root string) []string { return []string{"--root", root, "derive", "-n"} },
+			wantCode:     ExitOK,
+			wantNoStdout: true,
 		},
 		{
 			name: "explicit config and out directory",
@@ -423,6 +475,9 @@ func TestCLI(t *testing.T) {
 			}
 			if tt.wantStdout != "" && stdout != tt.wantStdout {
 				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			if tt.wantNoStdout && stdout != "" {
+				t.Errorf("stdout = %q, want nothing", stdout)
 			}
 			if !strings.Contains(stdout, tt.stdoutContains) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, tt.stdoutContains)

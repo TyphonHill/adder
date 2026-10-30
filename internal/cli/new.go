@@ -14,7 +14,6 @@ import (
 
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/plan"
 	"github.com/TyphonHill/adder/internal/scaffold"
 )
 
@@ -31,6 +30,7 @@ func newNewCommand(opts *globalOptions) *cobra.Command {
 		Long:  newLong,
 		// Generators define their own flags, so the command line is parsed once adder.yaml is loaded.
 		DisableFlagParsing: true,
+		ValidArgsFunction:  completeNew(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runNew(cmd, opts, args)
 		},
@@ -144,22 +144,15 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 			if opts.json {
 				return nil
 			}
-			out := cmd.OutOrStdout()
+			out := opts.printer(cmd.OutOrStdout())
 			for _, c := range res.Plan.Changes {
-				switch {
-				case c.Status == plan.Unchanged:
-					continue
-				case dryRun && c.Status != plan.Skipped:
-					fmt.Fprintf(out, "would be %-9s  %s\n", c.Status, c.Path)
-				default:
-					fmt.Fprintf(out, "%-9s  %s\n", c.Status, c.Path)
-				}
+				out.change(c, dryRun)
 			}
 			if showDiff {
-				printDiffs(out, res.Plan.Pending())
+				out.diffs(res.Plan.Pending())
 			}
 			if rep.Message != "" && !dryRun {
-				fmt.Fprintf(out, "\n%s\n", rep.Message)
+				out.printf("\n%s\n", rep.Message)
 			}
 			return nil
 		},
@@ -180,6 +173,7 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "show what would change without writing anything")
 	cmd.Flags().BoolVar(&showDiff, "diff", false, "also show each change as a unified diff; implies --dry-run")
 	cmd.Flags().StringVar(&inputsFile, "inputs", "", "read inputs from a JSON object in this file, or - for standard input; flags override it")
+	_ = cmd.MarkFlagFilename("inputs", "json")
 	return cmd
 }
 

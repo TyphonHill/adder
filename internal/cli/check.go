@@ -43,11 +43,15 @@ It exits with status 3 when any output is out of date, so it can guard CI and re
 			rep.Changes = changesReport(p.Changes, showDiff)
 			pending := p.Pending()
 			if !opts.json {
-				for _, c := range pending {
-					fmt.Fprintf(cmd.OutOrStdout(), "would be %-9s  %s\n", c.Status, c.Path)
+				out := opts.printer(cmd.OutOrStdout())
+				if err := out.scans(cmd.Context(), cfg, root); err != nil {
+					return err
+				}
+				for _, c := range p.Changes {
+					out.change(c, true)
 				}
 				if showDiff {
-					printDiffs(cmd.OutOrStdout(), pending)
+					out.diffs(pending)
 				}
 			}
 			if len(pending) > 0 {

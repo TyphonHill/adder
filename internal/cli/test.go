@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"maps"
 	"os"
 	"slices"
@@ -38,6 +37,7 @@ func newTestCommand(opts *globalOptions) *cobra.Command {
 		Long: `test runs the tests declared under each generator's tests in adder.yaml, or only those of the generators
 named, and compares the files each generator creates with the files under its want directory. It runs
 against the repository like --dry-run and writes nothing, unless --update rewrites the want directories.`,
+		ValidArgsFunction: completeGenerators(opts, 0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rep := &testReport{Tests: []testResultReport{}}
 			opts.report = rep
@@ -82,12 +82,12 @@ against the repository like --dry-run and writes nothing, unless --update rewrit
 					return err
 				}
 				if !opts.json {
-					printUpdates(cmd.OutOrStdout(), results)
+					printUpdates(opts.printer(cmd.OutOrStdout()), results)
 				}
 				return nil
 			}
 			if !opts.json {
-				printTests(cmd.OutOrStdout(), results)
+				printTests(opts.printer(cmd.OutOrStdout()), results)
 			}
 			var failures diag.List
 			for _, res := range results {
@@ -107,33 +107,35 @@ against the repository like --dry-run and writes nothing, unless --update rewrit
 	return cmd
 }
 
-func printTests(w io.Writer, results []*scaffold.TestResult) {
+func printTests(p *printer, results []*scaffold.TestResult) {
 	if len(results) == 0 {
-		fmt.Fprintln(w, "no generator tests")
+		p.printf("no generator tests\n")
 		return
 	}
 	for _, res := range results {
-		status := "ok"
+		status, color := "ok  ", green
 		if !res.Passed() {
-			status = "FAIL"
+			status, color = "FAIL", red
 		}
-		fmt.Fprintf(w, "%-4s  %s/%s\n", status, res.Generator, res.Test.Name)
+		p.printf("%s  %s/%s\n", p.paint(color, status), res.Generator, res.Test.Name)
 	}
-	for _, res := range results {
-		printDiffs(w, res.Changes)
+	if !p.quiet {
+		for _, res := range results {
+			p.diffs(res.Changes)
+		}
 	}
 }
 
-func printUpdates(w io.Writer, results []*scaffold.TestResult) {
+func printUpdates(p *printer, results []*scaffold.TestResult) {
 	updated := false
 	for _, res := range results {
 		for _, c := range res.Changes {
-			fmt.Fprintf(w, "%-9s  %s\n", c.Status, c.Path)
+			p.change(c, false)
 			updated = true
 		}
 	}
 	if !updated {
-		fmt.Fprintln(w, "golden files are up to date")
+		p.printf("golden files are up to date\n")
 	}
 }
 

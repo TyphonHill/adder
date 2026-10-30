@@ -60,7 +60,7 @@ func newListCommand(opts *globalOptions) *cobra.Command {
 				rep.Generators = append(rep.Generators, generatorReport{Name: name, Description: gen.Description, Pos: gen.Pos})
 			}
 			rep.Outputs = append(rep.Outputs, cfg.Derive.Outputs...)
-			if !opts.json {
+			if !opts.json && !opts.quiet {
 				printList(cmd.OutOrStdout(), rep)
 			}
 			return nil
@@ -98,7 +98,8 @@ func newDescribeCommand(opts *globalOptions) *cobra.Command {
 		Long: `describe shows what a generator takes and creates. Values allowed by valuesFrom and rejected by unique
 are computed from the scans, so they are current. With --json, it includes inputSchema, a JSON Schema
 for the object adder new --inputs accepts.`,
-		Args: usageArgs(cobra.ExactArgs(1)),
+		Args:              usageArgs(cobra.ExactArgs(1)),
+		ValidArgsFunction: completeGenerators(opts, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rep := &describeReport{}
 			opts.report = rep
@@ -117,7 +118,7 @@ for the object adder new --inputs accepts.`,
 			if rep.Description, err = scaffold.Describe(cmd.Context(), cfg, src, args[0]); err != nil {
 				return err
 			}
-			if !opts.json {
+			if !opts.json && !opts.quiet {
 				printDescription(cmd.OutOrStdout(), rep.Description)
 			}
 			return nil
@@ -187,7 +188,8 @@ func newExplainCommand(opts *globalOptions) *cobra.Command {
 		Short: "Show which output and template produced a file",
 		Long: `explain says where a generated file comes from: the output in adder.yaml that writes it, its
 template, the scans the template refers to, and whether the file is up to date.`,
-		Args: usageArgs(cobra.ExactArgs(1)),
+		Args:              usageArgs(cobra.ExactArgs(1)),
+		ValidArgsFunction: completeExplain(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rep := &explainReport{}
 			opts.report = rep
@@ -207,7 +209,7 @@ template, the scans the template refers to, and whether the file is up to date.`
 			if rep.Explanation, err = derive.Explain(cmd.Context(), cfg, src, name); err != nil {
 				return err
 			}
-			if !opts.json {
+			if !opts.json && !opts.quiet {
 				printExplanation(cmd.OutOrStdout(), rep.Explanation)
 			}
 			return nil
