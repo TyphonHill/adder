@@ -101,8 +101,10 @@ const (
 
 // File is one file a generator creates.
 type File struct {
-	// Template is a slash-separated path relative to the configuration file's directory.
+	// Template is a slash-separated path relative to the configuration file's directory, or to the root of Pack.
 	Template string `yaml:"template"`
+	// Pack names the pack holding the template, for a file rendering a pack's template.
+	Pack string `yaml:"pack"`
 	// Path is a template for the slash-separated path of the new file, relative to the repository root.
 	Path string `yaml:"path"`
 	// When and Unless name a bool input that includes or excludes the file.

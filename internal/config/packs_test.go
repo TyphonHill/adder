@@ -172,6 +172,12 @@ func TestPackProblems(t *testing.T) {
 			pack:   storePack,
 			want:   []string{"adder.yaml:6:3 duplicate-path"},
 		},
+		{name: "an output rendering a template of a pack adder was not built with", config: "version: 1\nderive:\n  outputs:\n    - {template: t.tmpl, pack: other, path: x.go}\n", want: []string{"adder.yaml:4:26 unknown-pack"}},
+		{name: "a generator file rendering a template of a pack adder was not built with", config: "version: 1\ngenerators:\n  g: {files: [{template: t.tmpl, pack: other, path: x.go}]}\n", want: []string{"adder.yaml:3:34 unknown-pack"}},
+		{name: "a borrowed pack's bad partial", config: "version: 1\nderive:\n  outputs:\n    - {template: t.tmpl, pack: store, path: x.go}\n", pack: "version: 1\npartials: [\"a/**/b\"]\n", want: []string{"pack store: pack.yaml:2:12 invalid-value"}},
+		{name: "a borrowed pack's pack.yaml that does not decode", config: "version: 1\nderive:\n  outputs:\n    - {template: t.tmpl, pack: store, path: x.go}\n", pack: "partials: [[x]]\n", want: []string{"pack store: pack.yaml:1 invalid-value"}},
+		{name: "a pack's output naming a pack", config: use, pack: "version: 1\noptions: {dirs: {type: list}, out: {}}\nderive:\n  outputs:\n    - {template: t.tmpl, pack: other, path: x.go}\n", want: []string{"pack store: pack.yaml:5:26 invalid-value"}},
+		{name: "a pack's generator file naming a pack", config: use, pack: "version: 1\noptions: {dirs: {type: list}, out: {}}\ngenerators:\n  g: {files: [{template: t.tmpl, pack: other, path: x.go}]}\n", want: []string{"pack store: pack.yaml:4:34 invalid-value"}},
 		{name: "a template in a scan's directories", config: "version: 1\nderive:\n  scans:\n    S: {dirs: [\"{{ .Vars.dir }}\"]}\n", want: []string{"adder.yaml:4:16 invalid-value"}},
 		{name: "a scan named Options", config: "version: 1\nderive:\n  scans:\n    Options: {dirs: [x]}\n", want: []string{"adder.yaml:4:5 reserved-name"}},
 	}
@@ -357,5 +363,28 @@ func TestPackGenerators(t *testing.T) {
 				t.Errorf("test = %+v", tests[0])
 			}
 		})
+	}
+}
+
+func TestPackTemplates(t *testing.T) {
+	cfg, err := Parse("adder.yaml", []byte(`version: 1
+derive:
+  scans:
+    S: {dirs: [x]}
+  outputs:
+    - {template: each.tmpl, each: S, path: "a/{{ .Item.Name }}.go"}
+    - {template: each.tmpl, pack: store, each: S, path: "b/{{ .Item.Name }}.go"}
+generators:
+  g: {files: [{template: g.tmpl, pack: store, path: x.go}]}
+`), fakePacks{"store": "version: 1\noptions: {dir: {}}\npartials: [./_*.tmpl]\n"})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	pt, ok := cfg.PackTemplates["store"]
+	if !ok || pt.FS == nil || len(pt.Partials) != 1 || pt.Partials[0].Pattern != "_*.tmpl" || pt.Partials[0].Pos.String() != "pack store: pack.yaml:3:12" {
+		t.Errorf("PackTemplates = %+v", cfg.PackTemplates)
+	}
+	if got := cfg.Derive.Outputs[1].Source(); got != "each.tmpl in pack store" {
+		t.Errorf("Source() = %q", got)
 	}
 }

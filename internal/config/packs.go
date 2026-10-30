@@ -52,6 +52,12 @@ type Use struct {
 	Config  *Config        `yaml:"-"`
 }
 
+// PackTemplates are a pack's templates and partials, as a configuration's own outputs and files render them.
+type PackTemplates struct {
+	FS       fs.FS
+	Partials []Partial
+}
+
 // Option types.
 const (
 	OptionString = "string"
@@ -137,8 +143,81 @@ func (c *Config) loadPacks(packs Packs, pos positions) diag.List {
 		}
 		c.Packs[name] = use
 	}
+	errs = append(errs, c.loadPackTemplates(packs, pos)...)
 	errs = append(errs, c.checkUsePaths()...)
 	return append(errs, c.addUseGenerators(pos)...)
+}
+
+// loadPackTemplates finds the packs whose templates the configuration's own outputs and generator files name,
+// with the partials their pack.yaml lists.
+func (c *Config) loadPackTemplates(packs Packs, pos positions) diag.List {
+	at := make(map[string]string) // the first place naming each pack
+	for i, out := range c.Derive.Outputs {
+		if out.Pack != "" && at[out.Pack] == "" {
+			at[out.Pack] = "derive.outputs." + strconv.Itoa(i) + ".pack"
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(c.Generators)) {
+		for i, f := range c.Generators[name].Files {
+			if f.Pack != "" && at[f.Pack] == "" {
+				at[f.Pack] = "generators." + name + ".files." + strconv.Itoa(i) + ".pack"
+			}
+		}
+	}
+	var errs diag.List
+	for _, pack := range slices.Sorted(maps.Keys(at)) {
+		var fsys fs.FS
+		found := false
+		if packs != nil {
+			fsys, found = packs.FS(pack)
+		}
+		if !found {
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.UnknownPack,
+				Pos:     pos.at(at[pack]),
+				Message: fmt.Sprintf("adder was built without pack %q", pack),
+				Hint:    "packs are part of a repository's own build of adder, such as go tool adder, whose main package passes them to adder.Main",
+			})
+			continue
+		}
+		partials, problems := packPartials(pack, fsys)
+		errs = append(errs, problems...)
+		if c.PackTemplates == nil {
+			c.PackTemplates = make(map[string]PackTemplates)
+		}
+		c.PackTemplates[pack] = PackTemplates{FS: fsys, Partials: partials}
+	}
+	return errs
+}
+
+// packPartials returns the partials a pack's pack.yaml lists, without loading the rest, which may need options.
+func packPartials(pack string, fsys fs.FS) ([]Partial, diag.List) {
+	file := diag.Pos{Pack: pack, File: PackFileName}
+	data, err := fs.ReadFile(fsys, PackFileName)
+	if err != nil {
+		return nil, diag.List{diag.Wrap(diag.IO, file, err)}
+	}
+	var root yaml.Node
+	var content struct {
+		Partials []Partial `yaml:"partials"`
+	}
+	err = yaml.Unmarshal(data, &root)
+	if err == nil {
+		err = root.Decode(&content)
+	}
+	if err != nil {
+		return nil, diag.InPack(decodeError(PackFileName, err), pack, file)
+	}
+	pos := indexNode(PackFileName, pack, &root)
+	var errs diag.List
+	for i := range content.Partials {
+		p := &content.Partials[i]
+		p.Pattern, p.Pos = cleanSlash(p.Pattern), pos.at("partials."+strconv.Itoa(i))
+		if d := checkGlob(p.Pos, fmt.Sprintf("partial %q", p.Pattern), p.Pattern); d != nil {
+			errs = append(errs, d)
+		}
+	}
+	return content.Partials, errs
 }
 
 // Outputs returns the configuration's own outputs, then those of each use of a pack, in name order.
@@ -296,6 +375,9 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, funcs te
 	if err := root.Decode(&filled); err != nil {
 		return nil, nil, inPack(decodeError(PackFileName, err))
 	}
+	if problems := ownTemplates(filled, indexNode(PackFileName, pack, &root)); len(problems) > 0 {
+		return nil, nil, problems
+	}
 	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive, Generators: filled.Generators}
 	pos := indexNode(PackFileName, pack, &root)
 	pos.overrides = overrides
@@ -323,6 +405,33 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, funcs te
 		cfg.Derive.Outputs[i].Pack, cfg.Derive.Outputs[i].Use = pack, use
 	}
 	return cfg, values, nil
+}
+
+// ownTemplates reports outputs and generator files in a pack.yaml that name a pack, since a pack renders only
+// its own templates.
+func ownTemplates(pf packFile, pos positions) diag.List {
+	var errs diag.List
+	invalid := func(at string) {
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos.at(at),
+			Message: "a pack renders only its own templates",
+			Hint:    "remove pack; template paths in pack.yaml are relative to the pack's root",
+		})
+	}
+	for i, out := range pf.Derive.Outputs {
+		if out.Pack != "" {
+			invalid("derive.outputs." + strconv.Itoa(i) + ".pack")
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(pf.Generators)) {
+		for i, f := range pf.Generators[name].Files {
+			if f.Pack != "" {
+				invalid("generators." + name + ".files." + strconv.Itoa(i) + ".pack")
+			}
+		}
+	}
+	return errs
 }
 
 // optionLines returns the lines of the mappings that stand for an option's value.

@@ -64,11 +64,15 @@ func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) 
 	if i < 0 {
 		return e, nil
 	}
+	scanNames := slices.Sorted(maps.Keys(owner.cfg.Derive.Scans))
+	if output.Pack != "" && owner.pack == "" {
+		owner = packUnit(cfg, output.Pack)
+	}
 	set, err := templates(owner, src)
 	if err != nil {
 		return nil, err
 	}
-	scans, err := set.References(output.Template, slices.Sorted(maps.Keys(owner.cfg.Derive.Scans)))
+	scans, err := set.References(output.Template, scanNames)
 	if err != nil {
 		return nil, owner.locate(err, output.Pos)
 	}
