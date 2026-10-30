@@ -16,13 +16,13 @@ import (
 
 	"golang.org/x/mod/modfile"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/header"
-	"github.com/TyphonHill/adder/internal/pack"
-	"github.com/TyphonHill/adder/internal/plan"
-	"github.com/TyphonHill/adder/internal/render"
-	"github.com/TyphonHill/adder/internal/scan"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/header"
+	"typhonhill.dev/adder/internal/pack"
+	"typhonhill.dev/adder/internal/plan"
+	"typhonhill.dev/adder/internal/render"
+	"typhonhill.dev/adder/internal/scan"
 )
 
 // Sources are the file systems a plan reads from.

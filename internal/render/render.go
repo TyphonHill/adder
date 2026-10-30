@@ -18,8 +18,8 @@ import (
 	"text/template"
 	"text/template/parse"
 
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/imports"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/imports"
 )
 
 // Set renders templates from a file system, each with the same partials and functions loaded.

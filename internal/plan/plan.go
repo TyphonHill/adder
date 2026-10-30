@@ -13,7 +13,7 @@ import (
 
 	"github.com/rogpeppe/go-internal/diff"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // Status is what applying a change does to its file.

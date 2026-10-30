@@ -16,8 +16,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/render"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/render"
 )
 
 // PackFileName is the configuration file at the root of a pack's file system.

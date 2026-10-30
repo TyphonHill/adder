@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/textcase"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/textcase"
 )
 
 // Generator creates new files from templates. It runs as adder new <name>.

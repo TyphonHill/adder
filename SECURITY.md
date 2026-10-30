@@ -16,7 +16,7 @@ Bugs in generated output, crashes, and wrong diagnostics are ordinary bugs; plea
 
 ## Reporting a vulnerability
 
-Please do not open a public issue. Report it privately through [GitHub's private vulnerability reporting](https://github.com/TyphonHill/adder/security/advisories/new), and include:
+Please do not open a public issue. Report it privately through [GitHub's private vulnerability reporting](https://github.com/typhonhilldev/adder/security/advisories/new), and include:
 
 - What you ran, including the output of `adder --version`.
 - A configuration and repository layout that reproduce the problem.

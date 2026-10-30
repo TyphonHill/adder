@@ -2,7 +2,7 @@
 env GOPROXY=off
 cp $ADDER_ROOT/go.mod go.mod
 cp $ADDER_ROOT/go.sum go.sum
-exec go mod edit -module=example.com/app -toolchain=none -require=github.com/TyphonHill/adder@v0.0.0 -replace=github.com/TyphonHill/adder=$ADDER_ROOT -tool=example.com/app/tools/adder
+exec go mod edit -module=example.com/app -toolchain=none -require=typhonhill.dev/adder@v0.0.0 -replace=typhonhill.dev/adder=$ADDER_ROOT -tool=example.com/app/tools/adder
 exec go tool adder derive
 stdout '^created    drivers/registry.gen.go$'
 stdout '^created    caches/registry.gen.go$'
@@ -60,7 +60,7 @@ stderr '^adder.yaml:4:5: pack use "drivers": adder was built without pack "store
 package main
 
 import (
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 
 	"example.com/app/store"
 )
@@ -73,7 +73,7 @@ package store
 import (
 	"embed"
 
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 )
 
 //go:embed pack.yaml registry.go.tmpl impl.go.tmpl

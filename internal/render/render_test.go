@@ -8,7 +8,7 @@ import (
 	"testing/fstest"
 	"text/template"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 func templates(content string) fstest.MapFS {

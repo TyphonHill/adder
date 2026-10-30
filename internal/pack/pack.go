@@ -10,9 +10,9 @@ import (
 	"slices"
 	"text/template"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/render"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/render"
 )
 
 // FileName is the configuration file at the root of a pack's file system.

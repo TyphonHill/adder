@@ -8,9 +8,9 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/derive"
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/derive"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // describeFixture loads the drivers fixture with two more inputs, so every kind of restriction is described.

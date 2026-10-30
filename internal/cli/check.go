@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TyphonHill/adder/internal/derive"
+	"typhonhill.dev/adder/internal/derive"
 )
 
 // staleError reports derived outputs that do not match what derive would write.

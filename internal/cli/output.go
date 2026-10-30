@@ -10,10 +10,10 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/derive"
-	"github.com/TyphonHill/adder/internal/pack"
-	"github.com/TyphonHill/adder/internal/plan"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/derive"
+	"typhonhill.dev/adder/internal/pack"
+	"typhonhill.dev/adder/internal/plan"
 )
 
 // ANSI colors for the words people scan for.

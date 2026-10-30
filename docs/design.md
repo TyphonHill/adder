@@ -25,7 +25,7 @@ adder.yaml ──► config ──► scan ──► render ──► plan ─�
 | `internal/diag` | Structured problems shared by every package. |
 | `internal/pack` | Check and register the packs adder was built with: their files and template functions. |
 | `internal/cli` | Commands, flags, output, and exit codes. |
-| `github.com/TyphonHill/adder` | The public API: `Main` and `Pack`, for a repository's own build. Signal handling and build information. |
+| `typhonhill.dev/adder` | The public API: `Main` and `Pack`, for a repository's own build. Signal handling and build information. |
 | `cmd/adder` | The binary: `adder.Main` without packs. |
 
 Each step only depends on the steps before it. Commands are thin: they load configuration, call one pipeline, and print the result.
@@ -207,7 +207,7 @@ How types are loaded is [decision 37](#37-loading-types).
 
 ### 18. The library API starts with packs and extensions
 
-The module's root package, `github.com/TyphonHill/adder`, is a small public facade over the internal packages. Its first consumer is a repository that builds its own adder with packs ([decision 41](#41-generator-packs)), custom template functions, or custom scanners ([decision 42](#42-custom-template-functions-and-scanners)), so v0.5 exposes only that:
+The module's root package, `typhonhill.dev/adder`, is a small public facade over the internal packages. Its first consumer is a repository that builds its own adder with packs ([decision 41](#41-generator-packs)), custom template functions, or custom scanners ([decision 42](#42-custom-template-functions-and-scanners)), so v0.5 exposes only that:
 
 ```go
 // Main runs the command line with the given packs, and exits.
@@ -588,7 +588,7 @@ generators:
 
 ### 31. Checking the configuration (planned, after v1.0)
 
-**A JSON Schema for `adder.yaml`.** The schema lives at `schema/v1.json` for `version: 1`, written in draft-07, which editors support best. `adder init` writes a `# yaml-language-server: $schema=` line pointing at the file on `main`, `https://raw.githubusercontent.com/TyphonHill/adder/main/schema/v1.json`, so the path must never move. A SchemaStore listing for files named `adder.yaml` waits until after v1.0, when the schema is stable. The schema is written by hand, so it can carry descriptions and examples, and a test checks that its properties match the configuration types exactly. It is a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings.
+**A JSON Schema for `adder.yaml`.** The schema lives at `schema/v1.json` for `version: 1`, written in draft-07, which editors support best. `adder init` writes a `# yaml-language-server: $schema=` line pointing at the file on `main`, `https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/v1.json`, so the path must never move. A SchemaStore listing for files named `adder.yaml` waits until after v1.0, when the schema is stable. The schema is written by hand, so it can carry descriptions and examples, and a test checks that its properties match the configuration types exactly. It is a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings.
 
 **`adder validate`** checks everything except whether outputs are up to date: the configuration, every template and partial, generator paths and tests, the scans, and rendering every derived output. It writes nothing and exits with status 0 or 1.
 
@@ -608,7 +608,7 @@ Pushing a `v*` tag runs GoReleaser in GitHub Actions:
 
 - **Binaries:** builds for Linux, macOS, and Windows on amd64 and arm64, with `-trimpath`, `CGO_ENABLED=0`, and file times taken from the commit, so rebuilding a tag produces identical archives. The version comes from the build information Go embeds from the tag, as `adder --version` already reads it, so no linker flags are needed.
 - **Integrity:** `checksums.txt` is signed with keyless cosign, as a Sigstore bundle. Each archive has an SPDX SBOM and a GitHub artifact attestation with SLSA build provenance, which `gh attestation verify` checks.
-- **Homebrew:** a cask in `TyphonHill/homebrew-tap`, pushed with a fine-grained token that can write only to that repository.
+- **Homebrew:** a cask in `typhonhilldev/homebrew-tap`, pushed with a fine-grained token that can write only to that repository.
 - **Release notes:** the changelog's section for the tag. The release fails when that section is missing, so no release ships without its changelog.
 - **Permissions:** the release job alone gets `contents: write`, `id-token: write`, and `attestations: write`.
 
@@ -747,7 +747,7 @@ package store
 import (
 	"embed"
 
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 )
 
 //go:embed pack.yaml templates
@@ -788,7 +788,7 @@ A repository that uses the pack builds its own adder, and names the pack in `add
 package main
 
 import (
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 	"github.com/acme/adder-packs/store"
 )
 
@@ -805,14 +805,14 @@ packs:
 ```
 
 ```console
-$ go mod edit -droptool github.com/TyphonHill/adder/cmd/adder
+$ go mod edit -droptool typhonhill.dev/adder/cmd/adder
 $ go get -tool ./tools/adder
 $ go tool adder new driver --name gcs
 created    drivers/gcs/driver.go
 updated    drivers/registry.gen.go
 ```
 
-**Building.** The repository's build takes the place of the `tool` line for `github.com/TyphonHill/adder/cmd/adder`, which is dropped because two tools named `adder` would make `go tool adder` ambiguous. `go tool adder` keeps working, now with the repository's packs. The Go command caches the build, so only the first run after a change compiles. `go.mod` and `go.sum` pin and verify the pack's version, private modules work as they do for any dependency, and tools such as Dependabot update packs like other modules. A stock adder that reads a configuration naming a pack it was not built with reports `unknown-pack`, with a hint to run the repository's own build.
+**Building.** The repository's build takes the place of the `tool` line for `typhonhill.dev/adder/cmd/adder`, which is dropped because two tools named `adder` would make `go tool adder` ambiguous. `go tool adder` keeps working, now with the repository's packs. The Go command caches the build, so only the first run after a change compiles. `go.mod` and `go.sum` pin and verify the pack's version, private modules work as they do for any dependency, and tools such as Dependabot update packs like other modules. A stock adder that reads a configuration naming a pack it was not built with reports `unknown-pack`, with a hint to run the repository's own build.
 
 **Using a pack.** Each entry under `packs` is one use, named like a generator. `pack` is the pack's `Name`, and `with` gives its options. A pack can be used more than once, such as once per service directory, and each use is independent.
 

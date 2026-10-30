@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // platformTags are the build tags set by the platform and toolchain, from Go's internal/syslist, which may take

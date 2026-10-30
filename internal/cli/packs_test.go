@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TyphonHill/adder/internal/pack"
+	"typhonhill.dev/adder/internal/pack"
 )
 
 func TestPackFuncs(t *testing.T) {

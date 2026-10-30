@@ -4,6 +4,10 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+- The module path is now `typhonhill.dev/adder`, and the repository lives at `github.com/typhonhilldev/adder`. Install adder with `go get -tool typhonhill.dev/adder/cmd/adder`, and change imports of `github.com/TyphonHill/adder` to `typhonhill.dev/adder`. Versions up to v0.5.1 stay available under the old path, which is deprecated, and are retracted under the new one, where they cannot be used.
+
 ## [0.5.1] - 2026-10-30
 
 ### Deprecated
@@ -113,10 +117,10 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Diagnostics with stable codes, file positions, and hints; every problem is reported at once.
 - Exit codes: 0 for success, 1 for problems, 2 for usage mistakes, and 3 for stale outputs.
 
-[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.5.1...HEAD
-[0.5.1]: https://github.com/TyphonHill/adder/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/TyphonHill/adder/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/TyphonHill/adder/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/TyphonHill/adder/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/TyphonHill/adder/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/TyphonHill/adder/releases/tag/v0.1.0
+[Unreleased]: https://github.com/typhonhilldev/adder/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/typhonhilldev/adder/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/typhonhilldev/adder/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/typhonhilldev/adder/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/typhonhilldev/adder/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/typhonhilldev/adder/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/typhonhilldev/adder/releases/tag/v0.1.0

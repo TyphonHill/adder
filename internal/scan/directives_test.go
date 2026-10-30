@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 func TestDirectives(t *testing.T) {

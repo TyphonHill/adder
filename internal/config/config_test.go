@@ -9,7 +9,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 const validConfig = `version: 1

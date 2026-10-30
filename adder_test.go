@@ -10,7 +10,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/TyphonHill/adder/internal/pack"
+	"typhonhill.dev/adder/internal/pack"
 )
 
 func TestVersionIn(t *testing.T) {

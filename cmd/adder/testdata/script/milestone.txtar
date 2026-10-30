@@ -8,7 +8,7 @@ modproxy example.com/storepack@v1.0.0 pack
 cd repo-a
 cp $ADDER_ROOT/go.mod go.mod
 cp $ADDER_ROOT/go.sum go.sum
-exec go mod edit -module=example.com/repo-a -toolchain=none -require=github.com/TyphonHill/adder@v0.0.0 -replace=github.com/TyphonHill/adder=$ADDER_ROOT -tool=example.com/repo-a/tools/adder
+exec go mod edit -module=example.com/repo-a -toolchain=none -require=typhonhill.dev/adder@v0.0.0 -replace=typhonhill.dev/adder=$ADDER_ROOT -tool=example.com/repo-a/tools/adder
 exec go mod edit -require=example.com/storepack@v1.0.0
 exec go mod download example.com/storepack
 exec go tool adder derive
@@ -23,7 +23,7 @@ exec go tool adder check
 cd ../repo-b
 cp $ADDER_ROOT/go.mod go.mod
 cp $ADDER_ROOT/go.sum go.sum
-exec go mod edit -module=example.com/repo-b -toolchain=none -require=github.com/TyphonHill/adder@v0.0.0 -replace=github.com/TyphonHill/adder=$ADDER_ROOT -tool=example.com/repo-b/tools/adder
+exec go mod edit -module=example.com/repo-b -toolchain=none -require=typhonhill.dev/adder@v0.0.0 -replace=typhonhill.dev/adder=$ADDER_ROOT -tool=example.com/repo-b/tools/adder
 exec go mod edit -require=example.com/storepack@v1.0.0
 exec go mod download example.com/storepack
 exec go tool adder new backend --name gcs
@@ -51,7 +51,7 @@ module example.com/storepack
 
 go 1.26.0
 
-require github.com/TyphonHill/adder v0.0.0
+require typhonhill.dev/adder v0.0.0
 -- pack/store.go --
 // Package store is a pack for repositories that keep one store implementation per directory.
 package store
@@ -60,7 +60,7 @@ import (
 	"embed"
 	"strings"
 
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 )
 
 //go:embed pack.yaml templates
@@ -109,7 +109,7 @@ package {{ .Options.package }}
 package main
 
 import (
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 
 	store "example.com/storepack"
 )
@@ -129,7 +129,7 @@ func New() {}
 package main
 
 import (
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 
 	store "example.com/storepack"
 )

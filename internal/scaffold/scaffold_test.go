@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/derive"
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/derive"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

@@ -1,5 +1,4 @@
-// Deprecated: adder moved to typhonhill.dev/adder. Install it with go get -tool typhonhill.dev/adder/cmd/adder.
-module github.com/TyphonHill/adder
+module typhonhill.dev/adder
 
 go 1.26.0
 
@@ -21,3 +20,6 @@ require (
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )
+
+// Tagged before the move: use github.com/TyphonHill/adder at these versions, or v0.6.0 or later here.
+retract [v0.1.0, v0.5.1]

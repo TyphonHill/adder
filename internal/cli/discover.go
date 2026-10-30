@@ -12,11 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/derive"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/plan"
-	"github.com/TyphonHill/adder/internal/scaffold"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/derive"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/plan"
+	"typhonhill.dev/adder/internal/scaffold"
 )
 
 // listReport is what list reports.

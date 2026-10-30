@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TyphonHill/adder/internal/config"
+	"typhonhill.dev/adder/internal/config"
 )
 
 var budget = flag.Bool("budget", false, "fail when derive is far slower than its performance budget")

@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // The header text is part of adder's compatibility promise: other commands find adder's outputs by parsing it.
