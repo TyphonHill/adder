@@ -39,7 +39,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | `adder validate`: check the configuration and templates without writing anything ([design 31](docs/design.md#31-checking-the-configuration-planned-after-v10)) | 🔜 after v1.0 |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
 | Multiple configurations in one repository, for monorepos and nested modules ([design 40](docs/design.md#40-multiple-configurations)) | ✅ |
-| `adder migrate`: upgrade a configuration to a newer schema version | 🔜 v1.0 |
+| `adder migrate`: upgrade a configuration to a newer schema version, with the first schema version that needs it ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 💡 |
 
 ### Scanning
 
@@ -152,7 +152,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | A public facade in the root package, experimental until v1.0: `adder.Main` and `adder.Pack` for a repository's own build ([design 18](docs/design.md#18-the-library-api-starts-with-packs-and-extensions)) | ✅ |
 | Register custom template functions and scanners from Go code ([design 42](docs/design.md#42-custom-template-functions-and-scanners)) | ✅ |
 | Run adder from Go, with plans and diagnostics as Go values, once a consumer such as an editor integration needs it ([design 18](docs/design.md#18-the-library-api-starts-with-packs-and-extensions)) | 💡 |
-| Compatibility guarantee for the library API | 🔜 v1.0 |
+| Compatibility guarantee for the library API ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
 
 ### Quality and security
 
@@ -166,6 +166,8 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Repository hardening: branch and tag rulesets with required checks | 🔜 after v1.0 |
 | A test that keeps README examples in sync with the test fixtures, once the documentation site has many examples | 💡 |
 | End-to-end CLI tests with `testscript` ([design 36](docs/design.md#36-testing-adder-itself)) | ✅ |
+| A review of everything v1.0 freezes: schemas, template data and functions, the header, codes, JSON, and the Go API ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
+| A trial on a production codebase with a hand-rolled generator, before the schema freezes ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
 | Fuzz tests for configuration parsing, header detection, directives, and import pruning ([design 36](docs/design.md#36-testing-adder-itself)) | ✅ |
 | Benchmarks on large repositories with a performance budget ([design 36](docs/design.md#36-testing-adder-itself)) | ✅ |
 | A symlink policy for scans and outputs ([design 26](docs/design.md#26-symlinks)) | ✅ |
@@ -186,17 +188,18 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Feature | Status |
 | --- | --- |
 | README with a tested quick start | ✅ |
+| README rewritten to show what adder does, with the reference in `docs/`, one file per topic ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
 | `CHANGELOG.md` following Keep a Changelog, with semantic versioning | ✅ |
 | `CONTRIBUTING.md` with build, test, and code conventions | ✅ |
 | `SECURITY.md` with private vulnerability reporting | ✅ |
-| `CODE_OF_CONDUCT.md` | 🔜 v1.0 |
+| `CODE_OF_CONDUCT.md`, with a way to report problems that publishes no one's address, at the launch | 🔜 after v1.0 |
 | Issue and pull request templates | 🔜 after v1.0 |
-| Runnable `examples/` directory, tested in CI ([design 35](docs/design.md#35-documentation-and-examples-planned-after-v10)) | 🔜 after v1.0 |
+| Runnable `examples/` directory, tested in CI: a registry, HTTP handlers from directives, and a pack ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
 | Documentation site: guides, configuration reference generated from the schema, function reference ([design 35](docs/design.md#35-documentation-and-examples-planned-after-v10)) | 🔜 after v1.0 |
 | Recipes: driver and plugin registries, HTTP routes, CLI commands, gRPC wiring, workflow engines | 🔜 after v1.0 |
 | Comparison page: adder versus `go generate`, stencil, plop, hygen, and hand-rolled generators | 🔜 after v1.0 |
 | Migration guide from a hand-rolled generator | 🔜 after v1.0 |
-| Support and deprecation policy for configuration fields and Go versions | 🔜 v1.0 |
+| Support and deprecation policy for configuration fields and Go versions, in `docs/compatibility.md` ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
 | Launch: announcement post, Gophers Slack, r/golang | 🔜 after v1.0 |
 
 ## Milestones
