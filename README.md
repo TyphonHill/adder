@@ -466,6 +466,7 @@ adder provides a small set of deterministic functions alongside Go's [built-in t
 | `uniq` | `uniq (list)` | values with repeats removed, in first-seen order |
 | `sortAlpha` | `sortAlpha (list)` | values sorted alphabetically |
 | `groupBy` | `groupBy "Dir" .Handlers` | a list of groups, each with `.Key` and `.Items`, sorted by key |
+| `sortBy` | `sortBy "Iota" .Colors` | the items sorted by a string or number field, keeping the order of equal ones |
 | `join` | `fieldValues "Name" .Drivers \| join ", "` | `local, s3` |
 | `trimPrefix`, `trimSuffix` | `trimPrefix "Handle" .Name` | `Users` for `HandleUsers` |
 | `replace` | `replace "-" "_" .Dir` | `go_redis` for `go-redis` |

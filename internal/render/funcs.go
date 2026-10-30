@@ -1,6 +1,7 @@
 package render
 
 import (
+	"cmp"
 	"fmt"
 	"reflect"
 	"slices"
@@ -26,6 +27,7 @@ func Funcs() template.FuncMap {
 		"toGoPascalCase": textcase.GoPascal,
 		"fieldValues":    FieldValues,
 		"groupBy":        groupBy,
+		"sortBy":         sortBy,
 		"uniq":           uniq,
 		"sortAlpha":      sortAlpha,
 		"join":           join,
@@ -92,6 +94,58 @@ func groupBy(field string, list any) ([]Group, error) {
 	}
 	slices.SortStableFunc(groups, func(a, b Group) int { return strings.Compare(a.Key, b.Key) })
 	return groups, nil
+}
+
+// sortBy returns a copy of list sorted by the named field of its structs, a string or a number. Items with equal
+// values keep their order, so sortBy "Iota" puts an enum in declaration order.
+func sortBy(field string, list any) (any, error) {
+	v := reflect.ValueOf(list)
+	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
+		return nil, fmt.Errorf("sortBy: want a list, got %T", list)
+	}
+	type keyed struct {
+		elem reflect.Value
+		key  reflect.Value
+	}
+	elems := make([]keyed, v.Len())
+	for i := range v.Len() {
+		elem := reflect.Indirect(v.Index(i))
+		if elem.Kind() != reflect.Struct {
+			return nil, fmt.Errorf("sortBy: element %d is %s, want a struct", i, elem.Kind())
+		}
+		key := elem.FieldByName(field)
+		if !key.IsValid() || !sortable(key.Kind()) {
+			return nil, fmt.Errorf("sortBy: %s has no string or number field %q", elem.Type(), field)
+		}
+		if i > 0 && key.Kind() != elems[0].key.Kind() {
+			return nil, fmt.Errorf("sortBy: field %q is %s in element %d but %s in element 0", field, key.Kind(), i, elems[0].key.Kind())
+		}
+		elems[i] = keyed{v.Index(i), key}
+	}
+	slices.SortStableFunc(elems, func(a, b keyed) int { return compareValues(a.key, b.key) })
+	out := reflect.MakeSlice(reflect.SliceOf(v.Type().Elem()), len(elems), len(elems))
+	for i, e := range elems {
+		out.Index(i).Set(e.elem)
+	}
+	return out.Interface(), nil
+}
+
+func sortable(k reflect.Kind) bool {
+	return k == reflect.String || reflect.Int <= k && k <= reflect.Float64
+}
+
+// compareValues orders two values of the same sortable kind.
+func compareValues(a, b reflect.Value) int {
+	switch {
+	case a.Kind() == reflect.String:
+		return strings.Compare(a.String(), b.String())
+	case a.CanInt():
+		return cmp.Compare(a.Int(), b.Int())
+	case a.CanUint():
+		return cmp.Compare(a.Uint(), b.Uint())
+	default:
+		return cmp.Compare(a.Float(), b.Float())
+	}
 }
 
 // join joins the elements of list with sep, writing each as fmt.Sprint does.

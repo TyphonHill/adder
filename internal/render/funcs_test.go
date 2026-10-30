@@ -25,12 +25,22 @@ func TestCaseFuncs(t *testing.T) {
 
 func TestFuncs(t *testing.T) {
 	type item struct{ Name, Dir string }
+	type ranked struct {
+		Name   string
+		Rank   int
+		Size   uint
+		Weight float64
+		Flag   bool
+	}
 	data := map[string]any{
-		"Items": []item{{"b", "x"}, {"a", "y"}, {"c", "x"}},
-		"Names": []string{"a", "b"},
-		"Mixed": []any{1, "two", true},
-		"Doc":   "line one\nline two",
-		"Empty": []item{},
+		"Items":    []item{{"b", "x"}, {"a", "y"}, {"c", "x"}},
+		"Names":    []string{"a", "b"},
+		"Mixed":    []any{1, "two", true},
+		"Doc":      "line one\nline two",
+		"Empty":    []item{},
+		"Ranked":   []ranked{{Name: "x", Rank: 3, Size: 2, Weight: 0.5}, {Name: "y", Rank: 1, Size: 3, Weight: 1.5}, {Name: "z", Rank: 2, Size: 1, Weight: 2.5}},
+		"Pointers": []*ranked{{Name: "x", Rank: 2}, {Name: "y", Rank: 1}},
+		"Mixed2":   []any{struct{ Key string }{"a"}, struct{ Key int }{1}},
 	}
 	tests := []struct {
 		name    string
@@ -66,6 +76,20 @@ func TestFuncs(t *testing.T) {
 			want: "x=bc y=a ",
 		},
 		{name: "groupBy an empty list", text: `{{ len (groupBy "Dir" .Empty) }}`, want: "0"},
+		{name: "sortBy a string field", text: `{{ range sortBy "Name" .Items }}{{ .Name }}{{ end }}`, want: "abc"},
+		{name: "sortBy keeps the order of equal values", text: `{{ range sortBy "Dir" .Items }}{{ .Name }}{{ end }}`, want: "bca"},
+		{name: "sortBy a number", text: `{{ range sortBy "Rank" .Ranked }}{{ .Name }}{{ end }}`, want: "yzx"},
+		{name: "sortBy an unsigned number", text: `{{ range sortBy "Size" .Ranked }}{{ .Name }}{{ end }}`, want: "zxy"},
+		{name: "sortBy a float", text: `{{ range sortBy "Weight" .Ranked }}{{ .Name }}{{ end }}`, want: "xyz"},
+		{name: "sortBy pointers to structs", text: `{{ range sortBy "Rank" .Pointers }}{{ .Name }}{{ end }}`, want: "yx"},
+		{name: "sortBy keeps the list's type", text: `{{ sortBy "Name" .Items | fieldValues "Dir" | join "," }}`, want: "y,x,x"},
+		{name: "sortBy leaves the list alone", text: `{{ $s := sortBy "Name" .Items }}{{ range .Items }}{{ .Name }}{{ end }}`, want: "bac"},
+		{name: "sortBy an empty list", text: `{{ len (sortBy "Name" .Empty) }}`, want: "0"},
+		{name: "sortBy a field of another kind", text: `{{ sortBy "Flag" .Ranked }}`, wantErr: true},
+		{name: "sortBy a missing field", text: `{{ sortBy "Nope" .Items }}`, wantErr: true},
+		{name: "sortBy not a list", text: `{{ sortBy "Name" "abc" }}`, wantErr: true},
+		{name: "sortBy a list of strings", text: `{{ sortBy "Name" .Names }}`, wantErr: true},
+		{name: "sortBy fields of different kinds", text: `{{ sortBy "Key" .Mixed2 }}`, wantErr: true},
 		{name: "groupBy a missing field", text: `{{ groupBy "Nope" .Items }}`, wantErr: true},
 	}
 	for _, tt := range tests {

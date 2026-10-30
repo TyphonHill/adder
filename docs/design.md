@@ -499,6 +499,7 @@ Functions Sprout lacks get names that do not collide with it:
 | Function | Example | Result |
 | --- | --- | --- |
 | `groupBy` | `groupBy "Dir" .Handlers` | a list of `.Key` and `.Items`, sorted by key |
+| `sortBy` | `sortBy "Iota" .Colors` | the items sorted by a string or number field, keeping the order of equal ones |
 
 `groupBy` takes a string field, like `fieldValues`, and returns a list rather than a map, so groups keep a stable order and work with `range` and `fieldValues`.
 
@@ -660,7 +661,7 @@ scans:
 - `.Kind` is `const` or `var`. New fields are `.Type`, the type as written, and `.Value`, the expression as written. In a `const` group, a name without a type or value repeats the previous ones, as Go does, so `.Type` is `Color` for every member of `Red Color = iota; Green; Blue`, while `.Value` stays empty for the repeated ones. `.Iota` is the name's position in its `const` group, its value of `iota`.
 - `type` matches `.Type` as written. With `typeCheck: true` it matches the declared or inferred type, so `const Red = Color(1)` counts too.
 
-**Why:** enums and lookup tables are among the most common things generators read, such as an enum's `String` method or a list of feature flags. `.Iota` covers the common `iota` enum without evaluating expressions, which needs type checking.
+**Why:** enums and lookup tables are among the most common things generators read, such as an enum's `String` method or a list of feature flags. `.Iota` covers the common `iota` enum without evaluating expressions, which needs type checking, and `sortBy "Iota"` lists an enum in declaration order while items keep one order for every scan ([decision 7](#7-deterministic-output)).
 
 ### 39. File scans (planned, v0.4)
 
