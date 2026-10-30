@@ -818,7 +818,7 @@ updated    drivers/registry.gen.go
 
 **Options.** A pack declares `options` with the same settings as generator inputs ([decision 19](#19-scaffolding-with-adder-new)): `help`, `default`, `pattern`, and `values`, with `type` `string`, `bool`, or `list`, a list of strings. Options are given only in `with`, so `valuesFrom` and `unique` do not apply. An option without a default is required. Mistakes in `with` are configuration problems, such as `invalid-value` and `missing-field`, reported at the use in `adder.yaml`.
 
-- In `pack.yaml`, a mapping whose only key is `option`, such as `dirs: {option: dirs}`, is replaced by that option's value before the configuration is validated, so a list can fill `dirs` and a string can fill `implements`. Problems with the result are reported at the use's `with` value.
+- In `pack.yaml`, a mapping whose only key is `option`, such as `dirs: {option: dirs}`, is replaced by that option's value before the configuration is validated, so a list can fill `dirs` and a string can fill `implements`. Problems with the result are reported at the use's `with` value. Scan directories are not templates, and one containing `{{` is rejected with a hint to use an option.
 - Templates in the pack, output paths, generator file paths, and messages see the options as `.Options`. Paths of outputs without `each` may use `.Options` and template functions, and render when the configuration loads, so two uses writing one file are reported then, at the second use.
 - There are no overrides. A use cannot change a pack's scans, outputs, or generators beyond its options; a repository that needs more defines its own outputs or forks the pack.
 

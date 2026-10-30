@@ -614,6 +614,14 @@ func validateDirective(name, directive, at string, pos positions) diag.List {
 
 // checkPattern reports directory patterns that are unsafe or malformed. "**" may only appear as a whole segment.
 func checkPattern(pos diag.Pos, field, pattern string) *diag.Diagnostic {
+	if strings.Contains(pattern, "{{") {
+		return &diag.Diagnostic{
+			Code:    diag.InvalidValue,
+			Pos:     pos,
+			Message: field + " cannot be a template",
+			Hint:    "in a pack, fill a list from an option instead, such as dirs: {option: dirs}",
+		}
+	}
 	if d := checkPath(pos, field, pattern); d != nil {
 		return d
 	}

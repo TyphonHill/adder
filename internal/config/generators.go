@@ -26,6 +26,9 @@ type Generator struct {
 
 	// Pos is where the generator is declared, for reporting problems found while generating.
 	Pos diag.Pos `yaml:"-"`
+	// Pack and Use name the pack and the use a generator comes from, for a generator a pack declares. Its
+	// templates are in the pack.
+	Pack, Use string `yaml:"-"`
 }
 
 // GeneratorTest is a generator run with sample inputs, compared with the files under Want.
