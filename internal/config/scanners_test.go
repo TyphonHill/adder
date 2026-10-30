@@ -7,7 +7,7 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // scannerPacks provides the scanners it lists, and no packs.

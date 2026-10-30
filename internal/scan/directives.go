@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 const directivePrefix = "//adder:"

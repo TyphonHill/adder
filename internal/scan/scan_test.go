@@ -12,8 +12,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 func file(content string) *fstest.MapFile {

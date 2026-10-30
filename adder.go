@@ -13,7 +13,7 @@
 //	// tools/adder/main.go
 //	package main
 //
-//	import "github.com/TyphonHill/adder"
+//	import "typhonhill.dev/adder"
 //
 //	func main() {
 //		adder.Main(adder.Pack{
@@ -22,7 +22,7 @@
 //		})
 //	}
 //
-// Then go get -tool ./tools/adder adds it as a tool, in place of github.com/TyphonHill/adder/cmd/adder, and
+// Then go get -tool ./tools/adder adds it as a tool, in place of typhonhill.dev/adder/cmd/adder, and
 // go tool adder runs it.
 //
 // This API is experimental until v1.0.
@@ -37,13 +37,13 @@ import (
 	"os/signal"
 	"runtime/debug"
 
-	"github.com/TyphonHill/adder/internal/cli"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/pack"
+	"typhonhill.dev/adder/internal/cli"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/pack"
 )
 
 // module is this module's path, which build information records with its version.
-const module = "github.com/TyphonHill/adder"
+const module = "typhonhill.dev/adder"
 
 // Pack is a set of extensions to adder that repositories share.
 type Pack struct {

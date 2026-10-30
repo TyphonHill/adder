@@ -13,7 +13,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 type failingFS struct{}

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 func TestNew(t *testing.T) {

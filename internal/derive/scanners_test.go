@@ -10,10 +10,10 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/pack"
-	"github.com/TyphonHill/adder/internal/plan"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/pack"
+	"typhonhill.dev/adder/internal/plan"
 )
 
 // routes lists the routes in each directory's routes.txt, one "METHOD /path" per line, as maps.

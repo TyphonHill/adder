@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/render"
-	"github.com/TyphonHill/adder/internal/scan"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/render"
+	"typhonhill.dev/adder/internal/scan"
 )
 
 // resolve checks the given inputs against the generator's declarations and fills in defaults. Data is the

@@ -11,7 +11,7 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/TyphonHill/adder/internal/textcase"
+	"typhonhill.dev/adder/internal/textcase"
 )
 
 // Funcs returns the functions available to every template. Names follow Sprout

@@ -1,9 +1,7 @@
 # adder
 
-> **adder has moved to `typhonhill.dev/adder`.** This module path, `github.com/TyphonHill/adder`, is deprecated and gets no new versions. Install adder with `go get -tool typhonhill.dev/adder/cmd/adder`.
-
-[![CI](https://github.com/TyphonHill/adder/actions/workflows/ci.yml/badge.svg)](https://github.com/TyphonHill/adder/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/TyphonHill/adder.svg)](https://pkg.go.dev/github.com/TyphonHill/adder)
+[![CI](https://github.com/typhonhilldev/adder/actions/workflows/ci.yml/badge.svg)](https://github.com/typhonhilldev/adder/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/typhonhill.dev/adder.svg)](https://pkg.go.dev/typhonhill.dev/adder)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Write the pattern once. adder adds the rest.
@@ -28,14 +26,14 @@ Change your code, run `adder derive` again, and the generated files follow.
 adder supports the two most recent Go releases (currently Go 1.26 and later). Add it as a tool dependency of your module:
 
 ```sh
-go get -tool github.com/TyphonHill/adder/cmd/adder
+go get -tool typhonhill.dev/adder/cmd/adder
 go tool adder --help
 ```
 
 Or install the binary:
 
 ```sh
-go install github.com/TyphonHill/adder/cmd/adder@latest
+go install typhonhill.dev/adder/cmd/adder@latest
 ```
 
 ## Quick start
@@ -448,7 +446,7 @@ package drivers
 
 ### Packs
 
-A pack shares derive outputs, generators, and their templates across repositories. It is a Go package that embeds a `pack.yaml` and its templates, versioned like any other dependency. The `github.com/TyphonHill/adder` package is experimental until v1.0.
+A pack shares derive outputs, generators, and their templates across repositories. It is a Go package that embeds a `pack.yaml` and its templates, versioned like any other dependency. The `typhonhill.dev/adder` package is experimental until v1.0.
 
 ```go
 // github.com/acme/adder-packs/store/pack.go
@@ -457,7 +455,7 @@ package store
 import (
 	"embed"
 
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 )
 
 //go:embed pack.yaml templates
@@ -498,7 +496,7 @@ A repository builds its own adder with the packs it uses, and names each use in 
 package main
 
 import (
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 	"github.com/acme/adder-packs/store"
 )
 
@@ -515,7 +513,7 @@ packs:
 ```
 
 ```sh
-go mod edit -droptool github.com/TyphonHill/adder/cmd/adder
+go mod edit -droptool typhonhill.dev/adder/cmd/adder
 go get -tool ./tools/adder
 go tool adder derive
 ```
@@ -533,7 +531,7 @@ go tool adder derive
 
 #### Publishing and upgrading a pack
 
-A pack is published like any Go module: its module holds the pack's package, which requires `github.com/TyphonHill/adder`, and a version tag such as `v1.0.0` releases it. Several packs can share one module, each in a package of its own.
+A pack is published like any Go module: its module holds the pack's package, which requires `typhonhill.dev/adder`, and a version tag such as `v1.0.0` releases it. Several packs can share one module, each in a package of its own.
 
 ```sh
 # In each repository that uses the pack:
@@ -664,7 +662,7 @@ Case functions split words at separators such as `_`, `-`, and spaces, at lowerc
 
 #### Your own functions
 
-A repository adds functions written in Go by building its own adder. The `github.com/TyphonHill/adder` package is experimental until v1.0.
+A repository adds functions written in Go by building its own adder. The `typhonhill.dev/adder` package is experimental until v1.0.
 
 ```go
 // tools/adder/main.go
@@ -673,7 +671,7 @@ package main
 import (
 	"strings"
 
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 )
 
 func main() {
@@ -685,7 +683,7 @@ func main() {
 ```
 
 ```sh
-go mod edit -droptool github.com/TyphonHill/adder/cmd/adder
+go mod edit -droptool typhonhill.dev/adder/cmd/adder
 go get -tool ./tools/adder
 go tool adder derive
 ```

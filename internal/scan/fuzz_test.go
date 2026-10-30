@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // FuzzDirectives checks that any doc comment line either parses as directives or is reported on its own line.

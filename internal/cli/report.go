@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/plan"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/plan"
 )
 
 // report is the result a command prints with --json.

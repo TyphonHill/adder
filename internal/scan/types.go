@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/TyphonHill/adder/internal/imports"
+	"typhonhill.dev/adder/internal/imports"
 )
 
 // fileImports maps the names a file refers to its imports by to their import paths.

@@ -9,13 +9,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/plan"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/plan"
 )
 
 // starterConfig is what adder init writes: a valid configuration whose commented examples are valid too.
-const starterConfig = `# adder configuration: https://github.com/TyphonHill/adder#configuration
+const starterConfig = `# adder configuration: https://github.com/typhonhilldev/adder#configuration
 version: 1
 
 # vars are strings every template can read as .Vars.<name>.

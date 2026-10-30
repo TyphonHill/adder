@@ -9,7 +9,7 @@ import (
 	"testing/fstest"
 	"text/template"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // fakePacks finds pack.yaml files by pack name.

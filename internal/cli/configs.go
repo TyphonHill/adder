@@ -13,9 +13,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/scan"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/scan"
 )
 
 // configRun is one configuration a command runs over.

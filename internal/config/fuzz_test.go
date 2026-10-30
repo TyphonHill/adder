@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // FuzzParse checks that no input panics and that every problem points inside the input.

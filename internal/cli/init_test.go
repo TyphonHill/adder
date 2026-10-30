@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TyphonHill/adder/internal/config"
+	"typhonhill.dev/adder/internal/config"
 )
 
 // commentedYAML matches a commented-out line of YAML in the starter configuration, but not prose.

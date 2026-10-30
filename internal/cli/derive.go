@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TyphonHill/adder/internal/derive"
+	"typhonhill.dev/adder/internal/derive"
 )
 
 func newDeriveCommand(opts *globalOptions) *cobra.Command {

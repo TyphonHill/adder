@@ -2,7 +2,7 @@
 env GOPROXY=off
 cp $ADDER_ROOT/go.mod go.mod
 cp $ADDER_ROOT/go.sum go.sum
-exec go mod edit -module=example.com/app -toolchain=none -require=github.com/TyphonHill/adder@v0.0.0 -replace=github.com/TyphonHill/adder=$ADDER_ROOT -tool=example.com/app/tools/adder
+exec go mod edit -module=example.com/app -toolchain=none -require=typhonhill.dev/adder@v0.0.0 -replace=typhonhill.dev/adder=$ADDER_ROOT -tool=example.com/app/tools/adder
 cp adder.yaml good.yaml
 exec go tool adder derive
 cmp api/routes.gen.go want/routes.gen.go
@@ -41,7 +41,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/TyphonHill/adder"
+	"typhonhill.dev/adder"
 )
 
 func main() {

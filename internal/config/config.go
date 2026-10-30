@@ -19,8 +19,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/TyphonHill/adder/internal/diag"
-	"github.com/TyphonHill/adder/internal/header"
+	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/header"
 )
 
 // FileName is the configuration file adder looks for in the repository root.

@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/mod/modfile"
 
-	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/diag"
+	"typhonhill.dev/adder/internal/config"
+	"typhonhill.dev/adder/internal/diag"
 )
 
 // listing reads each directory of a file system once per scan, since expanding patterns, finding boundaries,
