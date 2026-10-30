@@ -7,13 +7,13 @@ import (
 	"maps"
 	"os"
 	"path"
+	"reflect"
 	"slices"
 
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/derive"
 	"github.com/TyphonHill/adder/internal/pack"
 	"github.com/TyphonHill/adder/internal/plan"
-	"github.com/TyphonHill/adder/internal/scan"
 )
 
 // ANSI colors for the words people scan for.
@@ -111,7 +111,7 @@ func (p *printer) scans(ctx context.Context, cfg *config.Config, root string) er
 			return err
 		}
 		for _, name := range slices.Sorted(maps.Keys(scans)) {
-			n := len(data[name].([]scan.Item))
+			n := reflect.ValueOf(data[name]).Len()
 			items := "items"
 			if n == 1 {
 				items = "item"

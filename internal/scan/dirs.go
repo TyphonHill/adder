@@ -84,6 +84,15 @@ func (l *listing) nearestModule(dir string) (module, at string) {
 	return "", ""
 }
 
+// Dirs returns the directories the scan's dirs patterns match in fsys, without those it excludes, in order. A
+// scan without dirs has none.
+func Dirs(fsys fs.FS, s config.Scan) ([]string, error) {
+	if len(s.Dirs) == 0 {
+		return []string{}, nil
+	}
+	return expandDirs(newListing(fsys), s)
+}
+
 // expandDirs resolves the scan's directory patterns to unique directories, leaving out excluded ones.
 func expandDirs(l *listing, s config.Scan) ([]string, error) {
 	var dirs []string

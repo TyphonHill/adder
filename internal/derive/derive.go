@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -193,16 +194,16 @@ func replaceable(c plan.Change) bool {
 // planEach adds the output rendered for each item of its scan to p, then the files it generated before that it
 // no longer produces. Paths holds every path planned so far.
 func planEach(ctx context.Context, u prepared, src Sources, out config.Output, p *plan.Plan, paths map[string]bool) (diag.List, error) {
-	items, _ := u.data[out.Each].([]scan.Item)
+	items := itemsOf(u.data[out.Each])
 	produced := make(map[string]bool, len(items))
 	var problems diag.List
-	for _, item := range items {
+	for i, item := range items {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		itemData := maps.Clone(u.data)
 		itemData["Item"] = item
-		target, err := itemPath(u.set, out, item, itemData, paths)
+		target, err := itemPath(u.set, out, describeItem(item, i, out.Each), itemData, paths)
 		if err != nil {
 			problems = append(problems, diag.From(err)...)
 			continue
@@ -226,14 +227,14 @@ func planEach(ctx context.Context, u prepared, src Sources, out config.Output, p
 }
 
 // itemPath renders the output's path for an item and checks that it is a new file name inside the root.
-func itemPath(set *render.Set, out config.Output, item scan.Item, data map[string]any, paths map[string]bool) (string, error) {
+func itemPath(set *render.Set, out config.Output, item string, data map[string]any, paths map[string]bool) (string, error) {
 	field := fmt.Sprintf("output %q: path %q", out.Template, out.Path)
 	rendered, err := set.Text(out.Path, data)
 	if err != nil {
 		return "", diag.Prefix(err, out.Pos, field+": ")
 	}
 	target := path.Clean(rendered)
-	field += fmt.Sprintf(" renders as %q for %s in %s, which", rendered, item.Name, item.File)
+	field += fmt.Sprintf(" renders as %q for %s, which", rendered, item)
 	switch {
 	case strings.TrimSpace(rendered) == "" || strings.HasSuffix(rendered, "/") || target == ".":
 		return "", diag.Errorf(diag.InvalidValue, out.Pos, "%s is not a file name", field)
@@ -249,6 +250,64 @@ func itemPath(set *render.Set, out config.Output, item scan.Item, data map[strin
 		return "", d
 	}
 	return target, nil
+}
+
+// itemsOf returns the items of a scan, from the built-in scans or a custom scanner.
+func itemsOf(v any) []any {
+	switch v := v.(type) {
+	case []scan.Item:
+		items := make([]any, len(v))
+		for i, item := range v {
+			items[i] = item
+		}
+		return items
+	case []any:
+		return v
+	}
+	return nil
+}
+
+// describeItem names an item in a problem: a declaration by name and file, or a scanner's item by its place.
+func describeItem(item any, i int, scanName string) string {
+	if it, ok := item.(scan.Item); ok {
+		return it.Name + " in " + it.File
+	}
+	return fmt.Sprintf("item %d of %s", i, scanName)
+}
+
+// runScanner runs the custom scanner of the scan called name. Problems the scanner reports at a file are
+// placed in the repository; others are attributed to the scan.
+func runScanner(ctx context.Context, src Sources, name string, s config.Scan) ([]any, error) {
+	scanner, ok := src.Packs.Scanner(s.Scanner.Name)
+	if !ok {
+		return nil, diag.Errorf(diag.UnknownScanner, s.Scanner.Pos, "scan %q: adder was built without scanner %q", name, s.Scanner.Name)
+	}
+	dirs, err := scan.Dirs(src.Repo, s)
+	if err != nil {
+		return nil, diag.Locate(err, src.RepoDir, s.Pos)
+	}
+	items, err := scanner(ctx, pack.ScanInput{FS: src.Repo, Dirs: dirs, Decode: s.Scanner.Decode})
+	switch {
+	case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+		return nil, err
+	case err != nil:
+		list := diag.From(err)
+		for _, d := range list {
+			switch {
+			case d.Code == diag.Other:
+				d.Code, d.Message = diag.Scanner, fmt.Sprintf("scan %q: scanner %q: %s", name, s.Scanner.Name, d.Message)
+			case d.Code == diag.Scanner && d.Pos.File != "" && src.RepoDir != "":
+				d.Pos.File = filepath.Join(src.RepoDir, filepath.FromSlash(d.Pos.File))
+			}
+			if d.Pos == (diag.Pos{}) {
+				d.Pos = s.Pos
+			}
+		}
+		return nil, list
+	case items == nil:
+		return []any{}, nil
+	}
+	return items, nil
 }
 
 // staleFiles finds the files the output generated that it no longer produces: files matching its path, whose
@@ -385,6 +444,15 @@ func templateData(ctx context.Context, u unit, src Sources) (map[string]any, err
 	var problems diag.List
 	for _, name := range slices.Sorted(maps.Keys(cfg.Derive.Scans)) {
 		s := cfg.Derive.Scans[name]
+		if s.Scanner != nil {
+			items, err := runScanner(ctx, src, name, s)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+			problems = append(problems, diag.From(err)...)
+			data[name] = items
+			continue
+		}
 		var items []scan.Item
 		if s.TypeCheck {
 			items, err = scan.RunTyped(ctx, scan.TypedSource{FS: src.Repo, Dir: src.RepoDir, Overlay: src.Overlay}, s)

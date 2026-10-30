@@ -22,6 +22,8 @@ func (p testPacks) FS(name string) (fs.FS, bool) {
 
 func (testPacks) Funcs() template.FuncMap { return nil }
 
+func (testPacks) HasScanner(string) bool { return false }
+
 func TestPlanPackGenerator(t *testing.T) {
 	pack := func(file string) fstest.MapFS {
 		return fstest.MapFS{

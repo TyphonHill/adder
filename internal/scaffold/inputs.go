@@ -104,7 +104,8 @@ func check(flag, value string, in config.Input, data map[string]any) error {
 // scanValues returns the values of a Scan.Field reference, sorted and without repeats.
 func scanValues(ref string, in config.Input, data map[string]any) ([]string, error) {
 	scanName, field, _ := strings.Cut(ref, ".")
-	if !slices.Contains(itemFields, field) {
+	// A custom scanner's items have fields of their own, which FieldValues checks.
+	if _, builtin := data[scanName].([]scan.Item); builtin && !slices.Contains(itemFields, field) {
 		return nil, &diag.Diagnostic{
 			Code:    diag.InvalidValue,
 			Pos:     in.Pos,

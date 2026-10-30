@@ -25,6 +25,8 @@ func (p testPacks) FS(name string) (fs.FS, bool) {
 
 func (testPacks) Funcs() template.FuncMap { return nil }
 
+func (testPacks) HasScanner(string) bool { return false }
+
 // storePack lists the functions of the directories each use names, with a registry and one file per function.
 var storePack = fstest.MapFS{
 	"pack.yaml": {Data: []byte(`version: 1
