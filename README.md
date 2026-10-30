@@ -124,6 +124,7 @@ Global flags:
 | --- | --- | --- |
 | `--root` | the directory holding `adder.yaml` | Repository root that scans and outputs are relative to. |
 | `-c`, `--config` | `<root>/adder.yaml` | Configuration file. Template paths resolve against its directory. |
+| `--json` | off | Print the result and any problems as one JSON object on standard output. See [JSON output](#json-output). |
 
 Without either flag, adder finds `adder.yaml` in the current directory or the nearest parent that has one, the way `go` finds `go.mod`, so commands work from anywhere in the repository. With only `--config`, the root is that file's directory.
 
@@ -166,6 +167,36 @@ templates/drivers.go.tmpl:12:4: <.Drivrs>: map has no entry for key "Drivrs" [te
 | `3` | `adder check` found outputs that are out of date. |
 
 See [docs/design.md](docs/design.md#4-structured-diagnostics) for the full list of codes.
+
+### JSON output
+
+With `--json`, every command prints exactly one JSON object on standard output and nothing on standard error, whether it succeeds or fails. Exit codes are the same as without it, so scripts and coding agents can drive adder without parsing text. For the [driver generator](#generators) below:
+
+```console
+$ adder new driver --name gcs --dry-run --json
+{
+  "generator": "driver",
+  "dryRun": true,
+  "changes": [
+    {"path": "drivers/gcs/gcs.go", "status": "created"},
+    {"path": "drivers/drivers.gen.go", "status": "updated"}
+  ],
+  "message": "Next, implement New in drivers/gcs/gcs.go.",
+  "problems": []
+}
+```
+
+| Command | Fields |
+| --- | --- |
+| `derive` | `dryRun`, `changes`, `problems` |
+| `check` | `changes`, `problems` |
+| `new <generator>` | `generator`, `dryRun`, `changes`, `message`, `problems` |
+| `init` | `changes`, `problems` |
+
+- `changes` lists every file in the plan, unchanged ones included. Each has a `path`, relative to the root with forward slashes, and a `status`: `unchanged`, `created`, `updated`, or `skipped`. With `--diff`, changes that write a file also have a `diff`.
+- `problems` is always present and empty on success. Each problem has a `code`, a `message`, and, when known, a `pos` with `file`, `line`, and `column`, and a `hint`. Invocation mistakes, such as an unknown flag, have the code `usage`.
+- `adder check` reports stale outputs as changes, not problems, and exits with status 3.
+- `--help` still prints text.
 
 ## Configuration
 

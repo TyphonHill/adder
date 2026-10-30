@@ -296,6 +296,63 @@ func TestCLI(t *testing.T) {
 			wantStderr: func(string) string { return "adder: interrupted\n" },
 		},
 		{
+			name:     "json lists every change",
+			args:     func(root string) []string { return []string{"--root", root, "derive", "--json"} },
+			wantCode: ExitOK,
+			wantStdout: `{
+  "dryRun": false,
+  "changes": [
+    {
+      "path": "drivers/drivers.gen.go",
+      "status": "created"
+    }
+  ],
+  "problems": []
+}
+`,
+			wantStderr: func(string) string { return "" },
+		},
+		{
+			name: "json check reports stale outputs as changes, not problems",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, output), "package drivers\n")
+			},
+			args:           func(root string) []string { return []string{"--root", root, "check", "--json"} },
+			wantCode:       ExitStale,
+			stdoutContains: `"status": "updated"` + "\n    }\n  ],\n" + `  "problems": []`,
+			wantStderr:     func(string) string { return "" },
+		},
+		{
+			name: "json problems keep their codes",
+			args: func(root string) []string {
+				return []string{"--root", filepath.Join(root, "empty"), "derive", "--json"}
+			},
+			wantCode:       ExitError,
+			stdoutContains: `"changes": [],` + "\n" + `  "problems": [` + "\n    {\n" + `      "code": "io",`,
+			wantStderr:     func(string) string { return "" },
+		},
+		{
+			name:           "json interrupted",
+			args:           func(root string) []string { return []string{"--root", root, "derive", "--json"} },
+			canceled:       true,
+			wantCode:       ExitError,
+			stdoutContains: `"code": "error",` + "\n" + `      "message": "interrupted"`,
+			wantStderr:     func(string) string { return "" },
+		},
+		{
+			name:           "json usage mistake",
+			args:           func(string) []string { return []string{"--no-such-flag", "--json"} },
+			wantCode:       ExitUsage,
+			stdoutContains: `"code": "usage"`,
+			wantStderr:     func(string) string { return "" },
+		},
+		{
+			name:           "json help is text",
+			args:           func(string) []string { return []string{"--json"} },
+			wantCode:       ExitOK,
+			stdoutContains: "Usage:\n  adder [flags]",
+		},
+		{
 			name:           "unexpected argument",
 			args:           func(string) []string { return []string{"derive", "extra"} },
 			wantCode:       ExitUsage,
@@ -370,6 +427,29 @@ func TestCLI(t *testing.T) {
 			}
 			if tt.after != nil {
 				tt.after(t, root)
+			}
+		})
+	}
+}
+
+func TestWantsJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "absent", args: []string{"derive"}, want: false},
+		{name: "flag", args: []string{"derive", "--json"}, want: true},
+		{name: "before the command", args: []string{"--json", "new", "driver"}, want: true},
+		{name: "explicit false", args: []string{"--json=false"}, want: false},
+		{name: "last one wins", args: []string{"--json", "--json=0"}, want: false},
+		{name: "invalid value", args: []string{"--json=maybe"}, want: false},
+		{name: "after --", args: []string{"new", "driver", "--", "--json"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := wantsJSON(tt.args); got != tt.want {
+				t.Errorf("wantsJSON(%q) = %v, want %v", tt.args, got, tt.want)
 			}
 		})
 	}

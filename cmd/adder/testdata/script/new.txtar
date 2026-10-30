@@ -63,6 +63,7 @@ Flags:
 
 Global Flags:
   -c, --config string   configuration file (default <root>/adder.yaml)
+      --json            print the result and any problems as one JSON object on standard output
       --root string     repository root that scans and outputs are relative to (default: the directory holding adder.yaml, found from the current directory)
 
 Use "adder new [command] --help" for more information about a command.

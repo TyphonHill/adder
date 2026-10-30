@@ -20,15 +20,21 @@ func newDeriveCommand(opts *globalOptions) *cobra.Command {
 Files whose content has not changed are left untouched.`,
 		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			derived.DryRun = derived.DryRun || showDiff
+			rep := &deriveReport{DryRun: derived.DryRun, Changes: []changeReport{}}
+			opts.report = rep
 			cfg, root, err := opts.load()
 			if err != nil {
 				return err
 			}
 			derived.Root = root
-			derived.DryRun = derived.DryRun || showDiff
 			p, err := derive.Run(cmd.Context(), cfg, derived)
 			if err != nil {
 				return err
+			}
+			rep.Changes = changesReport(p.Changes, showDiff)
+			if opts.json {
+				return nil
 			}
 			for _, c := range p.Changes {
 				verb := ""

@@ -48,6 +48,20 @@ func TestNew(t *testing.T) {
 			wantNoFile: gcs,
 		},
 		{
+			name: "json reports the generator, changes, and message",
+			args: func(root string) []string {
+				return []string{"--root", root, "new", "driver", "--name", "gcs", "--json"}
+			},
+			wantCode: ExitOK,
+			stdoutContains: []string{
+				`"generator": "driver",` + "\n" + `  "dryRun": false,`,
+				`"path": "drivers/gcs/gcs.go",` + "\n" + `      "status": "created"`,
+				`"message": "Next, implement New in drivers/gcs/gcs.go.",` + "\n" + `  "problems": []`,
+			},
+			stdoutExcludes: []string{"created    "},
+			wantFile:       gcs,
+		},
+		{
 			name: "diff previews every change as a patch",
 			args: func(root string) []string {
 				return []string{"--root", root, "new", "driver", "--name", "gcs", "--diff"}

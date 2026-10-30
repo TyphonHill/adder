@@ -12,6 +12,7 @@ import (
 
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/plan"
 )
 
 // starterConfig is what adder init writes: a valid configuration whose commented examples are valid too.
@@ -53,6 +54,8 @@ func newInitCommand(opts *globalOptions) *cobra.Command {
 --config says otherwise. Its commented examples show each section. An existing file is never overwritten.`,
 		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			rep := &planReport{Changes: []changeReport{}}
+			opts.report = rep
 			path := cmp.Or(opts.config, filepath.Join(cmp.Or(opts.root, "."), config.FileName))
 			f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 			if errors.Is(err, fs.ErrExist) {
@@ -65,7 +68,10 @@ func newInitCommand(opts *globalOptions) *cobra.Command {
 			if err := errors.Join(err, f.Close()); err != nil {
 				return diag.Wrap(diag.IO, diag.Pos{File: path}, err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%-9s  %s\n", "created", filepath.ToSlash(path))
+			rep.Changes = []changeReport{{Path: filepath.ToSlash(path), Status: plan.Created}}
+			if !opts.json {
+				fmt.Fprintf(cmd.OutOrStdout(), "%-9s  %s\n", plan.Created, filepath.ToSlash(path))
+			}
 			return nil
 		},
 	}
