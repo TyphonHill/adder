@@ -316,6 +316,9 @@ func TestParseErrors(t *testing.T) {
 			want:        []want{{diag.InvalidValue, 7, 7}},
 			wantMessage: `scan "S": has types and values; use only one`,
 		},
+		{name: "files with Go settings", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      includeTests: true\n      buildTags: [x]\n      files: {}\n", want: []want{{diag.InvalidValue, 6, 7}, {diag.InvalidValue, 7, 7}}},
+		{name: "files and funcs together", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      funcs: {}\n      files: {name: x}\n", want: []want{{diag.InvalidValue, 7, 7}}},
+		{name: "files with an invalid name pattern", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      files: {name: \"(\"}\n", want: []want{{diag.InvalidValue, 6, 21}}},
 		{name: "scan name reserved for items", input: "version: 1\nderive:\n  scans:\n    Item: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
 			name:     "templated path without each",

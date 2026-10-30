@@ -24,7 +24,7 @@ import (
 // Item is a matched declaration.
 type Item struct {
 	Name       string  // declared name
-	Kind       string  // "func", "method", "struct", "interface", "type", "const", or "var"
+	Kind       string  // "func", "method", "struct", "interface", "type", "const", "var", or "file"
 	Receiver   string  // receiver type name, empty for plain functions
 	Package    string  // package name from the file's package clause
 	ImportPath string  // the package's import path, empty when the repository has no go.mod
@@ -92,6 +92,9 @@ func scanDir(ctx context.Context, fsys fs.FS, fset *token.FileSet, module, dir s
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return nil, diag.Wrap(diag.IO, diag.Pos{File: dir}, err)
+	}
+	if s.Files != nil {
+		return fileItems(ctx, fsys, dir, entries, *s.Files)
 	}
 
 	var items []Item
@@ -210,6 +213,32 @@ func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Ite
 			item.Directives = found
 			items = append(items, item)
 		}
+	}
+	return items, nil
+}
+
+// fileItems lists the files in dir that the scan selects, skipping hidden files, links, and files adder generated.
+func fileItems(ctx context.Context, fsys fs.FS, dir string, entries []fs.DirEntry, m config.FileMatch) ([]Item, error) {
+	var items []Item
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		name := entry.Name()
+		if !entry.Type().IsRegular() || strings.HasPrefix(name, ".") || (m.Name.Regexp != nil && !m.Name.MatchString(name)) {
+			continue
+		}
+		file := path.Join(dir, name)
+		if header.Supported(name) {
+			content, err := fs.ReadFile(fsys, file)
+			if err != nil {
+				return nil, diag.Wrap(diag.IO, diag.Pos{File: file}, err)
+			}
+			if _, generated := header.Parse(name, content); generated {
+				continue
+			}
+		}
+		items = append(items, Item{Name: name, Kind: config.KindFile, Dir: dir, File: file})
 	}
 	return items, nil
 }

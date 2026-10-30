@@ -219,7 +219,7 @@ A coding agent can discover and run any generator this way: `adder list --json`,
 
 ### Scans
 
-Each entry under `derive.scans` selects declarations: functions and methods by default, type declarations with a `types` block, or constants and variables with a `values` block. A scan uses one of `funcs`, `types`, and `values`. Its name becomes the template field that holds the results, so it must be a valid Go identifier other than `Module`, `Vars`, `Inputs`, or `Item`, which adder provides.
+Each entry under `derive.scans` selects declarations: functions and methods by default, type declarations with a `types` block, or constants and variables with a `values` block. A scan can also list files that are not Go source with a `files` block. A scan uses one of `funcs`, `types`, `values`, and `files`. Its name becomes the template field that holds the results, so it must be a valid Go identifier other than `Module`, `Vars`, `Inputs`, or `Item`, which adder provides.
 
 | Field | Description |
 | --- | --- |
@@ -243,6 +243,7 @@ Each entry under `derive.scans` selects declarations: functions and methods by d
 | `values.name` | Regular expression the name must match. |
 | `values.type` | The type as written, such as `Color`. In a `const` group, a name without its own type and value repeats the one before it, as Go does, so every member of an `iota` enum has its type. |
 | `values.directive` | Only match names with this directive, in their own doc comment or in their group's. A name's own directive replaces the group's directive of the same name. |
+| `files.name` | Regular expression the file name, with its extension, must match, such as `^[0-9]+_.*\.sql$` for migrations. Without it, every file is listed. Hidden files, symbolic links, and files adder generated are skipped, and contents are not read. |
 
 Files that no platform can build are skipped, such as those marked `//go:build ignore` or with a custom tag that `buildTags` does not list. Platform tags such as `linux` or `amd64` may take any value, so results are the same on every machine, and file name suffixes such as `_windows.go` never exclude a file.
 
@@ -250,8 +251,8 @@ Every match is an item with these fields, sorted by name:
 
 | Field | Description |
 | --- | --- |
-| `.Name` | Declared name. |
-| `.Kind` | `func`, `method`, `struct`, `interface`, `type`, `const`, or `var`. |
+| `.Name` | Declared name, or for file scans the file name. |
+| `.Kind` | `func`, `method`, `struct`, `interface`, `type`, `const`, `var`, or `file`. |
 | `.Receiver` | Receiver type for methods, empty for functions. |
 | `.Package` | Package name from the file's `package` clause. |
 | `.ImportPath` | The package's import path, empty when the repository has no `go.mod`. |

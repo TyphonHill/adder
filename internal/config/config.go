@@ -72,6 +72,8 @@ type Scan struct {
 	Types *TypeMatch `yaml:"types"`
 	// Values selects constant and variable declarations instead of functions when set.
 	Values *ValueMatch `yaml:"values"`
+	// Files lists files instead of Go declarations when set.
+	Files *FileMatch `yaml:"files"`
 
 	// Pos is where the scan is declared, for reporting problems found while scanning.
 	Pos diag.Pos `yaml:"-"`
@@ -86,6 +88,7 @@ const (
 	KindType      = "type" // any other type declaration, such as `type Status int`
 	KindConst     = "const"
 	KindVar       = "var"
+	KindFile      = "file"
 )
 
 // FuncMatch filters declarations. Unset fields match every declaration.
@@ -122,6 +125,12 @@ type ValueMatch struct {
 	// before it, as Go does.
 	Type      string `yaml:"type"`
 	Directive string `yaml:"directive"`
+}
+
+// FileMatch filters the files a file scan lists. Unset fields match every file.
+type FileMatch struct {
+	// Name matches the file name, including its extension.
+	Name Pattern `yaml:"name"`
 }
 
 // directiveName matches the names adder directives may use, which Go also recognizes as directives.
@@ -358,7 +367,7 @@ func (c *Config) validate(pos positions) error {
 		for _, block := range []struct {
 			key string
 			set bool
-		}{{"funcs", pos.has(at + ".funcs")}, {"types", scan.Types != nil}, {"values", scan.Values != nil}} {
+		}{{"funcs", pos.has(at + ".funcs")}, {"types", scan.Types != nil}, {"values", scan.Values != nil}, {"files", scan.Files != nil}} {
 			if block.set {
 				blocks = append(blocks, block.key)
 			}
@@ -368,7 +377,7 @@ func (c *Config) validate(pos positions) error {
 				Code:    diag.InvalidValue,
 				Pos:     pos.at(at + "." + blocks[1]),
 				Message: fmt.Sprintf("scan %q: has %s; use only one", name, strings.Join(blocks, " and ")),
-				Hint:    "each scan selects one kind of declaration: funcs, types, or values",
+				Hint:    "a scan selects functions, types, or values, or lists files, with one of funcs, types, values, or files",
 			})
 		}
 		switch {
@@ -376,6 +385,20 @@ func (c *Config) validate(pos positions) error {
 			errs = append(errs, validateTypes(name, *scan.Types, at+".types", pos)...)
 		case scan.Values != nil:
 			errs = append(errs, validateValues(name, *scan.Values, at+".values", pos)...)
+		case scan.Files != nil:
+			for _, setting := range []struct {
+				key string
+				set bool
+			}{{"includeTests", scan.IncludeTests}, {"buildTags", scan.BuildTags != nil}} {
+				if setting.set {
+					errs = append(errs, &diag.Diagnostic{
+						Code:    diag.InvalidValue,
+						Pos:     pos.at(at + "." + setting.key),
+						Message: fmt.Sprintf("scan %q: %s does not apply to a file scan", name, setting.key),
+						Hint:    "file scans list files by name without reading Go source",
+					})
+				}
+			}
 		default:
 			errs = append(errs, validateFuncs(name, scan.Funcs, at+".funcs", pos)...)
 		}
