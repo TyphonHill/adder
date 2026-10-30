@@ -96,7 +96,7 @@ const (
 	KindMethod    = "method"
 	KindStruct    = "struct"
 	KindInterface = "interface"
-	KindType      = "type" // any other type declaration, such as `type Status int`
+	KindOther     = "other" // any other type declaration, such as `type Status int`
 	KindConst     = "const"
 	KindVar       = "var"
 	KindFile      = "file"
@@ -104,9 +104,10 @@ const (
 
 // FuncMatch filters declarations. Unset fields match every declaration.
 type FuncMatch struct {
-	Exported   bool    `yaml:"exported"`
-	FirstParam string  `yaml:"firstParam"`
-	Name       Pattern `yaml:"name"`
+	Exported bool `yaml:"exported"`
+	// FirstParamName matches declarations whose first parameter has this name, such as ctx.
+	FirstParamName string  `yaml:"firstParamName"`
+	Name           Pattern `yaml:"name"`
 	// Kind limits the scan to plain functions or to methods.
 	Kind string `yaml:"kind"`
 	// Receiver matches methods on this type, whether the receiver is a value or a pointer.
@@ -614,13 +615,13 @@ func validateValues(name string, m ValueMatch, at string, pos positions) diag.Li
 func validateTypes(name string, m TypeMatch, at string, pos positions) diag.List {
 	var errs diag.List
 	switch m.Kind {
-	case "", KindStruct, KindInterface, KindType:
+	case "", KindStruct, KindInterface, KindOther:
 	default:
 		errs = append(errs, &diag.Diagnostic{
 			Code:    diag.InvalidValue,
 			Pos:     pos.at(at + ".kind"),
 			Message: fmt.Sprintf("scan %q: unknown type kind %q", name, m.Kind),
-			Hint:    "kind is struct, interface, or type",
+			Hint:    "kind is struct, interface, or other",
 		})
 	}
 	return append(errs, validateDirective(name, m.Directive, at, pos)...)

@@ -19,8 +19,9 @@ type Explanation struct {
 	Path string `json:"path"`
 	// Generated reports whether the file has adder's header.
 	Generated bool `json:"generated"`
-	// Template is the template the header names, with its pack and use for a pack's template.
-	Template string `json:"template,omitempty"`
+	// Source is what the header says the file was generated from: a template, with its pack and use for a
+	// pack's template.
+	Source string `json:"source,omitempty"`
 	// Output is the output that writes or removes the file, nil when none does.
 	Output *config.Output `json:"output"`
 	// Scans are the scans the output's template refers to by name.
@@ -37,7 +38,7 @@ func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) 
 		return nil, diag.Locate(diag.Wrap(diag.IO, diag.Pos{File: name}, err), src.RepoDir, diag.Pos{})
 	}
 	e := &Explanation{Path: name}
-	e.Template, e.Generated = header.Parse(name, content)
+	e.Source, e.Generated = header.Parse(name, content)
 	if !e.Generated {
 		return e, nil
 	}
@@ -45,7 +46,7 @@ func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) 
 	var owner unit
 	for _, u := range units(cfg, src) {
 		for i, out := range u.cfg.Derive.Outputs {
-			if output == nil && out.Source() == e.Template && writes(out, name) {
+			if output == nil && out.Source() == e.Source && writes(out, name) {
 				output, owner = &u.cfg.Derive.Outputs[i], u
 			}
 		}

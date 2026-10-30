@@ -143,14 +143,14 @@ func TestRun(t *testing.T) {
 			wantCodes: []diag.Code{diag.IO},
 		},
 		{
-			name: "without go.mod there is no Module field",
+			name: "without go.mod, Module is empty",
 			setup: func(t *testing.T, root string, _ *config.Config) {
 				if err := os.Remove(filepath.Join(root, "go.mod")); err != nil {
 					t.Fatal(err)
 				}
 			},
-			wantCodes: []diag.Code{diag.TemplateExec},
-			wantHint:  "available fields: Drivers, Vars",
+			wantStatuses: []plan.Status{plan.Created},
+			wantInRoot:   true,
 		},
 		{
 			name: "reports every output problem and writes nothing",
@@ -684,7 +684,7 @@ func TestExplain(t *testing.T) {
 			if e.Output != nil {
 				output = e.Output.Path
 			}
-			if e.Path != tt.file || e.Generated != tt.wantGenerated || e.Template != tt.wantTemplate || output != tt.wantOutput ||
+			if e.Path != tt.file || e.Generated != tt.wantGenerated || e.Source != tt.wantTemplate || output != tt.wantOutput ||
 				!slices.Equal(e.Scans, tt.wantScans) || (e.Status == nil) != (tt.wantStatus == nil) || (e.Status != nil && *e.Status != *tt.wantStatus) {
 				t.Errorf("Explain() = %+v (status %v), want generated %v from %q by %q, scans %v, status %v",
 					e, e.Status, tt.wantGenerated, tt.wantTemplate, tt.wantOutput, tt.wantScans, tt.wantStatus)

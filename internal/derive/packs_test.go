@@ -183,7 +183,7 @@ func TestExplainPack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if e.Template != tt.template || e.Output == nil || e.Output.Use != "stores" || e.Output.Pack != "store" || !slices.Equal(e.Scans, tt.scans) || *e.Status != plan.Unchanged {
+			if e.Source != tt.template || e.Output == nil || e.Output.Use != "stores" || e.Output.Pack != "store" || !slices.Equal(e.Scans, tt.scans) || *e.Status != plan.Unchanged {
 				t.Errorf("Explain() = %+v, output %+v", e, e.Output)
 			}
 		})

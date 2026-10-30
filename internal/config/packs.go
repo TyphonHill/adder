@@ -39,8 +39,8 @@ type Use struct {
 	Pack string `yaml:"pack"`
 	// With gives the pack's options, by name.
 	With map[string]any `yaml:"with"`
-	// Generators renames the pack's generators, from the pack's name to the command's.
-	Generators map[string]string `yaml:"generators"`
+	// Rename gives the pack's generators other command names, from the pack's name to the command's.
+	Rename map[string]string `yaml:"rename"`
 	// Tests are the tests of the pack's generators, by command name, with golden files in the repository.
 	Tests map[string][]GeneratorTest `yaml:"tests"`
 
@@ -247,26 +247,26 @@ func (c *Config) addUseGenerators(pos positions) diag.List {
 		if use.Config == nil {
 			continue
 		}
-		for _, name := range slices.Sorted(maps.Keys(use.Generators)) {
-			renamed := use.Generators[name]
+		for _, name := range slices.Sorted(maps.Keys(use.Rename)) {
+			renamed := use.Rename[name]
 			switch _, ok := use.Config.Generators[name]; {
 			case !ok:
-				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".generators."+name), "pack use %q: pack %q has no generator %q", useName, use.Pack, name))
+				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".rename."+name), "pack use %q: pack %q has no generator %q", useName, use.Pack, name))
 			case !generatorName.MatchString(renamed):
-				errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".generators."+name), "pack use %q: generator name %q must be lowercase words joined by hyphens", useName, renamed))
+				errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".rename."+name), "pack use %q: generator name %q must be lowercase words joined by hyphens", useName, renamed))
 			}
 		}
 		commands := make(map[string]bool)
 		for _, name := range slices.Sorted(maps.Keys(use.Config.Generators)) {
 			gen := use.Config.Generators[name]
-			command := cmp.Or(use.Generators[name], name)
+			command := cmp.Or(use.Rename[name], name)
 			commands[command] = true
 			if first, taken := from[command]; taken {
 				errs = append(errs, &diag.Diagnostic{
 					Code:    diag.InvalidName,
 					Pos:     use.Pos,
 					Message: fmt.Sprintf("pack use %q: generator %q is already defined in %s", useName, command, first),
-					Hint:    fmt.Sprintf("rename it under the use, such as generators: {%s: %s-%s}", name, useName, name),
+					Hint:    fmt.Sprintf("rename it under the use, such as rename: {%s: %s-%s}", name, useName, name),
 				})
 				continue
 			}

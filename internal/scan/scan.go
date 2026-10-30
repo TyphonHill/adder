@@ -24,7 +24,7 @@ import (
 // Item is a matched declaration.
 type Item struct {
 	Name       string  // declared name
-	Kind       string  // "func", "method", "struct", "interface", "type", "const", "var", or "file"
+	Kind       string  // "func", "method", "struct", "interface", "other", "const", "var", or "file"
 	Receiver   string  // receiver type name, empty for plain functions
 	Package    string  // package name from the file's package clause
 	ImportPath string  // the package's import path, empty when the repository has no go.mod
@@ -347,7 +347,7 @@ func valueItems(fset *token.FileSet, file *ast.File, m config.ValueMatch, base I
 
 func typeKind(ts *ast.TypeSpec) string {
 	if ts.Assign.IsValid() {
-		return config.KindType
+		return config.KindOther
 	}
 	switch ts.Type.(type) {
 	case *ast.StructType:
@@ -355,7 +355,7 @@ func typeKind(ts *ast.TypeSpec) string {
 	case *ast.InterfaceType:
 		return config.KindInterface
 	}
-	return config.KindType
+	return config.KindOther
 }
 
 func structFields(st *ast.StructType) []Field {
@@ -469,7 +469,7 @@ func matches(fn *ast.FuncDecl, imports map[string]string, m config.FuncMatch, ty
 		return false
 	case m.Receiver != "" && (fn.Recv == nil || receiverName(fn) != m.Receiver):
 		return false
-	case m.FirstParam != "" && firstParamName(fn) != m.FirstParam:
+	case m.FirstParamName != "" && firstParamName(fn) != m.FirstParamName:
 		return false
 	case m.FirstParamType != "" && typed != nil:
 		return typed.firstParamIs(fn, m.FirstParamType)

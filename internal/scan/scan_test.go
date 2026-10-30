@@ -97,7 +97,7 @@ func pattern(expr string) config.Pattern {
 	return config.Pattern{Regexp: regexp.MustCompile(expr)}
 }
 
-var jobFuncs = config.FuncMatch{Exported: true, FirstParam: "ctx", Name: pattern("Job$")}
+var jobFuncs = config.FuncMatch{Exported: true, FirstParamName: "ctx", Name: pattern("Job$")}
 
 // id identifies an item by its file and its qualified name.
 func id(it Item) string {
@@ -409,9 +409,9 @@ func TestRunTypes(t *testing.T) {
 		Name: "Store", Kind: "interface", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go",
 		Line: 19, Doc: "Store saves users.", Directives: map[string]map[string]string{"register": {"table": "stores"}},
 	}
-	status := Item{Name: "Status", Kind: "type", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 22, Doc: "Status is an account status."}
+	status := Item{Name: "Status", Kind: "other", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 22, Doc: "Status is an account status."}
 	unexported := Item{Name: "internal", Kind: "struct", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 24}
-	alias := Item{Name: "Alias", Kind: "type", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 28, Doc: "Alias renames User."}
+	alias := Item{Name: "Alias", Kind: "other", Package: "model", ImportPath: "example.com/m/model", Dir: "model", File: "model/model.go", Line: 28, Doc: "Alias renames User."}
 
 	tests := []struct {
 		name  string
@@ -422,7 +422,7 @@ func TestRunTypes(t *testing.T) {
 		{name: "exported only", types: config.TypeMatch{Exported: true}, want: []Item{alias, status, store, user}},
 		{name: "structs", types: config.TypeMatch{Kind: config.KindStruct}, want: []Item{user, unexported}},
 		{name: "interfaces", types: config.TypeMatch{Kind: config.KindInterface}, want: []Item{store}},
-		{name: "other types, including aliases", types: config.TypeMatch{Kind: config.KindType}, want: []Item{alias, status}},
+		{name: "other types, including aliases", types: config.TypeMatch{Kind: config.KindOther}, want: []Item{alias, status}},
 		{name: "by name", types: config.TypeMatch{Name: pattern("^S")}, want: []Item{status, store}},
 		{name: "by directive", types: config.TypeMatch{Directive: "register"}, want: []Item{store, user}},
 		{name: "by a directive nothing has", types: config.TypeMatch{Directive: "other"}, want: nil},

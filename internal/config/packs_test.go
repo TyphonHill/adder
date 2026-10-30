@@ -283,7 +283,7 @@ func TestPackGenerators(t *testing.T) {
 		},
 		{
 			name:   "renamed generators",
-			config: "version: 1\npacks:\n  a: {pack: store, with: {dir: a}, generators: {driver: a-driver}}\n  b: {pack: store, with: {dir: b}}\n",
+			config: "version: 1\npacks:\n  a: {pack: store, with: {dir: a}, rename: {driver: a-driver}}\n  b: {pack: store, with: {dir: b}}\n",
 			want:   map[string]string{"a-driver": "a", "driver": "b"},
 		},
 		{
@@ -303,13 +303,13 @@ func TestPackGenerators(t *testing.T) {
 		},
 		{
 			name:     "renaming a generator the pack does not have",
-			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}, generators: {nope: x}}\n",
-			wantErrs: []string{"adder.yaml:3:55 invalid-value"},
+			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}, rename: {nope: x}}\n",
+			wantErrs: []string{"adder.yaml:3:51 invalid-value"},
 		},
 		{
 			name:     "a new name that is not lowercase words",
-			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}, generators: {driver: Driver}}\n",
-			wantErrs: []string{"adder.yaml:3:55 invalid-name"},
+			config:   "version: 1\npacks:\n  drivers: {pack: store, with: {dir: d}, rename: {driver: Driver}}\n",
+			wantErrs: []string{"adder.yaml:3:51 invalid-name"},
 		},
 		{
 			name:     "tests for a generator the use does not have",

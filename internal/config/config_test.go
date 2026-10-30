@@ -397,7 +397,7 @@ func TestParseErrors(t *testing.T) {
 		{name: "dirs bad glob", input: "version: 1\nderive:\n  scans:\n    A: {dirs: ['a/[']}", want: []want{{diag.InvalidValue, 4, 16}}},
 		{
 			name:     "unknown kind",
-			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {kind: type}}",
+			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {kind: other}}",
 			want:     []want{{diag.InvalidValue, 4, 28}},
 			wantHint: "kind is func or method",
 		},
@@ -416,7 +416,7 @@ func TestParseErrors(t *testing.T) {
 			name:     "unknown type kind",
 			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: [a], types: {kind: func}}",
 			want:     []want{{diag.InvalidValue, 4, 28}},
-			wantHint: "kind is struct, interface, or type",
+			wantHint: "kind is struct, interface, or other",
 		},
 		{
 			name:     "invalid function directive",
