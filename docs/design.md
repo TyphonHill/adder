@@ -84,6 +84,7 @@ Positions follow two rules:
 | `missing-input` | A required generator input was not given. |
 | `invalid-input` | A generator input has the wrong type, fails a restriction, or is not declared. |
 | `file-exists` | A generator would create a file that already exists. |
+| `usage` | With `--json`, adder was invoked incorrectly, such as with an unknown flag. |
 
 **Why:** error text is for people and changes freely, but codes and positions are for tools. Keeping both from the start means JSON output, editor squiggles, and documentation links need no rework later.
 
@@ -364,7 +365,7 @@ Every command accepts `--json`. It writes exactly one JSON object to standard ou
 
 - `problems` is always present, empty on success. Problems are the same `diag.Diagnostic` values the text output prints, with positions written the same way ([decision 4](#4-structured-diagnostics)).
 - `changes` lists every file in the plan, unchanged ones included, so a tool sees the whole picture without a second command. Change paths are slash-separated and relative to the root. With `--diff`, each change that is not unchanged also has a `diff` field holding its unified diff.
-- `adder new` adds `generator` and `message`. Each other command's fields are listed with it in the documentation.
+- `adder derive` and `adder new` add `dryRun`, since `--diff` implies it, and `adder new` adds `generator` and `message`. The README lists every command's fields.
 - Mistakes in how adder was invoked, such as an unknown flag, become a problem with the new code `usage`, so a tool never has to parse help text. `--help` still prints text.
 - Field names are lowerCamelCase. From v1.0, fields are only ever added.
 

@@ -57,7 +57,7 @@ func runNew(cmd *cobra.Command, opts *globalOptions, args []string) error {
 	tree := &cobra.Command{Use: "adder", SilenceErrors: true, SilenceUsage: true}
 	tree.CompletionOptions.DisableDefaultCmd = true
 	addGlobalFlags(tree, opts)
-	tree.AddCommand(generatorsCommand(cfg, root))
+	tree.AddCommand(generatorsCommand(opts, cfg, root))
 	tree.SetArgs(append([]string{"new"}, args...))
 	tree.SetIn(cmd.InOrStdin())
 	tree.SetOut(cmd.OutOrStdout())
@@ -66,7 +66,7 @@ func runNew(cmd *cobra.Command, opts *globalOptions, args []string) error {
 }
 
 // generatorsCommand returns the new command with a subcommand for each generator in cfg, working in root.
-func generatorsCommand(cfg *config.Config, root string) *cobra.Command {
+func generatorsCommand(opts *globalOptions, cfg *config.Config, root string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "new <generator> [flags]",
 		Short: "Create files with a generator from adder.yaml",
@@ -85,7 +85,7 @@ func generatorsCommand(cfg *config.Config, root string) *cobra.Command {
 		},
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Generators)) {
-		cmd.AddCommand(generatorCommand(cfg, root, name))
+		cmd.AddCommand(generatorCommand(opts, cfg, root, name))
 	}
 	return cmd
 }
@@ -103,7 +103,7 @@ func unknownGenerator(cmd *cobra.Command, cfg *config.Config, name string) error
 	return d
 }
 
-func generatorCommand(cfg *config.Config, root, name string) *cobra.Command {
+func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string) *cobra.Command {
 	gen := cfg.Generators[name]
 	var dryRun, showDiff bool
 	var inputsFile string
@@ -112,6 +112,9 @@ func generatorCommand(cfg *config.Config, root, name string) *cobra.Command {
 		Short: gen.Description,
 		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			dryRun = dryRun || showDiff
+			rep := &newReport{Generator: name, DryRun: dryRun, Changes: []changeReport{}}
+			opts.report = rep
 			inputs, err := readInputs(cmd, inputsFile)
 			if err != nil {
 				return err
@@ -127,10 +130,14 @@ func generatorCommand(cfg *config.Config, root, name string) *cobra.Command {
 				}
 			}
 
-			dryRun = dryRun || showDiff
 			res, err := scaffold.Run(cmd.Context(), cfg, name, inputs, scaffold.Options{Root: root, DryRun: dryRun})
 			if err != nil {
 				return err
+			}
+			rep.Changes = changesReport(res.Plan.Changes, showDiff)
+			rep.Message = strings.TrimSpace(res.Message)
+			if opts.json {
+				return nil
 			}
 			out := cmd.OutOrStdout()
 			for _, c := range res.Plan.Changes {
@@ -146,8 +153,8 @@ func generatorCommand(cfg *config.Config, root, name string) *cobra.Command {
 			if showDiff {
 				printDiffs(out, res.Plan.Pending())
 			}
-			if msg := strings.TrimSpace(res.Message); msg != "" && !dryRun {
-				fmt.Fprintf(out, "\n%s\n", msg)
+			if rep.Message != "" && !dryRun {
+				fmt.Fprintf(out, "\n%s\n", rep.Message)
 			}
 			return nil
 		},

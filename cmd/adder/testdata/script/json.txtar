@@ -1,0 +1,296 @@
+# derive lists every change, and nothing goes to standard error.
+exec adder derive --json
+cmp stdout derive.json
+! stderr .
+
+# A second run reports the output as unchanged.
+exec adder derive --json --dry-run
+cmp stdout unchanged.json
+
+# check reports stale outputs with status 3 and no problems, and --diff adds each diff.
+mkdir drivers/gcs
+cp gcs.go drivers/gcs/gcs.go
+exits 3 adder check --json --diff
+cmp stdout stale.json
+! stderr .
+
+# new reports the generator, its changes, and its message, even on a dry run.
+exec adder new driver --name blob --dry-run --json
+cmp stdout new.json
+! exists drivers/blob
+
+# Problems keep their codes and positions, and exit statuses are unchanged.
+exits 2 adder new driver --json
+cmp stdout missing.json
+! stderr .
+exits 2 adder new drivr --json
+cmp stdout unknown.json
+
+# Usage mistakes become usage problems, even before --json is parsed.
+exits 2 adder check --nope --json
+cmp stdout flag.json
+! stderr .
+exits 2 adder nope --json
+cmp stdout command.json
+
+# --json=false turns it back off, and help is still text.
+exec adder derive --json --json=false --dry-run
+stdout '^would be updated    drivers/drivers.gen.go$'
+exec adder --json --help
+stdout '^Usage:$'
+
+# Problems in adder.yaml are reported with their positions.
+cp bad.yaml adder.yaml
+exits 1 adder derive --json
+cmp stdout config.json
+
+# init reports the file it created, or the problem.
+mkdir fresh
+exec adder init --root fresh --json
+cmp stdout init.json
+exits 1 adder init --root fresh --json
+stdout '"code": "file-exists"'
+
+-- derive.json --
+{
+  "dryRun": false,
+  "changes": [
+    {
+      "path": "drivers/drivers.gen.go",
+      "status": "created"
+    }
+  ],
+  "problems": []
+}
+-- unchanged.json --
+{
+  "dryRun": true,
+  "changes": [
+    {
+      "path": "drivers/drivers.gen.go",
+      "status": "unchanged"
+    }
+  ],
+  "problems": []
+}
+-- stale.json --
+{
+  "changes": [
+    {
+      "path": "drivers/drivers.gen.go",
+      "status": "updated",
+      "diff": "diff a/drivers/drivers.gen.go b/drivers/drivers.gen.go\n--- a/drivers/drivers.gen.go\n+++ b/drivers/drivers.gen.go\n@@ -4,6 +4,7 @@\n \n import (\n \t\"example.com/storage/driver\"\n+\t\"example.com/storage/drivers/gcs\"\n \t\"example.com/storage/drivers/local\"\n \t\"example.com/storage/drivers/s3\"\n )\n@@ -10,6 +11,7 @@\n \n // All maps each driver name to its constructor.\n var All = map[string]driver.Factory{\n+\t\"gcs\":   gcs.New,\n \t\"local\": local.New,\n \t\"s3\":    s3.New,\n }\n"
+    }
+  ],
+  "problems": []
+}
+-- new.json --
+{
+  "generator": "driver",
+  "dryRun": true,
+  "changes": [
+    {
+      "path": "drivers/blob/blob.go",
+      "status": "created"
+    },
+    {
+      "path": "drivers/README.md",
+      "status": "created"
+    },
+    {
+      "path": "drivers/drivers.gen.go",
+      "status": "updated"
+    }
+  ],
+  "message": "Next, implement New in drivers/blob/blob.go.",
+  "problems": []
+}
+-- missing.json --
+{
+  "generator": "driver",
+  "dryRun": false,
+  "changes": [],
+  "message": "",
+  "problems": [
+    {
+      "code": "missing-input",
+      "message": "--name is required",
+      "hint": "Driver name, used as the package name"
+    }
+  ]
+}
+-- unknown.json --
+{
+  "problems": [
+    {
+      "code": "unknown-generator",
+      "message": "unknown generator \"drivr\"",
+      "hint": "did you mean driver?"
+    }
+  ]
+}
+-- flag.json --
+{
+  "problems": [
+    {
+      "code": "usage",
+      "message": "unknown flag: --nope",
+      "hint": "run 'adder check --help' for usage"
+    }
+  ]
+}
+-- command.json --
+{
+  "problems": [
+    {
+      "code": "usage",
+      "message": "unknown command \"nope\" for \"adder\"",
+      "hint": "run 'adder --help' for usage"
+    }
+  ]
+}
+-- config.json --
+{
+  "dryRun": false,
+  "changes": [],
+  "problems": [
+    {
+      "code": "missing-field",
+      "message": "output 0: path is required",
+      "pos": {
+        "file": "adder.yaml",
+        "line": 7,
+        "column": 7
+      }
+    }
+  ]
+}
+-- init.json --
+{
+  "changes": [
+    {
+      "path": "fresh/adder.yaml",
+      "status": "created"
+    }
+  ],
+  "problems": []
+}
+-- bad.yaml --
+version: 1
+derive:
+  scans:
+    Drivers:
+      dirs: ["drivers/*"]
+  outputs:
+    - template: templates/drivers.go.tmpl
+-- gcs.go --
+package gcs
+
+import "example.com/storage/driver"
+
+// New returns a driver backed by a Google Cloud Storage bucket.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+-- adder.yaml --
+version: 1
+vars:
+  License: Apache-2.0
+derive:
+  scans:
+    Drivers:
+      dirs: ["drivers/*"]
+      funcs:
+        exported: true
+        name: ^New$
+  outputs:
+    - template: templates/drivers.go.tmpl
+      path: drivers/drivers.gen.go
+generators:
+  driver:
+    description: Add a storage driver
+    inputs:
+      name:
+        help: Driver name, used as the package name
+        pattern: "[a-z][a-z0-9]*"
+        unique: Drivers.Package
+      summary:
+        help: One-line description for the package documentation
+        default: stores objects
+      cache:
+        type: bool
+        help: Add an in-memory cache in front of the driver
+    files:
+      - template: templates/new/driver.go.tmpl
+        path: drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go
+      - template: templates/new/cache.go.tmpl
+        path: drivers/{{ .Inputs.name }}/cache.go
+        when: cache
+      - template: templates/new/README.md.tmpl
+        path: drivers/README.md
+        ifExists: skip
+    message: |
+      Next, implement New in drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
+-- driver/driver.go --
+package driver
+
+// Driver stores and retrieves objects.
+type Driver interface {
+	Get(key string) ([]byte, error)
+}
+
+// Factory creates a Driver from its configuration.
+type Factory func(config map[string]string) (Driver, error)
+-- drivers/local/local.go --
+package local
+
+import "example.com/storage/driver"
+
+// New returns a driver backed by the local filesystem.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+
+// NewOptions is not a constructor and is not registered.
+func NewOptions() {}
+-- drivers/s3/s3.go --
+package s3
+
+import "example.com/storage/driver"
+
+// New returns a driver backed by an S3 bucket.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }
+
+func newClient() {}
+-- go.mod --
+module example.com/storage
+
+go 1.26.0
+-- templates/drivers.go.tmpl --
+package drivers
+
+import (
+	"{{ .Module }}/driver"
+{{- range .Drivers }}
+	"{{ .ImportPath }}"
+{{- end }}
+)
+
+// All maps each driver name to its constructor.
+var All = map[string]driver.Factory{
+{{- range .Drivers }}
+	"{{ .Package }}": {{ .Package }}.New,
+{{- end }}
+}
+-- templates/new/README.md.tmpl --
+# Drivers
+
+Each directory holds one driver.
+-- templates/new/cache.go.tmpl --
+package {{ .Inputs.name }}
+
+type cache struct{ entries map[string][]byte }
+-- templates/new/driver.go.tmpl --
+// Package {{ .Inputs.name }} is a driver that {{ .Inputs.summary }}. Licensed under {{ .Vars.License }}.
+package {{ .Inputs.name }}
+
+import "{{ .Module }}/driver"
+
+// New returns a {{ .Inputs.name }} driver.
+func New(config map[string]string) (driver.Driver, error) { return nil, nil }

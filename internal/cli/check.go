@@ -30,6 +30,8 @@ func newCheckCommand(opts *globalOptions) *cobra.Command {
 It exits with status 3 when any output is out of date, so it can guard CI and repositories that commit generated files.`,
 		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			rep := &planReport{Changes: []changeReport{}}
+			opts.report = rep
 			cfg, root, err := opts.load()
 			if err != nil {
 				return err
@@ -38,12 +40,15 @@ It exits with status 3 when any output is out of date, so it can guard CI and re
 			if err != nil {
 				return err
 			}
+			rep.Changes = changesReport(p.Changes, showDiff)
 			pending := p.Pending()
-			for _, c := range pending {
-				fmt.Fprintf(cmd.OutOrStdout(), "would be %-9s  %s\n", c.Status, c.Path)
-			}
-			if showDiff {
-				printDiffs(cmd.OutOrStdout(), pending)
+			if !opts.json {
+				for _, c := range pending {
+					fmt.Fprintf(cmd.OutOrStdout(), "would be %-9s  %s\n", c.Status, c.Path)
+				}
+				if showDiff {
+					printDiffs(cmd.OutOrStdout(), pending)
+				}
 			}
 			if len(pending) > 0 {
 				return &staleError{count: len(pending)}

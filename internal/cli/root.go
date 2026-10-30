@@ -33,6 +33,9 @@ type usageError struct {
 func (e *usageError) Error() string { return e.err.Error() }
 func (e *usageError) Unwrap() error { return e.err }
 
+// command returns the command whose help explains the usage.
+func (e *usageError) command() string { return cmp.Or(e.cmd, "adder") }
+
 // usageArgs reports argument validation failures as usage errors.
 func usageArgs(validate cobra.PositionalArgs) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
@@ -43,10 +46,14 @@ func usageArgs(validate cobra.PositionalArgs) cobra.PositionalArgs {
 	}
 }
 
-// globalOptions holds the flags shared by every subcommand. Empty means the flag was not given.
+// globalOptions holds the flags shared by every subcommand, and the report of the command that ran. Empty means
+// the flag was not given.
 type globalOptions struct {
 	root   string
 	config string
+	json   bool
+
+	report report // set by a command when it starts running, for --json
 }
 
 // load finds and loads the configuration, returning it with the repository root. The configuration is
@@ -72,17 +79,22 @@ func (o *globalOptions) load() (*config.Config, string, error) {
 
 // Main runs adder with args, reading stdin and writing to stdout and stderr, and returns the process exit code.
 func Main(ctx context.Context, version string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	cmd := New(version)
+	cmd, opts := newRoot(version)
+	opts.json = wantsJSON(args)
 	cmd.SetArgs(args)
 	cmd.SetIn(stdin)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 
 	err := cmd.ExecuteContext(ctx)
+	if opts.json {
+		writeReport(stdout, opts.report, err)
+	} else if err != nil {
+		printError(stderr, err)
+	}
 	if err == nil {
 		return ExitOK
 	}
-	printError(stderr, err)
 	if _, ok := errors.AsType[*usageError](err); ok || invocationProblem(err) {
 		return ExitUsage
 	}
@@ -104,8 +116,8 @@ func invocationProblem(err error) bool {
 	return true
 }
 
-// New returns the root adder command.
-func New(version string) *cobra.Command {
+// newRoot returns the root adder command and the options its commands share.
+func newRoot(version string) (*cobra.Command, *globalOptions) {
 	opts := &globalOptions{}
 	cmd := &cobra.Command{
 		Use:   "adder",
@@ -123,7 +135,7 @@ Generators and derived files are declared in adder.yaml at the repository root.`
 	}
 	addGlobalFlags(cmd, opts)
 	cmd.AddCommand(newInitCommand(opts), newDeriveCommand(opts), newCheckCommand(opts), newNewCommand(opts))
-	return cmd
+	return cmd, opts
 }
 
 // addGlobalFlags defines the flags every subcommand shares and reports flag mistakes as usage errors.
@@ -133,6 +145,7 @@ func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
 	})
 	cmd.PersistentFlags().StringVar(&opts.root, "root", "", "repository root that scans and outputs are relative to (default: the directory holding "+config.FileName+", found from the current directory)")
 	cmd.PersistentFlags().StringVarP(&opts.config, "config", "c", "", "configuration file (default <root>/"+config.FileName+")")
+	cmd.PersistentFlags().BoolVar(&opts.json, "json", opts.json, "print the result and any problems as one JSON object on standard output")
 }
 
 // printDiffs writes each pending change as a unified diff, after a blank line.
@@ -145,7 +158,7 @@ func printDiffs(w io.Writer, changes []plan.Change) {
 // printError writes err for a person to read, one line per problem.
 func printError(w io.Writer, err error) {
 	if usage, ok := errors.AsType[*usageError](err); ok {
-		fmt.Fprintf(w, "adder: %v\nRun '%s --help' for usage.\n", usage.err, cmp.Or(usage.cmd, "adder"))
+		fmt.Fprintf(w, "adder: %v\nRun '%s --help' for usage.\n", usage.err, usage.command())
 		return
 	}
 	if errors.Is(err, context.Canceled) {

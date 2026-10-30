@@ -35,6 +35,7 @@ const (
 	MissingInput       Code = "missing-input"
 	InvalidInput       Code = "invalid-input"
 	FileExists         Code = "file-exists"
+	Usage              Code = "usage"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.
