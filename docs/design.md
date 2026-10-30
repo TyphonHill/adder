@@ -632,11 +632,11 @@ Pushing a `v*` tag runs GoReleaser in GitHub Actions:
 
 - **Site:** built with Hugo and the Hextra theme from `site/` and deployed to GitHub Pages from `main`. Hugo is a single Go binary and Hextra installs as a Hugo module, so the documentation needs no Node toolchain. The site holds guides, references, recipes, a comparison with other tools, and a guide to migrating from a hand-rolled generator.
 - **References are generated:** the configuration reference comes from the JSON Schema and the function reference from the function table, by a program in `internal/tools/docgen`. Function examples run as tests, and a test fails when the generated pages are out of date, the same way `adder check` does.
-- **Examples:** `examples/` holds complete repositories, each its own module with `adder.yaml`, templates, Go code, and committed outputs: a driver registry, HTTP routes, CLI commands, and workflow engine wiring. CI runs `adder check` and `go build ./...` in each with adder built from the same commit. Recipes on the site walk through them.
+- **Examples:** the examples v1.0 adds to `examples/` ([decision 43](#43-reaching-v10-planned-v10)) grow to cover more cases, such as CLI commands and workflow engine wiring, and recipes on the site walk through them.
 - **Comparisons** state the version of each tool compared and the date, and link to its documentation.
 - **Issues and pull requests** use templates: bug reports ask for `adder --version`, the relevant `adder.yaml`, the command, and its output.
 
-Before then, the README and `docs/` remain the documentation.
+Before then, the README and `docs/` are the documentation ([decision 43](#43-reaching-v10-planned-v10)), and the site renders the same `docs/` files.
 
 **Why:** each example is its own module, so `.Module` and `.ImportPath` work as they do in a real repository, and adder's own module stays free of example code.
 
@@ -906,6 +906,63 @@ type Problem struct {
 | Functions available only to their own pack's templates | A repository using a pack's templates in its own outputs would have no way to reach the functions those templates need. |
 
 **Why:** a repository's code sometimes holds information no general scan can find, such as routes registered in a call chain or names in a non-Go file format. Custom functions and scanners let a repository or pack handle those cases without adder growing a feature for each.
+
+### 43. Reaching v1.0 (planned, v1.0)
+
+v1.0 makes the promises in [Compatibility](#compatibility) binding, so it is about getting them right rather than adding features. Four steps come before the release, in this order, because each can change what the next one describes.
+
+**1. Review everything v1.0 freezes.** Every name and behavior the compatibility promise covers is read once more, asking whether it should change while change is still free:
+
+- the `adder.yaml` and `pack.yaml` schemas: every key, default, and validation rule
+- template data: scan item fields, `.Module`, `.Vars`, `.Inputs`, `.Options`, `.Item`
+- template function names, argument order, and behavior
+- the generated-code header
+- diagnostic codes, exit codes, and the JSON output of every command
+- the root package's Go API: `Main`, `Pack`, `Scanner`, `ScanInput`, and `Problem`
+
+Where the module lives is already settled: since v0.6.0 it is `typhonhill.dev/adder`, a path on a domain the project owns, so the repository can move between GitHub accounts without breaking imports.
+
+Each change the review proposes is decided on its own. Those accepted ship before v1.0, listed under **Changed** or **Removed** in the changelog.
+
+**2. Try adder on a production codebase.** adder replaces the hand-rolled generator of a large repository in a local trial before the schema freezes, since a real generator is the best test of whether the schema is right. Nothing from that repository is published. What the trial finds comes back as general changes to adder, with examples of its own.
+
+**3. Rewrite the documentation, with examples.** The README becomes a short page that shows what adder does: the problem it solves, one example before and after, a few small examples of deriving, scaffolding, packs, checks in CI, and agents, installation, and links. The reference moves to `docs/`, one file per topic:
+
+| File | Covers |
+| --- | --- |
+| `docs/getting-started.md` | A first registry and a first generator, step by step. |
+| `docs/configuration.md` | Scans, outputs, vars, partials, and monorepos. |
+| `docs/generators.md` | Inputs, files, messages, prompts, and generator tests. |
+| `docs/templates.md` | Template data, item fields, and functions. |
+| `docs/packs.md` | Using, writing, publishing, and upgrading packs. |
+| `docs/extending.md` | A repository's own build, functions, and scanners. |
+| `docs/commands.md` | Every command and flag, exit codes, and JSON output. |
+| `docs/compatibility.md` | What v1.0 promises, and the support and deprecation policy. |
+
+GitHub renders these today, and the documentation site after v1.0 ([decision 35](#35-documentation-and-examples-planned-after-v10)) renders the same files instead of duplicating them.
+
+`examples/` holds a few complete repositories, each its own module with `adder.yaml`, templates, Go code, and committed outputs, which the documentation links to:
+
+| Example | Shows |
+| --- | --- |
+| `examples/registry` | A driver registry derived from the code, a generator that adds a driver, and a generator test. |
+| `examples/handlers` | HTTP routes registered from comment directives, grouped by package, with one file per handler. |
+| `examples/packs` | A pack module, and an application that builds its own adder with it, a function, and a scanner. |
+
+CI runs `adder check` and `go build ./...` in each, with adder built from the same commit, so an example that drifts from adder fails the build.
+
+**4. Write the policies.** `docs/compatibility.md` states the support and deprecation policy:
+
+- Within v1, a setting, field, function, or code is only deprecated, never removed. It keeps working, the changelog lists it under **Deprecated** with what replaces it, and the documentation marks it.
+- Removal waits for a new schema `version` in `adder.yaml`, or v2 of the Go module for the Go API. `adder migrate` arrives with the first schema version that needs it, and upgrades a configuration from the version before.
+- adder supports the two most recent Go releases ([decision 11](#11-go-versions-and-dependencies)), as Go does. Moving the minimum to a newer release is not a breaking change.
+
+| Considered | Why not |
+| --- | --- |
+| `adder migrate` in v1.0 | Version 1 is the only schema, so there is nothing to migrate yet. |
+| Freezing without a production trial | Freezing is a one-way door, and the tests are written by the people who wrote the schema. |
+| Keeping the reference in the README | Seven hundred lines that mix a pitch, a tutorial, and a reference serve none of them well. |
+| A code of conduct in v1.0 | It matters once others join, which the launch after v1.0 invites. It arrives then, with a way to report problems that publishes no one's address. |
 
 ## Compatibility
 
