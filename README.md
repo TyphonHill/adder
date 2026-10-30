@@ -1,5 +1,7 @@
 # adder
 
+> **adder has moved to `typhonhill.dev/adder`.** This module path, `github.com/TyphonHill/adder`, is deprecated and gets no new versions. Install adder with `go get -tool typhonhill.dev/adder/cmd/adder`.
+
 [![CI](https://github.com/TyphonHill/adder/actions/workflows/ci.yml/badge.svg)](https://github.com/TyphonHill/adder/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/TyphonHill/adder.svg)](https://pkg.go.dev/github.com/TyphonHill/adder)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)

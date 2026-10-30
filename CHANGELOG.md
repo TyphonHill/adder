@@ -4,6 +4,12 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-30
+
+### Deprecated
+
+- The module path `github.com/TyphonHill/adder`. adder moved to `typhonhill.dev/adder`, where new versions are released: install it with `go get -tool typhonhill.dev/adder/cmd/adder`, and change imports of `github.com/TyphonHill/adder` to `typhonhill.dev/adder`. Nothing else changes.
+
 ## [0.5.0] - 2026-10-30
 
 ### Added
@@ -107,7 +113,8 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Diagnostics with stable codes, file positions, and hints; every problem is reported at once.
 - Exit codes: 0 for success, 1 for problems, 2 for usage mistakes, and 3 for stale outputs.
 
-[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/TyphonHill/adder/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/TyphonHill/adder/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/TyphonHill/adder/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TyphonHill/adder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TyphonHill/adder/compare/v0.2.0...v0.3.0

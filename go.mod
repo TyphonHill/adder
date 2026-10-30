@@ -1,3 +1,4 @@
+// Deprecated: adder moved to typhonhill.dev/adder. Install it with go get -tool typhonhill.dev/adder/cmd/adder.
 module github.com/TyphonHill/adder
 
 go 1.26.0
