@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/TyphonHill/adder/internal/config"
-	"github.com/TyphonHill/adder/internal/derive"
 	"github.com/TyphonHill/adder/internal/diag"
 	"github.com/TyphonHill/adder/internal/scaffold"
 )
@@ -29,7 +28,7 @@ var isTerminal = func(v any) bool {
 }
 
 // promptMissing asks for the required inputs of the generator called name that inputs lacks, and adds them.
-func promptMissing(cmd *cobra.Command, cfg *config.Config, root, name string, inputs map[string]any) error {
+func promptMissing(cmd *cobra.Command, opts *globalOptions, cfg *config.Config, root, name string, inputs map[string]any) error {
 	missing := false
 	for input, in := range cfg.Generators[name].Inputs {
 		if _, given := inputs[input]; !given && in.Required() {
@@ -39,7 +38,7 @@ func promptMissing(cmd *cobra.Command, cfg *config.Config, root, name string, in
 	if !missing {
 		return nil
 	}
-	src, closeSources, err := derive.Open(cfg, root)
+	src, closeSources, err := opts.open(cfg, root)
 	if err != nil {
 		return err
 	}

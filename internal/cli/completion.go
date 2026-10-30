@@ -85,7 +85,7 @@ func completeNew(opts *globalOptions) cobra.CompletionFunc {
 			if strings.Contains(toComplete, "=") {
 				prefix = "--" + flag + "="
 			}
-			return inputValues(cmd, cfg, root, name, gen, flag, value, prefix), noFiles
+			return inputValues(cmd, opts, cfg, root, name, gen, flag, value, prefix), noFiles
 		}
 		if strings.HasPrefix(toComplete, "-") {
 			return generatorFlags(gen, toComplete), noFiles
@@ -120,7 +120,7 @@ func generatorFlags(gen config.Generator, prefix string) []cobra.Completion {
 }
 
 // inputValues completes the values the input behind flag allows, each written after prefix.
-func inputValues(cmd *cobra.Command, cfg *config.Config, root, name string, gen config.Generator, flag, value, prefix string) []cobra.Completion {
+func inputValues(cmd *cobra.Command, opts *globalOptions, cfg *config.Config, root, name string, gen config.Generator, flag, value, prefix string) []cobra.Completion {
 	input := ""
 	for key, in := range gen.Inputs {
 		if config.Flag(key) == flag && in.Type == config.InputString {
@@ -130,7 +130,7 @@ func inputValues(cmd *cobra.Command, cfg *config.Config, root, name string, gen 
 	if input == "" || (gen.Inputs[input].Values == nil && gen.Inputs[input].ValuesFrom == "") {
 		return nil
 	}
-	src, closeSources, err := derive.Open(cfg, root)
+	src, closeSources, err := opts.open(cfg, root)
 	if err != nil {
 		return nil
 	}
@@ -164,7 +164,7 @@ func completeExplain(opts *globalOptions) cobra.CompletionFunc {
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveDefault
 		}
-		src, closeSources, err := derive.Open(cfg, root)
+		src, closeSources, err := opts.open(cfg, root)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveDefault
 		}

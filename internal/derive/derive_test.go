@@ -709,7 +709,7 @@ func TestOpen(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := *cfg
 			c.Dir = tt.dir
-			src, closeSources, err := Open(&c, tt.root)
+			src, closeSources, err := Open(&c, tt.root, nil)
 			if tt.wantFile != "" {
 				if list := diag.From(err); len(list) != 1 || list[0].Code != diag.IO || list[0].Pos.File != tt.wantFile {
 					t.Errorf("Open() error = %v, want an io problem for %s", err, tt.wantFile)

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,13 +21,21 @@ func TestMain(m *testing.M) {
 
 func TestScripts(t *testing.T) {
 	goEnv := goEnvironment(t)
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
 	testscript.Run(t, testscript.Params{
 		Dir: "testdata/script",
-		// Type-aware scans run the go command, which needs the caches of the go running the tests.
+		// Type-aware scans and a repository's own build run the go command, which needs the caches of the go
+		// running the tests. Builds replace adder's module with this checkout, at ADDER_ROOT.
 		Setup: func(env *testscript.Env) error {
 			for key, value := range goEnv {
 				env.Setenv(key, value)
 			}
+			env.Setenv("ADDER_ROOT", root)
+			// Scripts run the go that runs the tests, never a toolchain go.mod asks for, which may not be downloaded.
+			env.Setenv("GOTOOLCHAIN", "local")
 			return nil
 		},
 		UpdateScripts:       *update,

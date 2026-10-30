@@ -20,7 +20,7 @@ func describeFixture(t *testing.T) (*config.Config, derive.Sources) {
 	gen := cfg.Generators["driver"]
 	gen.Inputs["base"] = config.Input{Type: config.InputString, Help: "Driver to copy", Default: new("local"), ValuesFrom: "Drivers.Package"}
 	gen.Inputs["tier"] = config.Input{Type: config.InputString, Values: []string{"fast", "slow"}, Default: new("fast")}
-	src, closeSources, err := derive.Open(cfg, root)
+	src, closeSources, err := derive.Open(cfg, root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestDescribeErrors(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(cfg)
 			}
-			src, closeSources, err := derive.Open(cfg, root)
+			src, closeSources, err := derive.Open(cfg, root, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -69,7 +69,7 @@ func TestGeneratorTest(t *testing.T) {
 				inputs = map[string]any{"name": "example"}
 			}
 			test := config.GeneratorTest{Name: "plain", Inputs: inputs, Want: want, Pos: diag.Pos{File: "adder.yaml", Line: 30}}
-			src, closeSources, err := derive.Open(cfg, root)
+			src, closeSources, err := derive.Open(cfg, root, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

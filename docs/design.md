@@ -23,8 +23,10 @@ adder.yaml ──► config ──► scan ──► render ──► plan ─�
 | `internal/textcase` | Case conversion, shared by template functions and input flag names. |
 | `internal/imports` | Package names for import paths, and removing unused imports from rendered Go. |
 | `internal/diag` | Structured problems shared by every package. |
+| `internal/pack` | Check and register the packs adder was built with. |
 | `internal/cli` | Commands, flags, output, and exit codes. |
-| `cmd/adder` | The binary: signal handling and build information only. |
+| `github.com/TyphonHill/adder` | The public API: `Main` and `Pack`, for a repository's own build. Signal handling and build information. |
+| `cmd/adder` | The binary: `adder.Main` without packs. |
 
 Each step only depends on the steps before it. Commands are thin: they load configuration, call one pipeline, and print the result.
 
@@ -640,7 +642,7 @@ Before then, the README and `docs/` remain the documentation.
 
 ### 36. Testing adder itself
 
-- **End to end:** `testscript` scripts in `cmd/adder/testdata/script` run the real command against small repositories written inline, covering each command's text and JSON output and exit codes. Today's command tests stay as unit tests for details that scripts express poorly.
+- **End to end:** `testscript` scripts in `cmd/adder/testdata/script` run the real command against small repositories written inline, covering each command's text and JSON output and exit codes. Scripts for packs build a repository's own adder with the Go command, offline, with adder's module replaced by the checkout under test. Today's command tests stay as unit tests for details that scripts express poorly.
 - **Fuzzing:** fuzz tests for configuration loading, header parsing, directive parsing, and import pruning check that no input panics, that problems point inside the input, and that pruning keeps gofmt-formatted Go parsing. Seed corpora run with every test run, and a weekly workflow fuzzes each target for five minutes.
 - **Performance budget:** a benchmark builds a repository of 1,000 packages and 10,000 functions and runs `derive` over it. The budget is 500 ms on GitHub's standard runners. CI fails above four times the budget, which catches a slowdown by an order of magnitude without failing on noisy timing. Parallel parsing is only added if the budget is missed.
 
@@ -837,7 +839,7 @@ updated    drivers/registry.gen.go
 **Problems.**
 
 - A problem in a pack's file carries the pack's name as `pack` in JSON and in text as `pack store: pack.yaml:3:5: message [code]`, with the path relative to the pack's `FS`.
-- New codes: `unknown-pack` for a configuration that names a pack adder was not built with, and `invalid-pack` for a pack that cannot be registered, such as two packs with the same name, a name that is not a lowercase word, or an `FS` without `pack.yaml`.
+- New codes: `unknown-pack` for a configuration that names a pack adder was not built with, and `invalid-pack` for a pack that cannot be registered, such as two packs with the same name, a name that is not lowercase words joined by hyphens, or an `FS` without `pack.yaml`.
 
 | Considered | Why not |
 | --- | --- |
@@ -861,7 +863,7 @@ adder.Main(adder.Pack{
 })
 ```
 
-**Functions.** A pack's functions are available to every template, the repository's and every pack's. A name used by a built-in function or by another pack is an `invalid-pack` problem when adder starts, so adding a built-in function is a breaking change for packs that use its name, and the changelog says so. Functions follow the rules of `text/template`. They must be deterministic, as built-in functions are ([decision 13](#13-our-own-template-functions-with-sprouts-names)), which adder cannot check.
+**Functions.** A pack's functions are available to every template, the repository's and every pack's. A name used by a built-in function, including those and the keywords of `text/template`, or by another pack is an `invalid-pack` problem when adder starts, so adding a built-in function is a breaking change for packs that use its name, and the changelog says so. Functions follow the rules of `text/template`. They must be deterministic, as built-in functions are ([decision 13](#13-our-own-template-functions-with-sprouts-names)), which adder cannot check. Function names in paths are checked when a path renders rather than when `adder.yaml` loads, since loading does not know which functions the build has.
 
 **Scanners.** A scan can use a registered scanner instead of `funcs`, `types`, `values`, or `files`:
 

@@ -33,7 +33,7 @@ It exits with status 3 when any output is out of date, so it can guard CI and re
 			newReport := func() report { return &planReport{Changes: []changeReport{}} }
 			return runConfigs(cmd, opts, args, newReport, func(run configRun, r report) error {
 				rep := r.(*planReport)
-				p, err := derive.Run(cmd.Context(), run.cfg, derive.Options{Root: run.root, DryRun: true})
+				p, err := derive.Run(cmd.Context(), run.cfg, derive.Options{Root: run.root, DryRun: true, Packs: opts.packs})
 				if err != nil {
 					return err
 				}

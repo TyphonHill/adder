@@ -18,6 +18,7 @@ import (
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/diag"
 	"github.com/TyphonHill/adder/internal/header"
+	"github.com/TyphonHill/adder/internal/pack"
 	"github.com/TyphonHill/adder/internal/plan"
 	"github.com/TyphonHill/adder/internal/render"
 	"github.com/TyphonHill/adder/internal/scan"
@@ -39,6 +40,9 @@ type Sources struct {
 
 	// Overlay holds files Repo has that are not on disk yet, by slash-separated path, for type-aware scans.
 	Overlay map[string][]byte
+
+	// Packs are the packs adder was built with. Nil means none.
+	Packs *pack.Registry
 }
 
 // Plan computes every derived output and how it differs from the existing files, without writing anything.
@@ -125,7 +129,7 @@ func planEach(ctx context.Context, set *render.Set, data map[string]any, src Sou
 		}
 		itemData := maps.Clone(data)
 		itemData["Item"] = item
-		target, err := itemPath(out, item, itemData, paths)
+		target, err := itemPath(set, out, item, itemData, paths)
 		if err != nil {
 			problems = append(problems, diag.From(err)...)
 			continue
@@ -149,9 +153,9 @@ func planEach(ctx context.Context, set *render.Set, data map[string]any, src Sou
 }
 
 // itemPath renders the output's path for an item and checks that it is a new file name inside the root.
-func itemPath(out config.Output, item scan.Item, data map[string]any, paths map[string]bool) (string, error) {
+func itemPath(set *render.Set, out config.Output, item scan.Item, data map[string]any, paths map[string]bool) (string, error) {
 	field := fmt.Sprintf("output %q: path %q", out.Template, out.Path)
-	rendered, err := render.Text(out.Path, data)
+	rendered, err := set.Text(out.Path, data)
 	if err != nil {
 		return "", diag.Prefix(err, out.Pos, field+": ")
 	}
@@ -258,7 +262,7 @@ func templates(cfg *config.Config, src Sources) (*render.Set, error) {
 	}
 
 	slices.Sort(files)
-	set, err := render.NewSet(src.Templates, slices.Compact(files))
+	set, err := render.NewSet(src.Templates, slices.Compact(files), src.Packs.Funcs())
 	if err != nil {
 		problems = append(problems, diag.Locate(err, src.TemplatesDir, diag.Pos{})...)
 	}
@@ -314,7 +318,7 @@ func templateData(ctx context.Context, cfg *config.Config, src Sources) (map[str
 
 // Open returns sources for the repository at root, whose existing outputs are in the root too, and a function
 // that closes them.
-func Open(cfg *config.Config, root string) (Sources, func(), error) {
+func Open(cfg *config.Config, root string, packs *pack.Registry) (Sources, func(), error) {
 	repo, err := os.OpenRoot(root)
 	if err != nil {
 		return Sources{}, nil, diag.Wrap(diag.IO, diag.Pos{File: root}, err)
@@ -328,6 +332,7 @@ func Open(cfg *config.Config, root string) (Sources, func(), error) {
 		Repo: repo.FS(), RepoDir: root,
 		Templates: templates.FS(), TemplatesDir: cfg.Dir,
 		Existing: repo.FS(), ExistingDir: root,
+		Packs: packs,
 	}
 	// Both roots are only read, so closing them cannot lose anything.
 	return src, func() { _ = repo.Close(); _ = templates.Close() }, nil
@@ -341,6 +346,8 @@ type Options struct {
 	OutDir string
 	// DryRun computes the plan without writing anything.
 	DryRun bool
+	// Packs are the packs adder was built with.
+	Packs *pack.Registry
 }
 
 // Run plans the derived outputs against the directories in opts and, unless DryRun is set, applies the plan.
@@ -372,6 +379,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) (*plan.Plan, err
 		Repo: repo.FS(), RepoDir: opts.Root,
 		Templates: templates.FS(), TemplatesDir: cfg.Dir,
 		ExistingDir: outDir,
+		Packs:       opts.Packs,
 	}
 	if out != nil {
 		src.Existing = out.FS()

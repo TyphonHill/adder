@@ -15,6 +15,7 @@ import (
 	"github.com/TyphonHill/adder/internal/config"
 	"github.com/TyphonHill/adder/internal/derive"
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/pack"
 	"github.com/TyphonHill/adder/internal/plan"
 	"github.com/TyphonHill/adder/internal/render"
 )
@@ -91,7 +92,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 
 	res := &Result{Plan: p}
 	if gen.Message != "" {
-		msg, err := render.Text(gen.Message, data)
+		msg, err := set.Text(gen.Message, data)
 		if err != nil {
 			problems = append(problems, diag.Prefix(err, gen.Pos, "message: ")...)
 		}
@@ -106,7 +107,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 // newFile renders the file f of a generator. Seen holds the paths of the files planned so far.
 func newFile(cfg *config.Config, src derive.Sources, set *render.Set, data map[string]any, i int, f config.File, seen map[string]bool) (plan.Change, error) {
 	field := fmt.Sprintf("file %d: path %q", i, f.Path)
-	rendered, err := render.Text(f.Path, data)
+	rendered, err := set.Text(f.Path, data)
 	if err != nil {
 		return plan.Change{}, diag.Prefix(err, f.Pos, field+": ")
 	}
@@ -177,6 +178,8 @@ type Options struct {
 	Root string
 	// DryRun computes the plan without writing anything.
 	DryRun bool
+	// Packs are the packs adder was built with.
+	Packs *pack.Registry
 }
 
 // Run plans the generator called name with inputs and, unless DryRun is set, applies the plan.
@@ -197,6 +200,7 @@ func Run(ctx context.Context, cfg *config.Config, name string, inputs map[string
 		Repo: repo.FS(), RepoDir: opts.Root,
 		Templates: templates.FS(), TemplatesDir: cfg.Dir,
 		Existing: repo.FS(), ExistingDir: opts.Root,
+		Packs: opts.Packs,
 	}
 	res, err := Plan(ctx, cfg, src, name, inputs)
 	if err != nil || opts.DryRun {

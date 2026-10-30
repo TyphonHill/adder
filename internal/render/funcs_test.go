@@ -94,7 +94,7 @@ func TestFuncs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Text(tt.text, data)
+			got, err := renderText(tt.text, data)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Text(%s) error = %v, wantErr %v", tt.text, err, tt.wantErr)
 			}

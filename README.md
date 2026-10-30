@@ -527,6 +527,36 @@ Functions that Sprout also has take the value last, so they work at the end of a
 
 Case functions split words at separators such as `_`, `-`, and spaces, at lowercase-to-uppercase changes, and at the end of an acronym: `HTTPServer` is `HTTP` and `Server`. The Go variants produce identifiers that follow Go naming style: they keep words already in capitals, such as `BMC`, and capitalize common initialisms such as `ID`, `HTTP`, and `URL`.
 
+#### Your own functions
+
+A repository adds functions written in Go by building its own adder. The `github.com/TyphonHill/adder` package is experimental until v1.0.
+
+```go
+// tools/adder/main.go
+package main
+
+import (
+	"strings"
+
+	"github.com/TyphonHill/adder"
+)
+
+func main() {
+	adder.Main(adder.Pack{
+		Name:  "local",
+		Funcs: map[string]any{"routeName": func(s string) string { return "/" + strings.ToLower(s) }},
+	})
+}
+```
+
+```sh
+go mod edit -droptool github.com/TyphonHill/adder/cmd/adder
+go get -tool ./tools/adder
+go tool adder derive
+```
+
+`go tool adder` now runs the repository's build, which the Go command caches after the first run. Functions are available to every template, and must be deterministic: the same arguments always give the same result. A name that is built in, or used by another pack, fails every command with an `invalid-pack` problem.
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for where adder is headed, its principles, and its non-goals.

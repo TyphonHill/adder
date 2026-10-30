@@ -12,7 +12,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/TyphonHill/adder/internal/config"
+	"github.com/TyphonHill/adder/internal/derive"
 	"github.com/TyphonHill/adder/internal/diag"
+	"github.com/TyphonHill/adder/internal/pack"
 )
 
 // Exit codes returned by Main.
@@ -54,7 +56,13 @@ type globalOptions struct {
 	quiet   bool
 	verbose bool
 
+	packs  *pack.Registry
 	report report // set by a command when it starts running, for --json
+}
+
+// open returns the sources for a configuration with the packs adder was built with.
+func (o *globalOptions) open(cfg *config.Config, root string) (derive.Sources, func(), error) {
+	return derive.Open(cfg, root, o.packs)
 }
 
 // load finds and loads the configuration, returning it with the repository root. The configuration is
@@ -83,8 +91,9 @@ func (o *globalOptions) loadFrom(dir string) (*config.Config, string, error) {
 	return cfg, root, err
 }
 
-// Main runs adder with args, reading stdin and writing to stdout and stderr, and returns the process exit code.
-func Main(ctx context.Context, version string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+// Main runs adder built with packs on args, reading stdin and writing to stdout and stderr, and returns the
+// process exit code.
+func Main(ctx context.Context, version string, packs []pack.Pack, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cmd, opts := newRoot(version)
 	opts.json = wantsJSON(args)
 	cmd.SetArgs(args)
@@ -92,7 +101,11 @@ func Main(ctx context.Context, version string, args []string, stdin io.Reader, s
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 
-	err := cmd.ExecuteContext(ctx)
+	registry, err := pack.New(packs)
+	if err == nil {
+		opts.packs = registry
+		err = cmd.ExecuteContext(ctx)
+	}
 	if opts.json {
 		writeReport(stdout, opts.report, err)
 	} else if err != nil {
