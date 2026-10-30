@@ -7,8 +7,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// enableColor turns on the console's support for color escape codes, reporting whether it is on.
-func enableColor(w io.Writer) bool {
+// enableColor turns on the console's support for color escape codes, reporting whether it is on. It is a
+// variable so tests can pretend.
+var enableColor = func(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
 		return false

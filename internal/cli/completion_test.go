@@ -47,7 +47,7 @@ generators:
 		{name: "describe takes one generator", words: []string{"describe", "driver", ""}, want: ":4\n"},
 		{name: "test skips generators already named", words: []string{"test", "driver", ""}, want: ":4\n"},
 		{name: "explain", words: []string{"explain", ""}, want: "drivers/drivers.gen.go\n:4\n"},
-		{name: "explain from a subdirectory", chdir: "drivers/s3", words: []string{"explain", "../"}, want: filepath.Join("..", "drivers.gen.go") + "\n:4\n"},
+		{name: "explain from a subdirectory", chdir: "drivers/s3", words: []string{"explain", "../"}, want: "../drivers.gen.go\n:4\n"},
 		{name: "explain takes one file", words: []string{"explain", "a", ""}, want: ":4\n"},
 		{name: "without a configuration", chdir: "-", words: []string{"new", ""}, want: ":4\n"},
 		{name: "explain without a configuration", chdir: "-", words: []string{"explain", ""}, want: ":0\n"},

@@ -4,7 +4,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-10-29
+## [0.3.0] - 2026-10-30
 
 ### Added
 

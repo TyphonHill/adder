@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -16,21 +17,24 @@ func TestUseColor(t *testing.T) {
 		terminal bool
 		noColor  string
 		term     string
+		console  bool // whether the console's color support turns on
 		want     bool
 	}{
-		{name: "a terminal", terminal: true, term: "xterm-256color", want: true},
-		{name: "not a terminal", terminal: false, term: "xterm-256color", want: false},
-		{name: "NO_COLOR", terminal: true, noColor: "1", term: "xterm-256color", want: false},
-		{name: "an empty NO_COLOR does not count", terminal: true, noColor: "", term: "xterm", want: true},
-		{name: "a dumb terminal", terminal: true, term: "dumb", want: false},
+		{name: "a terminal", terminal: true, term: "xterm-256color", console: true, want: true},
+		{name: "not a terminal", terminal: false, term: "xterm-256color", console: true, want: false},
+		{name: "NO_COLOR", terminal: true, noColor: "1", term: "xterm-256color", console: true, want: false},
+		{name: "an empty NO_COLOR does not count", terminal: true, noColor: "", term: "xterm", console: true, want: true},
+		{name: "a dumb terminal", terminal: true, term: "dumb", console: true, want: false},
+		{name: "a console without color support", terminal: true, term: "xterm", console: false, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("NO_COLOR", tt.noColor)
 			t.Setenv("TERM", tt.term)
-			terminal := isTerminal
+			terminal, console := isTerminal, enableColor
 			isTerminal = func(any) bool { return tt.terminal }
-			t.Cleanup(func() { isTerminal = terminal })
+			enableColor = func(io.Writer) bool { return tt.console }
+			t.Cleanup(func() { isTerminal, enableColor = terminal, console })
 			if got := useColor(&bytes.Buffer{}); got != tt.want {
 				t.Errorf("useColor() = %v, want %v", got, tt.want)
 			}
