@@ -7,6 +7,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 ### Added
 
 - Constant and variable scans, with a `values` block filtering by `kind`, `exported`, `name`, `type`, and `directive`. Items gain `.Type`, `.Value`, and `.Iota`, and a `const` group's type carries to the names that repeat it, so `iota` enums work.
+- File scans, with a `files` block that lists files that are not Go source, such as SQL migrations, by a `name` pattern. With `each`, an output can render one file per listed file.
 - Template function `sortBy`, which sorts items by a string or number field, such as `sortBy "Iota" .Colors` for declaration order.
 
 ## [0.3.0] - 2026-10-30
