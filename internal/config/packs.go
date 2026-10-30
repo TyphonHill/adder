@@ -29,6 +29,8 @@ type Packs interface {
 	FS(name string) (fs.FS, bool)
 	// Funcs returns the template functions the packs add to the built-in ones.
 	Funcs() template.FuncMap
+	// HasScanner reports whether a pack provides the scanner called name.
+	HasScanner(name string) bool
 }
 
 // Use is one use of a pack, with the options it gives.
@@ -137,7 +139,7 @@ func (c *Config) loadPacks(packs Packs, pos positions) diag.List {
 				Hint:    "packs are part of a repository's own build of adder, such as go tool adder, whose main package passes them to adder.Main",
 			})
 		default:
-			cfg, values, problems := loadPack(use.Pack, fsys, name, use.With, packs.Funcs(), at, pos)
+			cfg, values, problems := loadPack(use.Pack, fsys, name, use.With, packs, at, pos)
 			errs = append(errs, problems...)
 			use.FS, use.Options, use.Config = fsys, values, cfg
 		}
@@ -321,7 +323,7 @@ func (c *Config) checkUsePaths() diag.List {
 }
 
 // loadPack reads the pack's pack.yaml and fills in the options use gives in with, declared at at in adder.yaml.
-func loadPack(pack string, fsys fs.FS, use string, with map[string]any, funcs template.FuncMap, at string, adder positions) (*Config, map[string]any, diag.List) {
+func loadPack(pack string, fsys fs.FS, use string, with map[string]any, packs Packs, at string, adder positions) (*Config, map[string]any, diag.List) {
 	file := diag.Pos{Pack: pack, File: PackFileName}
 	data, err := fs.ReadFile(fsys, PackFileName)
 	if err != nil {
@@ -381,13 +383,14 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, funcs te
 	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive, Generators: filled.Generators}
 	pos := indexNode(PackFileName, pack, &root)
 	pos.overrides = overrides
-	if problems := cfg.renderPaths(values, funcs, adder.at(at), pos); len(problems) > 0 {
+	if problems := cfg.renderPaths(values, packs.Funcs(), adder.at(at), pos); len(problems) > 0 {
 		return nil, nil, problems
 	}
 	cfg.normalize()
 	cfg.recordPositions(pos)
 	// Positions already name the pack, except those of options given in adder.yaml.
 	problems = diag.From(cfg.validate(pos))
+	problems = append(problems, cfg.checkScanners(packs)...)
 	for _, name := range slices.Sorted(maps.Keys(cfg.Generators)) {
 		if cfg.Generators[name].Tests != nil {
 			problems = append(problems, &diag.Diagnostic{

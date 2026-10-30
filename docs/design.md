@@ -896,7 +896,7 @@ type Problem struct {
 - A scanner returns its items as structs, pointers to structs, or `map[string]any`, in a deterministic order, which adder keeps. Templates, `each`, `valuesFrom`, `sortBy`, and `groupBy` read fields by name from either.
 - `Decode` reports problems in `with` at their position in `adder.yaml`, with the usual codes.
 - A scanner's error is reported at the scan with the new code `scanner`. A `Problem`, or several joined with `errors.Join`, is reported at its own position instead, so a scanner can point at the file that is wrong.
-- Scanner names, like function names, are unique across packs. A scan naming an unknown scanner is an `unknown-scanner` problem, with a hint to run the repository's own build.
+- Scanner names are lowercase words joined by hyphens and, like function names, unique across packs. A scan naming an unknown scanner is an `unknown-scanner` problem, with a hint to run the repository's own build.
 - Scanners must not write files or depend on anything outside `FS`, so that `check` and `derive` agree. adder cannot check this either.
 
 | Considered | Why not |

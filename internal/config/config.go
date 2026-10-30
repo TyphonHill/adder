@@ -79,6 +79,8 @@ type Scan struct {
 	Values *ValueMatch `yaml:"values"`
 	// Files lists files instead of Go declarations when set.
 	Files *FileMatch `yaml:"files"`
+	// Scanner runs a custom scanner from a pack instead when set.
+	Scanner *ScannerMatch `yaml:"scanner"`
 	// TypeCheck loads type information, for filters that compare types rather than spelling.
 	TypeCheck bool `yaml:"typeCheck"`
 	// Platform is the GOOS/GOARCH a type-aware scan checks, linux/amd64 by default.
@@ -277,6 +279,7 @@ func Parse(file string, data []byte, packs Packs) (*Config, error) {
 	cfg.recordPositions(pos)
 	problems := diag.From(cfg.validate(pos))
 	problems = append(problems, cfg.loadPacks(packs, pos)...)
+	problems = append(problems, cfg.checkScanners(packs)...)
 	if err := problems.Err(); err != nil {
 		return nil, err
 	}
@@ -320,6 +323,9 @@ func (c *Config) recordPositions(pos positions) {
 	}
 	for name, scan := range c.Derive.Scans {
 		scan.Pos = pos.at("derive.scans." + name)
+		if scan.Scanner != nil {
+			scan.Scanner.Pos = pos.at("derive.scans." + name + ".scanner.name")
+		}
 		c.Derive.Scans[name] = scan
 	}
 	for i := range c.Derive.Outputs {
@@ -365,7 +371,7 @@ func (c *Config) validate(pos positions) error {
 		case slices.Contains(reservedNames, name):
 			errs = append(errs, diag.Errorf(diag.ReservedName, pos.at(at), "scan %q: name is reserved", name))
 		}
-		if len(scan.Dirs) == 0 {
+		if len(scan.Dirs) == 0 && scan.Scanner == nil {
 			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "scan %q: dirs is required", name))
 		}
 		for _, list := range []struct {
@@ -393,7 +399,7 @@ func (c *Config) validate(pos positions) error {
 		for _, block := range []struct {
 			key string
 			set bool
-		}{{"funcs", pos.has(at + ".funcs")}, {"types", scan.Types != nil}, {"values", scan.Values != nil}, {"files", scan.Files != nil}} {
+		}{{"funcs", pos.has(at + ".funcs")}, {"types", scan.Types != nil}, {"values", scan.Values != nil}, {"files", scan.Files != nil}, {"scanner", scan.Scanner != nil}} {
 			if block.set {
 				blocks = append(blocks, block.key)
 			}
@@ -403,7 +409,7 @@ func (c *Config) validate(pos positions) error {
 				Code:    diag.InvalidValue,
 				Pos:     pos.at(at + "." + blocks[1]),
 				Message: fmt.Sprintf("scan %q: has %s; use only one", name, strings.Join(blocks, " and ")),
-				Hint:    "a scan selects functions, types, or values, or lists files, with one of funcs, types, values, or files",
+				Hint:    "a scan selects functions, types, or values, lists files, or runs a scanner, with one of funcs, types, values, files, or scanner",
 			})
 		}
 		errs = append(errs, validateTypeCheck(name, scan, at, pos)...)
@@ -423,6 +429,23 @@ func (c *Config) validate(pos positions) error {
 						Pos:     pos.at(at + "." + setting.key),
 						Message: fmt.Sprintf("scan %q: %s does not apply to a file scan", name, setting.key),
 						Hint:    "file scans list files by name without reading Go source",
+					})
+				}
+			}
+		case scan.Scanner != nil:
+			if scan.Scanner.Name == "" {
+				errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at+".scanner"), "scan %q: scanner name is required", name))
+			}
+			for _, setting := range []struct {
+				key string
+				set bool
+			}{{"includeTests", scan.IncludeTests}, {"buildTags", scan.BuildTags != nil}, {"typeCheck", scan.TypeCheck}} {
+				if setting.set {
+					errs = append(errs, &diag.Diagnostic{
+						Code:    diag.InvalidValue,
+						Pos:     pos.at(at + "." + setting.key),
+						Message: fmt.Sprintf("scan %q: %s does not apply to a scan with a scanner", name, setting.key),
+						Hint:    "a scanner reads the files it needs itself",
 					})
 				}
 			}

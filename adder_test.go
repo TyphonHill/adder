@@ -1,8 +1,12 @@
 package adder
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"reflect"
 	"runtime/debug"
+	"slices"
 	"testing"
 	"testing/fstest"
 
@@ -50,7 +54,7 @@ func TestInternal(t *testing.T) {
 		packs []Pack
 	}{
 		{name: "none"},
-		{name: "every field", packs: []Pack{{Name: "local", Funcs: map[string]any{"same": same}}, {Name: "store", FS: fstest.MapFS{}}}},
+		{name: "every field", packs: []Pack{{Name: "local", Funcs: map[string]any{"same": same}, Scanners: map[string]Scanner{"routes": func(context.Context, *ScanInput) ([]any, error) { return nil, nil }}}, {Name: "store", FS: fstest.MapFS{}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -59,13 +63,57 @@ func TestInternal(t *testing.T) {
 				t.Fatalf("internal() = %d packs, want %d", len(got), len(tt.packs))
 			}
 			for i, p := range tt.packs {
-				if got[i].Name != p.Name || len(got[i].Funcs) != len(p.Funcs) || (got[i].FS == nil) != (p.FS == nil) {
+				if got[i].Name != p.Name || len(got[i].Funcs) != len(p.Funcs) || (got[i].FS == nil) != (p.FS == nil) || len(got[i].Scanners) != len(p.Scanners) {
 					t.Errorf("internal()[%d] = %+v, want %+v", i, got[i], p)
 				}
 			}
 			// Every field of Pack must reach the internal packages.
 			if n := reflect.TypeFor[Pack]().NumField(); n != reflect.TypeFor[pack.Pack]().NumField() {
 				t.Errorf("Pack has %d fields, but pack.Pack has %d", n, reflect.TypeFor[pack.Pack]().NumField())
+			}
+		})
+	}
+}
+
+func TestProblems(t *testing.T) {
+	other := errors.New("no routes file")
+	tests := []struct {
+		name string
+		err  error
+		want []string // "position code message"
+	}{
+		{name: "a problem", err: Problem{File: "api/routes.go", Line: 3, Column: 2, Message: "bad route"}, want: []string{"api/routes.go:3:2 scanner bad route"}},
+		{name: "a pointer to a problem", err: &Problem{File: "api/routes.go", Message: "bad route"}, want: []string{"api/routes.go scanner bad route"}},
+		{name: "joined problems", err: errors.Join(Problem{File: "a.go", Line: 1, Message: "one"}, Problem{File: "b.go", Line: 2, Message: "two"}), want: []string{"a.go:1 scanner one", "b.go:2 scanner two"}},
+		{name: "a wrapped problem", err: fmt.Errorf("routes: %w", Problem{File: "a.go", Message: "bad"}), want: []string{"a.go scanner bad"}},
+		{name: "another error", err: other, want: []string{" error no routes file"}},
+		{name: "a problem joined with another error", err: errors.Join(Problem{File: "a.go", Message: "bad"}, other), want: []string{"a.go scanner bad", " error no routes file"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, d := range problems(tt.err) {
+				got = append(got, d.Pos.String()+" "+string(d.Code)+" "+d.Message)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("problems() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestProblemError(t *testing.T) {
+	tests := []struct {
+		p    Problem
+		want string
+	}{
+		{p: Problem{File: "a.go", Line: 3, Column: 2, Message: "bad"}, want: "a.go:3:2: bad"},
+		{p: Problem{Message: "bad"}, want: "bad"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := tt.p.Error(); got != tt.want {
+				t.Errorf("Error() = %q, want %q", got, tt.want)
 			}
 		})
 	}

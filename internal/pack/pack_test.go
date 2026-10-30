@@ -1,6 +1,7 @@
 package pack
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -77,6 +78,41 @@ func TestNew(t *testing.T) {
 			}
 			if _, ok := (*Registry)(nil).FS("store"); ok {
 				t.Error("a nil registry has a pack")
+			}
+		})
+	}
+}
+
+func TestScanners(t *testing.T) {
+	scanner := func(context.Context, ScanInput) ([]any, error) { return nil, nil }
+	tests := []struct {
+		name     string
+		packs    []Pack
+		want     []string
+		wantErrs []string
+	}{
+		{name: "scanners from several packs", packs: []Pack{{Name: "a", Scanners: map[string]Scanner{"routes": scanner}}, {Name: "b", Scanners: map[string]Scanner{"sql-tables": scanner}}}, want: []string{"routes", "sql-tables"}},
+		{name: "a name that is not lowercase words", packs: []Pack{{Name: "a", Scanners: map[string]Scanner{"Routes": scanner}}}, wantErrs: []string{`pack "a": scanner name "Routes" is not lowercase words joined by hyphens`}},
+		{name: "a nil scanner", packs: []Pack{{Name: "a", Scanners: map[string]Scanner{"routes": nil}}}, wantErrs: []string{`pack "a": scanner "routes" is nil`}},
+		{name: "a scanner in two packs", packs: []Pack{{Name: "a", Scanners: map[string]Scanner{"routes": scanner}}, {Name: "b", Scanners: map[string]Scanner{"routes": scanner}}}, wantErrs: []string{`packs "a" and "b" both define scanner "routes"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := New(tt.packs)
+			var got []string
+			for _, d := range diag.From(err) {
+				got = append(got, d.Message)
+			}
+			if !slices.Equal(got, tt.wantErrs) {
+				t.Fatalf("New() problems = %q, want %q", got, tt.wantErrs)
+			}
+			for _, name := range tt.want {
+				if !r.HasScanner(name) {
+					t.Errorf("HasScanner(%q) = false", name)
+				}
+			}
+			if r != nil && r.HasScanner("missing") || (*Registry)(nil).HasScanner("routes") {
+				t.Error("HasScanner found a scanner no pack defines")
 			}
 		})
 	}

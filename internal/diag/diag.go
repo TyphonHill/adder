@@ -40,6 +40,8 @@ const (
 	TypeCheck          Code = "type-check"
 	InvalidPack        Code = "invalid-pack"
 	UnknownPack        Code = "unknown-pack"
+	UnknownScanner     Code = "unknown-scanner"
+	Scanner            Code = "scanner"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.

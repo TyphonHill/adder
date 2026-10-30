@@ -318,6 +318,41 @@ var All = []driver.Driver{
 
 Type-aware scans are slower than parsing, and need the `go` command on `PATH`, code that compiles, and its dependencies already downloaded: adder never downloads anything, and reports a missing dependency as a `type-check` problem. Every run checks the same platform, `linux/amd64` unless `platform` says otherwise, with cgo off and nothing from your environment that changes which files are built, so output is the same on every machine. `adder new` type checks the files it is about to create, so registries pick up a new type in the same run.
 
+### Custom scanners
+
+A scanner written in Go finds what no built-in scan can, such as routes registered in a call chain or names in a file format adder does not read. A repository registers it in its own build of adder, as for [its own functions](#your-own-functions):
+
+```go
+adder.Main(adder.Pack{Name: "local", Scanners: map[string]adder.Scanner{"routes": routes}})
+
+func routes(ctx context.Context, in *adder.ScanInput) ([]any, error) {
+	var opts struct {
+		Prefix string `yaml:"prefix"`
+	}
+	if err := in.Decode(&opts); err != nil {
+		return nil, err
+	}
+	var items []any
+	for _, dir := range in.Dirs {
+		// Read files from in.FS, append items, or return an adder.Problem at a file.
+	}
+	return items, nil
+}
+```
+
+```yaml
+scans:
+  Routes:
+    dirs: ["api/*"]
+    scanner: {name: routes, with: {prefix: /v1}}
+```
+
+- `scanner` takes the place of `funcs`, `types`, `values`, or `files`. `dirs` is optional, and expands as for any scan.
+- `in.FS` is the repository, including the files `adder new` is about to write, so new code is scanned in the same run. `in.Decode` decodes `with`, rejecting unknown fields at their place in `adder.yaml`.
+- Items are structs, pointers to structs, or `map[string]any`, in an order that depends only on the files. Templates, `each`, `valuesFrom`, `unique`, `sortBy`, and `groupBy` read their fields by name.
+- An `adder.Problem`, or several joined with `errors.Join`, is reported at its file with the code `scanner`; any other error at the scan. A scan naming a scanner adder was not built with is `unknown-scanner`.
+- A scanner must not write files or read anything but `in.FS`, so that `adder check` and `adder derive` agree.
+
 ### Directives
 
 Code can opt in to a scan explicitly with a directive in its doc comment, instead of relying on naming conventions:

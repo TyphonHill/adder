@@ -106,7 +106,7 @@ func joinPath(parent, child string) string {
 }
 
 // knownFields lists the YAML keys of each configuration type, keyed by the type name the decoder reports.
-var knownFields = fieldsOf(Config{}, Derive{}, Scan{}, FuncMatch{}, TypeMatch{}, ValueMatch{}, FileMatch{}, Output{}, Generator{}, Input{}, File{}, GeneratorTest{}, Use{}, Option{}, packFile{})
+var knownFields = fieldsOf(Config{}, Derive{}, Scan{}, FuncMatch{}, TypeMatch{}, ValueMatch{}, FileMatch{}, Output{}, Generator{}, Input{}, File{}, GeneratorTest{}, Use{}, Option{}, packFile{}, ScannerMatch{})
 
 func fieldsOf(values ...any) map[string][]string {
 	fields := make(map[string][]string, len(values))

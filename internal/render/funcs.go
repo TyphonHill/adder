@@ -77,12 +77,12 @@ func CheckFunc(name string, fn any) error {
 	}
 }
 
-// FieldValues returns the named string field of every struct in list.
+// FieldValues returns the named string field of every struct or map in list.
 func FieldValues(field string, list any) ([]string, error) {
 	return stringFields("fieldValues", field, list)
 }
 
-// stringFields returns the named string field of every struct in list, for the template function fn.
+// stringFields returns the named string field of every struct or map in list, for the template function fn.
 func stringFields(fn, field string, list any) ([]string, error) {
 	v := reflect.ValueOf(list)
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
@@ -91,17 +91,43 @@ func stringFields(fn, field string, list any) ([]string, error) {
 
 	out := make([]string, 0, v.Len())
 	for i := range v.Len() {
-		elem := reflect.Indirect(v.Index(i))
-		if elem.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("%s: element %d is %s, want a struct", fn, i, elem.Kind())
+		f, elem, err := fieldOf(fn, v.Index(i), i, field)
+		if err != nil {
+			return nil, err
 		}
-		f := elem.FieldByName(field)
-		if !f.IsValid() || f.Kind() != reflect.String {
+		if f.Kind() != reflect.String {
 			return nil, fmt.Errorf("%s: %s has no string field %q", fn, elem.Type(), field)
 		}
 		out = append(out, f.String())
 	}
 	return out, nil
+}
+
+// fieldOf returns the named field of the element at index i of a list, a struct or a map with string keys as
+// custom scanners return, and the element itself.
+func fieldOf(fn string, v reflect.Value, i int, field string) (reflect.Value, reflect.Value, error) {
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return reflect.Value{}, v, fmt.Errorf("%s: element %d is nil", fn, i)
+		}
+		v = v.Elem()
+	}
+	var f reflect.Value
+	switch {
+	case v.Kind() == reflect.Struct:
+		f = v.FieldByName(field)
+	case v.Kind() == reflect.Map && v.Type().Key().Kind() == reflect.String:
+		f = v.MapIndex(reflect.ValueOf(field).Convert(v.Type().Key()))
+		if f.IsValid() && f.Kind() == reflect.Interface {
+			f = f.Elem()
+		}
+	default:
+		return reflect.Value{}, v, fmt.Errorf("%s: element %d is %s, want a struct or a map", fn, i, v.Kind())
+	}
+	if !f.IsValid() {
+		return reflect.Value{}, v, fmt.Errorf("%s: %s has no field %q", fn, v.Type(), field)
+	}
+	return f, v, nil
 }
 
 // Group is the items of a list that share a key, as groupBy returns them.
@@ -110,7 +136,7 @@ type Group struct {
 	Items []any
 }
 
-// groupBy groups the structs in list by their string field, sorted by key. Items keep their order in list.
+// groupBy groups the structs or maps in list by their string field, sorted by key. Items keep their order in list.
 func groupBy(field string, list any) ([]Group, error) {
 	keys, err := stringFields("groupBy", field, list)
 	if err != nil {
@@ -132,7 +158,7 @@ func groupBy(field string, list any) ([]Group, error) {
 	return groups, nil
 }
 
-// sortBy returns a copy of list sorted by the named field of its structs, a string or a number. Items with equal
+// sortBy returns a copy of list sorted by the named field of its structs or maps, a string or a number. Items with equal
 // values keep their order, so sortBy "Iota" puts an enum in declaration order.
 func sortBy(field string, list any) (any, error) {
 	v := reflect.ValueOf(list)
@@ -145,12 +171,11 @@ func sortBy(field string, list any) (any, error) {
 	}
 	elems := make([]keyed, v.Len())
 	for i := range v.Len() {
-		elem := reflect.Indirect(v.Index(i))
-		if elem.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("sortBy: element %d is %s, want a struct", i, elem.Kind())
+		key, elem, err := fieldOf("sortBy", v.Index(i), i, field)
+		if err != nil {
+			return nil, err
 		}
-		key := elem.FieldByName(field)
-		if !key.IsValid() || !sortable(key.Kind()) {
+		if !sortable(key.Kind()) {
 			return nil, fmt.Errorf("sortBy: %s has no string or number field %q", elem.Type(), field)
 		}
 		if i > 0 && key.Kind() != elems[0].key.Kind() {

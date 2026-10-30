@@ -41,6 +41,10 @@ func TestFuncs(t *testing.T) {
 		"Ranked":   []ranked{{Name: "x", Rank: 3, Size: 2, Weight: 0.5}, {Name: "y", Rank: 1, Size: 3, Weight: 1.5}, {Name: "z", Rank: 2, Size: 1, Weight: 2.5}},
 		"Pointers": []*ranked{{Name: "x", Rank: 2}, {Name: "y", Rank: 1}},
 		"Mixed2":   []any{struct{ Key string }{"a"}, struct{ Key int }{1}},
+		"Maps":     []any{map[string]any{"name": "b", "rank": 2, "dir": "x"}, map[string]any{"name": "a", "rank": 1, "dir": "y"}},
+		"NoKey":    []any{map[string]any{"other": "x"}},
+		"Nils":     []any{nil},
+		"IntKeys":  []map[int]string{{1: "x"}},
 	}
 	tests := []struct {
 		name    string
@@ -82,6 +86,12 @@ func TestFuncs(t *testing.T) {
 		{name: "sortBy an unsigned number", text: `{{ range sortBy "Size" .Ranked }}{{ .Name }}{{ end }}`, want: "zxy"},
 		{name: "sortBy a float", text: `{{ range sortBy "Weight" .Ranked }}{{ .Name }}{{ end }}`, want: "xyz"},
 		{name: "sortBy pointers to structs", text: `{{ range sortBy "Rank" .Pointers }}{{ .Name }}{{ end }}`, want: "yx"},
+		{name: "fieldValues of maps and structs together", text: `{{ fieldValues "name" .Maps | join "," }}`, want: "b,a"},
+		{name: "sortBy maps", text: `{{ range sortBy "rank" .Maps }}{{ .name }}{{ end }}`, want: "ab"},
+		{name: "groupBy maps", text: `{{ range groupBy "dir" .Maps }}{{ .Key }} {{ end }}`, want: "x y "},
+		{name: "a map without the key", text: `{{ fieldValues "name" .NoKey }}`, wantErr: true},
+		{name: "a nil item", text: `{{ fieldValues "name" .Nils }}`, wantErr: true},
+		{name: "a map without string keys", text: `{{ fieldValues "name" .IntKeys }}`, wantErr: true},
 		{name: "sortBy keeps the list's type", text: `{{ sortBy "Name" .Items | fieldValues "Dir" | join "," }}`, want: "y,x,x"},
 		{name: "sortBy leaves the list alone", text: `{{ $s := sortBy "Name" .Items }}{{ range .Items }}{{ .Name }}{{ end }}`, want: "bac"},
 		{name: "sortBy an empty list", text: `{{ len (sortBy "Name" .Empty) }}`, want: "0"},
