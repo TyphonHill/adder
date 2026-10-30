@@ -51,7 +51,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | `.ImportPath` on every item, so templates stop assembling import paths by hand ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | Skip files adder generated, so outputs never feed back into scans; other generators' files are still scanned | ✅ |
 | `exclude` patterns and recursive `**` globs that skip `testdata`, `vendor`, and hidden directories like `./...` | ✅ |
-| Skip files excluded by build constraints such as `//go:build ignore` ([design 27](docs/design.md#27-build-constraints-in-scans-planned-v03)) | ✅ |
+| Skip files excluded by build constraints such as `//go:build ignore` ([design 27](docs/design.md#27-build-constraints-in-scans)) | ✅ |
 | Match on `kind` (functions or methods) and `receiver` | ✅ |
 | `firstParamType`: match the first parameter's type as written, resolved through the file's imports ([design 20](docs/design.md#20-richer-scans-without-type-checking)) | ✅ |
 | `.Kind`, `.Doc`, `.Line`, `.Signature`, `.Params`, and `.Results` on every item | ✅ |
@@ -80,10 +80,10 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Remove unused imports from Go output, so templates need not guard each one ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)) | ✅ |
 | Add missing imports from a built-in table of the standard library | 💡 |
 | Shared template partials, such as `templates/partials/license.tmpl` | ✅ |
-| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `nindent`, `plural`, `groupBy` ([design 28](docs/design.md#28-more-template-functions-planned-v03)) | ✅ |
-| One output per item, with a templated path, for example a file per interface ([design 24](docs/design.md#24-one-output-per-item-planned-v03)) | ✅ |
-| Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path-planned-v03)) | ✅ |
-| Generated-file headers for other languages, using their comment syntax ([design 25](docs/design.md#25-generated-file-headers-for-other-languages-planned-v03)) | ✅ |
+| More functions, using Sprout's names where they exist: `join`, `trimPrefix`, `trimSuffix`, `replace`, `quote`, `indent`, `nindent`, `plural`, `groupBy` ([design 28](docs/design.md#28-more-template-functions)) | ✅ |
+| One output per item, with a templated path, for example a file per interface ([design 24](docs/design.md#24-one-output-per-item)) | ✅ |
+| Remove outputs that are no longer produced, found by their header within each output's path pattern ([design 15](docs/design.md#15-stale-outputs-are-found-by-header-within-each-outputs-own-path)) | ✅ |
+| Generated-file headers for other languages, using their comment syntax ([design 25](docs/design.md#25-generated-file-headers-for-other-languages)) | ✅ |
 | `--stdout` to print a single output instead of writing it | 💡 |
 
 ### Scaffolding: `adder new`
@@ -101,8 +101,8 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | New files and the derived outputs they change computed as one plan, so registries update in the same run | ✅ |
 | A message after generating, with next steps for the person who ran it | ✅ |
 | Inputs from flags, from a JSON file, or from standard input | ✅ |
-| Interactive prompts for missing inputs when running in a terminal ([design 29](docs/design.md#29-prompts-for-missing-inputs-planned-v03)) | ✅ |
-| Generator tests: render a generator with sample inputs and compare to golden files ([design 30](docs/design.md#30-generator-tests-planned-v03)) | ✅ |
+| Interactive prompts for missing inputs when running in a terminal ([design 29](docs/design.md#29-prompts-for-missing-inputs)) | ✅ |
+| Generator tests: render a generator with sample inputs and compare to golden files ([design 30](docs/design.md#30-generator-tests)) | ✅ |
 | Composing generators, where one generator runs another | 💡 |
 | Inserting code into existing files through the syntax tree, for cases deriving cannot cover | 💡 |
 
@@ -110,11 +110,11 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 
 | Feature | Status |
 | --- | --- |
-| `adder list`: every generator and derived output ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | ✅ |
-| `adder describe <generator>` with a JSON Schema of its inputs ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | ✅ |
+| `adder list`: every generator and derived output ([design 23](docs/design.md#23-discovering-generators-and-outputs)) | ✅ |
+| `adder describe <generator>` with a JSON Schema of its inputs ([design 23](docs/design.md#23-discovering-generators-and-outputs)) | ✅ |
 | Structured diagnostics with stable codes, positions, and hints | ✅ |
-| JSON output for every command ([design 22](docs/design.md#22-json-output-planned-v03)) | ✅ |
-| `adder explain <file>`: which configuration and template produced a generated file ([design 23](docs/design.md#23-discovering-generators-and-outputs-planned-v03)) | ✅ |
+| JSON output for every command ([design 22](docs/design.md#22-json-output)) | ✅ |
+| `adder explain <file>`: which configuration and template produced a generated file ([design 23](docs/design.md#23-discovering-generators-and-outputs)) | ✅ |
 | A guide and a ready-made `AGENTS.md` section for repositories that use coding agents ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-after-v10)) | 🔜 after v1.0 |
 | `adder mcp`: an MCP server exposing generators as tools, read-only unless asked to write | 💡 |
 
@@ -128,8 +128,8 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Documented exit codes for success, error, usage, and stale outputs | ✅ |
 | `adder check`: exit with status 3 when derived files are stale, for CI and repositories that commit them | ✅ |
 | `adder init`: create a starter `adder.yaml` with commented examples of each section | ✅ |
-| Shell completion for commands, generator names, and inputs ([design 32](docs/design.md#32-terminal-output-planned-v03)) | ✅ |
-| `--quiet`, `--verbose`, and `NO_COLOR` support ([design 32](docs/design.md#32-terminal-output-planned-v03)) | ✅ |
+| Shell completion for commands, generator names, and inputs ([design 32](docs/design.md#32-terminal-output)) | ✅ |
+| `--quiet`, `--verbose`, and `NO_COLOR` support ([design 32](docs/design.md#32-terminal-output)) | ✅ |
 | `adder derive --watch` for a fast edit loop | 💡 |
 | `adder graph`: a Mermaid diagram of which outputs depend on which scans and templates | 💡 |
 
@@ -164,10 +164,10 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Secret scanning with push protection, and private vulnerability reporting | ✅ |
 | Repository hardening: branch and tag rulesets with required checks | 🔜 after v1.0 |
 | A test that keeps README examples in sync with the test fixtures, once the documentation site has many examples | 💡 |
-| End-to-end CLI tests with `testscript` ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
-| Fuzz tests for configuration parsing, header detection, directives, and import pruning ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
-| Benchmarks on large repositories with a performance budget ([design 36](docs/design.md#36-testing-adder-itself-planned-v03)) | ✅ |
-| A symlink policy for scans and outputs ([design 26](docs/design.md#26-symlinks-planned-v03)) | ✅ |
+| End-to-end CLI tests with `testscript` ([design 36](docs/design.md#36-testing-adder-itself)) | ✅ |
+| Fuzz tests for configuration parsing, header detection, directives, and import pruning ([design 36](docs/design.md#36-testing-adder-itself)) | ✅ |
+| Benchmarks on large repositories with a performance budget ([design 36](docs/design.md#36-testing-adder-itself)) | ✅ |
+| A symlink policy for scans and outputs ([design 26](docs/design.md#26-symlinks)) | ✅ |
 | CodeQL | ✅ |
 | OpenSSF Scorecard | 🔜 after v1.0 |
 
