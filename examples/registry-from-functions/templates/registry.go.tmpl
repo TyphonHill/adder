@@ -1,7 +1,7 @@
 package drivers
 
 import (
-	"example.com/registry-from-functions/storage"
+	"{{ .Module }}/storage"
 {{- range .Drivers }}
 	"{{ .ImportPath }}"
 {{- end }}

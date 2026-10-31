@@ -170,11 +170,15 @@ func renderOutput(u prepared, data map[string]any, src Sources, out config.Outpu
 	}
 	if change := p.Changes[len(p.Changes)-1]; change.Status == plan.Updated && !replaceable(change) {
 		p.Changes = p.Changes[:len(p.Changes)-1]
+		hint := "adder never overwrites files people own; move or delete the file, or write the output somewhere else"
+		if header.Foreign(change.Path, change.Old) {
+			hint = "another tool generated this file; delete it once, as when moving to adder, and adder generates it from then on"
+		}
 		return diag.Locate(&diag.Diagnostic{
 			Code:    diag.FileExists,
 			Pos:     diag.Pos{File: target},
 			Message: fmt.Sprintf("file already exists and adder did not generate it, so it is not replaced by %s", out.Source()),
-			Hint:    "adder never overwrites files people own; move or delete the file, or write the output somewhere else",
+			Hint:    hint,
 		}, src.ExistingDir, out.Pos)
 	}
 	return nil

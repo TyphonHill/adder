@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"path"
+	"regexp"
 	"strings"
 
 	"typhonhill.dev/adder/internal/diag"
@@ -139,6 +140,39 @@ func Parse(name string, src []byte) (source string, ok bool) {
 		}
 	}
 	return "", false
+}
+
+// foreign matches the generated-code comment of any tool, following Go's convention.
+var foreign = regexp.MustCompile(`^Code generated .* DO NOT EDIT\.$`)
+
+// Foreign reports whether src, the content of the file called name, has a generated-code comment that is not
+// adder's: in a Go file where Go looks for one, and otherwise in the comment lines it starts with.
+func Foreign(name string, src []byte) bool {
+	if _, ours := Parse(name, src); ours {
+		return false
+	}
+	if isGo(name) {
+		file, err := parseGo(src)
+		return err == nil && ast.IsGenerated(file)
+	}
+	c, ok := syntaxFor(name)
+	if !ok {
+		return false
+	}
+	for line := range strings.Lines(string(src[preambleEnd(name, src):])) {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		text, found := strings.CutPrefix(line, strings.TrimSpace(c.open))
+		if !found {
+			return false
+		}
+		if foreign.MatchString(strings.TrimSpace(strings.TrimSuffix(text, strings.TrimSpace(c.close)))) {
+			return true
+		}
+	}
+	return false
 }
 
 // Source is Parse for a Go file that is already parsed. The file must have been parsed with parser.ParseComments.
