@@ -554,3 +554,11 @@ func TestLoad(t *testing.T) {
 		})
 	}
 }
+
+// TestFrozenReservedNames pins the top-level template fields, which v1 promises not to add to (docs/compatibility.md):
+// a new one would make a scan of that name invalid.
+func TestFrozenReservedNames(t *testing.T) {
+	if want := []string{"Inputs", "Item", "Module", "Options", "Vars"}; !slices.Equal(reservedNames, want) {
+		t.Errorf("reservedNames = %q, want %q", reservedNames, want)
+	}
+}

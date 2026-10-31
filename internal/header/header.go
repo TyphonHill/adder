@@ -33,7 +33,8 @@ var (
 )
 
 // languages lists, for each comment syntax, the lowercase file extensions that use it, in sorted order. Go is
-// handled separately. Adding an extension changes what adder writes, so it belongs in the changelog.
+// handled separately. The list is frozen within v1 (docs/compatibility.md), since adding an extension changes what
+// adder writes for files of that type.
 var languages = []struct {
 	comment
 	exts string

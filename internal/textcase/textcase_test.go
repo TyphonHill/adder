@@ -1,6 +1,7 @@
 package textcase
 
 import (
+	"maps"
 	"slices"
 	"testing"
 )
@@ -79,5 +80,18 @@ func TestCase(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// TestFrozenInitialisms pins the initialisms, which v1 promises never to change (docs/compatibility.md): changing
+// them would rename generated identifiers.
+func TestFrozenInitialisms(t *testing.T) {
+	want := []string{
+		"ACL", "AMQP", "API", "ASCII", "CPU", "CSS", "DB", "DNS", "EOF", "GID", "GUID", "HTML", "HTTP", "HTTPS", "ID",
+		"IP", "JSON", "QPS", "RAM", "RPC", "RTP", "SIP", "SLA", "SMTP", "SQL", "SSH", "TCP", "TLS", "TS", "TTL", "UDP",
+		"UI", "UID", "URI", "URL", "UTF8", "UUID", "VM", "XML", "XMPP", "XSRF", "XSS",
+	}
+	if got := slices.Sorted(maps.Keys(goInitialisms)); !slices.Equal(got, want) {
+		t.Errorf("initialisms = %q, want %q", got, want)
 	}
 }

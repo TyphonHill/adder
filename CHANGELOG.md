@@ -8,6 +8,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 - `examples/`: ten small repositories, each showing one thing adder does and named after it, from `registry-from-functions` and `enum-strings` to `scaffold-with-generator`, `shared-pack`, `custom-scanner`, and `monorepo`. Each README says what the example shows and how, and adder's tests check and build every example with adder from the same commit.
 - `docs/`: the reference, moved from the README into one file per topic: getting started, configuration, templates, extending adder, and commands. `docs/migrating.md` explains how to move to adder from a generator of your own.
+- `docs/compatibility.md`: what v1.0 promises and what it does not, and the deprecation and Go version policies. Tests pin the lists it freezes: the file types that get a header, the initialisms, the template functions, and the reserved template fields.
 
 ### Changed
 

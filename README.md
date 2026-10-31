@@ -114,11 +114,12 @@ go tool adder init
 - [Extending adder](docs/extending.md): packs, your own functions, and scanners.
 - [Commands](docs/commands.md): commands, flags, exit codes, and JSON output.
 - [Moving to adder](docs/migrating.md) from a generator of your own.
+- [Compatibility](docs/compatibility.md): what v1.0 promises, and the deprecation policy.
 - [Design](docs/design.md): how adder is built, and why.
 
 ## Status
 
-adder is close to v1.0. Until then, the configuration may still change, and the [changelog](CHANGELOG.md) says how. From v1.0, it follows [semantic versioning](docs/design.md#compatibility). See the [roadmap](ROADMAP.md) for what comes next.
+adder is close to v1.0. Until then, the configuration may still change, and the [changelog](CHANGELOG.md) says how. From v1.0, it follows semantic versioning, as [compatibility](docs/compatibility.md) describes. See the [roadmap](ROADMAP.md) for what comes next.
 
 ## Contributing
 
