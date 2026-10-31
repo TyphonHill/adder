@@ -1,0 +1,1115 @@
+{
+  "$comment": "Generated from adder-v1.json by TestPackSchema in internal/config. Do not edit.",
+  "$id": "https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/pack-v1.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "command": {
+      "description": "Lowercase words joined by hyphens.",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "type": "string"
+    },
+    "derive": {
+      "additionalProperties": false,
+      "description": "Files rebuilt from scans of the repository's code by adder derive.",
+      "properties": {
+        "outputs": {
+          "anyOf": [
+            {
+              "description": "Files rendered from the scans.",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/output"
+                  },
+                  {
+                    "$ref": "#/definitions/option"
+                  }
+                ]
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "scans": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/scan"
+                  },
+                  {
+                    "$ref": "#/definitions/option"
+                  }
+                ]
+              },
+              "description": "What to read from the code, by the template field that holds the results.",
+              "propertyNames": {
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/identifier"
+                  }
+                ],
+                "not": {
+                  "enum": [
+                    "Inputs",
+                    "Item",
+                    "Module",
+                    "Options",
+                    "Vars"
+                  ]
+                }
+              },
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "directive": {
+      "description": "The name of an //adder: directive, such as route.",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "type": "string"
+    },
+    "dirs": {
+      "description": "Slash-separated glob patterns relative to the repository root. ** matches any number of directories.",
+      "examples": [
+        [
+          "drivers/*"
+        ],
+        [
+          "internal/**/handlers"
+        ]
+      ],
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/definitions/option"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "file": {
+      "additionalProperties": false,
+      "properties": {
+        "ifExists": {
+          "anyOf": [
+            {
+              "description": "fail, the default, or skip for a file that may already exist. adder never overwrites a file.",
+              "enum": [
+                "fail",
+                "skip"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "pack": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/command"
+                }
+              ],
+              "description": "The pack holding the template."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "path": {
+          "anyOf": [
+            {
+              "description": "Where to create the file, relative to the repository root. A template.",
+              "examples": [
+                "drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "template": {
+          "anyOf": [
+            {
+              "description": "The template, relative to this file, or to the pack with pack.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "unless": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/inputName"
+                }
+              ],
+              "description": "A bool input that excludes the file."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "when": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/inputName"
+                }
+              ],
+              "description": "A bool input that includes the file."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "required": [
+        "template",
+        "path"
+      ],
+      "type": "object"
+    },
+    "files": {
+      "additionalProperties": false,
+      "description": "Lists files of any kind instead of Go declarations.",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/regexp"
+                }
+              ],
+              "description": "File names, with their extension, containing a match for this regular expression.",
+              "examples": [
+                "\\.sql$"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "funcs": {
+      "additionalProperties": false,
+      "description": "Filters functions and methods. Unset filters match everything.",
+      "properties": {
+        "directive": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/directive"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "exported": {
+          "anyOf": [
+            {
+              "description": "Only exported names.",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "firstParamName": {
+          "anyOf": [
+            {
+              "description": "Declarations whose first parameter has this name.",
+              "examples": [
+                "ctx"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "firstParamType": {
+          "anyOf": [
+            {
+              "description": "Declarations whose first parameter has this type, with full import paths.",
+              "examples": [
+                "context.Context"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "description": "Plain functions or methods only.",
+              "enum": [
+                "func",
+                "method"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/regexp"
+                }
+              ],
+              "description": "Names containing a match for this regular expression.",
+              "examples": [
+                "^New$"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "receiver": {
+          "anyOf": [
+            {
+              "description": "Methods on this type, with a value or pointer receiver.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "generator": {
+      "additionalProperties": false,
+      "properties": {
+        "deprecated": {
+          "anyOf": [
+            {
+              "description": "Marks the generator as on its way out, saying what to use instead.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "derive": {
+          "anyOf": [
+            {
+              "description": "false skips updating derived outputs.",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "description": "Shown in adder new.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "files": {
+          "anyOf": [
+            {
+              "description": "The files the generator creates.",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/file"
+                  },
+                  {
+                    "$ref": "#/definitions/option"
+                  }
+                ]
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "inputs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/input"
+                  },
+                  {
+                    "$ref": "#/definitions/option"
+                  }
+                ]
+              },
+              "description": "Values given on the command line, each a flag in kebab-case and .Inputs.\u003cname\u003e in templates.",
+              "propertyNames": {
+                "$ref": "#/definitions/inputName"
+              },
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "message": {
+          "anyOf": [
+            {
+              "description": "A template printed after the files are created, such as next steps.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "type": "object"
+    },
+    "generators": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/generator"
+          },
+          {
+            "$ref": "#/definitions/option"
+          }
+        ]
+      },
+      "description": "Commands that create new files from templates, as adder new \u003cname\u003e.",
+      "propertyNames": {
+        "$ref": "#/definitions/command"
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "identifier": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
+    },
+    "input": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "anyOf": [
+            {
+              "description": "Makes a string input optional.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "deprecated": {
+          "anyOf": [
+            {
+              "description": "Marks the input as on its way out, saying what to use instead. A deprecated string input needs a default.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "help": {
+          "anyOf": [
+            {
+              "description": "Shown in --help and with problems.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/regexp"
+                }
+              ],
+              "description": "A regular expression the whole value must match."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "type": {
+          "anyOf": [
+            {
+              "description": "string, the default, or bool.",
+              "enum": [
+                "string",
+                "bool"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "unique": {
+          "anyOf": [
+            {
+              "description": "Rejects values a scan already has, written Scan.Field.",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "values": {
+          "anyOf": [
+            {
+              "description": "The allowed values.",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/definitions/option"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "valuesFrom": {
+          "anyOf": [
+            {
+              "description": "Takes the allowed values from a scan, written Scan.Field.",
+              "examples": [
+                "Drivers.Package"
+              ],
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "inputName": {
+      "description": "lowerCamelCase, such as packageName.",
+      "pattern": "^[a-z][A-Za-z0-9]*$",
+      "type": "string"
+    },
+    "option": {
+      "additionalProperties": false,
+      "description": "Takes the value of one of the pack's options.",
+      "properties": {
+        "option": {
+          "$ref": "#/definitions/inputName"
+        }
+      },
+      "required": [
+        "option"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "additionalProperties": false,
+      "description": "A file rendered from a template with the results of every scan.",
+      "properties": {
+        "each": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/identifier"
+                }
+              ],
+              "description": "A scan whose items each get a file of their own, as .Item."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "pack": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/command"
+                }
+              ],
+              "description": "The pack holding the template."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "path": {
+          "anyOf": [
+            {
+              "description": "Where to write the file, relative to the repository root. A template with each.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "template": {
+          "anyOf": [
+            {
+              "description": "The template, relative to this file, or to the pack with pack.",
+              "examples": [
+                "templates/registry.go.tmpl"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "required": [
+        "template",
+        "path"
+      ],
+      "type": "object"
+    },
+    "packOption": {
+      "additionalProperties": false,
+      "description": "A setting the pack takes from each use, as .Options.\u003cname\u003e in its templates.",
+      "properties": {
+        "default": {
+          "description": "Makes the option optional. Bool options default to false."
+        },
+        "deprecated": {
+          "description": "Marks the option as on its way out, saying what to use instead. A deprecated string or list option needs a default.",
+          "type": "string"
+        },
+        "help": {
+          "description": "Shown with problems about the option.",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "A regular expression the whole value, or each value of a list, must match.",
+          "type": "string"
+        },
+        "type": {
+          "description": "string, the default, bool, or list.",
+          "enum": [
+            "string",
+            "bool",
+            "list"
+          ]
+        },
+        "values": {
+          "description": "The allowed values, or the values a list may hold.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "partials": {
+      "description": "Templates whose {{ define }} blocks every template can use, as path.Match patterns relative to this file.",
+      "examples": [
+        [
+          "templates/partials/*.tmpl"
+        ]
+      ],
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "regexp": {
+      "description": "A Go regular expression.",
+      "type": "string"
+    },
+    "scan": {
+      "additionalProperties": false,
+      "description": "Selects items from the code: functions and methods by default, or types, values, files, or a custom scanner's items.",
+      "properties": {
+        "buildTags": {
+          "anyOf": [
+            {
+              "description": "Custom build tags to treat as set, such as integration.",
+              "items": {
+                "anyOf": [
+                  {
+                    "pattern": "^[A-Za-z0-9_.]+$",
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/definitions/option"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "dirs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/dirs"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "exclude": {
+          "anyOf": [
+            {
+              "description": "Directories to leave out, in the same syntax as dirs.",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/definitions/option"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "files": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/files"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "funcs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/funcs"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "includeTests": {
+          "anyOf": [
+            {
+              "description": "Also scan _test.go files.",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "description": "With typeCheck, the GOOS/GOARCH to check. Defaults to linux/amd64.",
+              "examples": [
+                "windows/arm64"
+              ],
+              "pattern": "^[a-z0-9]+/[a-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "scanner": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/scanner"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "typeCheck": {
+          "anyOf": [
+            {
+              "description": "Load type information, for filters that compare types rather than spelling.",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "types": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/types"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "values": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/values"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "scanner": {
+      "additionalProperties": false,
+      "description": "Runs a custom scanner from a pack in a repository's own build of adder.",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/command"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "with": {
+          "anyOf": [
+            {
+              "description": "Settings the scanner decodes itself."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "test": {
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "anyOf": [
+            {
+              "description": "The inputs, by name.",
+              "type": "object"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "description": "The test's name, unique among the generator's tests.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "want": {
+          "anyOf": [
+            {
+              "description": "The directory of the files the generator should create, relative to this file.",
+              "examples": [
+                "testdata/driver/plain"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "want"
+      ],
+      "type": "object"
+    },
+    "types": {
+      "additionalProperties": false,
+      "description": "Selects type declarations instead of functions.",
+      "properties": {
+        "directive": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/directive"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "exported": {
+          "anyOf": [
+            {
+              "description": "Only exported names.",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "implements": {
+          "anyOf": [
+            {
+              "description": "With typeCheck, types whose values or pointers implement this interface, with its import path.",
+              "examples": [
+                "io.Writer"
+              ],
+              "pattern": "^(error|\\S+\\.[A-Za-z_][A-Za-z0-9_]*)$",
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "description": "Structs, interfaces, or any other type declaration.",
+              "enum": [
+                "struct",
+                "interface",
+                "other"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/regexp"
+                }
+              ],
+              "description": "Names containing a match for this regular expression."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "values": {
+      "additionalProperties": false,
+      "description": "Selects constants and variables instead of functions.",
+      "properties": {
+        "directive": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/directive"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "exported": {
+          "anyOf": [
+            {
+              "description": "Only exported names.",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "description": "Constants or variables only.",
+              "enum": [
+                "const",
+                "var"
+              ]
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/regexp"
+                }
+              ],
+              "description": "Names containing a match for this regular expression."
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        },
+        "type": {
+          "anyOf": [
+            {
+              "description": "The type as written, which a const group repeats.",
+              "examples": [
+                "Color"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/option"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "description": "adder pack configuration, version 1: https://github.com/typhonhilldev/adder/blob/main/docs/extending.md",
+  "properties": {
+    "derive": {
+      "$ref": "#/definitions/derive"
+    },
+    "generators": {
+      "$ref": "#/definitions/generators"
+    },
+    "options": {
+      "additionalProperties": {
+        "$ref": "#/definitions/packOption"
+      },
+      "description": "The settings each use gives under with.",
+      "propertyNames": {
+        "$ref": "#/definitions/inputName"
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "partials": {
+      "$ref": "#/definitions/partials"
+    },
+    "version": {
+      "const": 1,
+      "description": "The configuration schema version."
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "pack.yaml",
+  "type": "object"
+}

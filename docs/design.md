@@ -591,7 +591,14 @@ generators:
 
 ### 31. Checking the configuration (planned, v1.0)
 
-**A JSON Schema for `adder.yaml`.** The schema lives at `schema/v1.json` for `version: 1`, written in draft-07, which editors support best. `adder init` writes a `# yaml-language-server: $schema=` line pointing at the file on `main`, `https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/v1.json`, so the path must never move. A SchemaStore listing for files named `adder.yaml` waits for the launch, once v1.0 has made the schema stable. The schema is written by hand, so it can carry descriptions and examples, and a test checks that its properties match the configuration types exactly. It is a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings.
+**JSON Schemas for `adder.yaml` and `pack.yaml`.** `schema/adder-v1.json` describes `adder.yaml` for `version: 1`, and `schema/pack-v1.json` describes `pack.yaml`, both in draft-07, which editors support best. `adder init` writes a `# yaml-language-server: $schema=` line pointing at the file on `main`, `https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/adder-v1.json`, and the examples carry the same line, so the paths must never move. A SchemaStore listing for files named `adder.yaml` waits for the launch, once v1.0 has made the schema stable.
+
+- The adder schema is written by hand, so it carries descriptions and examples. A test checks that its properties match the configuration types exactly, in both directions.
+- The pack schema is generated from it by a test, which fails when the file is out of date and rewrites it with `-update`. Every value in a `pack.yaml` may instead be an option's value, `{option: name}`, so the pack schema is the adder schema with each value made "this, or an option", without `vars`, `packs`, or generator tests, and with `options`.
+- Where adder accepts a null, such as `scans:` with only comments below it, so does the schema, since `adder init` writes such files. Keywords beside a `$ref` are ignored in draft-07, so a `$ref` that needs a description or another rule is wrapped in `allOf`.
+- A test validates every `adder.yaml` and `pack.yaml` in the examples, fixtures, and test scripts that adder loads, and checks that the schemas reject common mistakes.
+
+The schemas are a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings, such as a generator's `unique` naming a scan that exists.
 
 | Considered | Why not |
 | --- | --- |

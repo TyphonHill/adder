@@ -49,7 +49,7 @@ var files embed.FS
 var Pack = adder.Pack{Name: "registry", FS: files}
 ```
 
-`pack.yaml` has the same `derive`, `generators`, and `partials` as `adder.yaml`, and declares the `options` each use gives:
+`pack.yaml` has the same `derive`, `generators`, and `partials` as `adder.yaml`, and declares the `options` each use gives. Its [JSON Schema](../schema/pack-v1.json) is `# yaml-language-server: $schema=https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/pack-v1.json`:
 
 ```yaml
 # registry/pack.yaml

@@ -34,7 +34,7 @@ Status: ✅ available · 🔜 planned for the milestone shown: v1.0, or the laun
 | Every validation problem reported at once, with its line and column | ✅ |
 | Paths are slash-separated, relative, confined to their root, and cleaned on load | ✅ |
 | Find `adder.yaml` by walking up from the current directory, like `go` finds `go.mod` (one file name, [design 12](docs/design.md#12-one-configuration-file-at-the-root)) | ✅ |
-| JSON Schema for `adder.yaml`, for editor completion and validation ([design 31](docs/design.md#31-checking-the-configuration-planned-v10)) | 🔜 v1.0 |
+| JSON Schemas for `adder.yaml` and `pack.yaml`, for editor completion and validation ([design 31](docs/design.md#31-checking-the-configuration-planned-v10)) | ✅ |
 | The schema listed in SchemaStore, so editors find it without a modeline | 🔜 launch |
 | Top-level `vars` shared by every template, such as a license header | ✅ |
 | Multiple configurations in one repository, for monorepos and nested modules ([design 40](docs/design.md#40-multiple-configurations)) | ✅ |

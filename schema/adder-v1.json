@@ -1,0 +1,232 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/adder-v1.json",
+  "title": "adder.yaml",
+  "description": "adder configuration, version 1: https://github.com/typhonhilldev/adder/blob/main/docs/configuration.md",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"description": "The configuration schema version.", "const": 1},
+    "vars": {
+      "description": "Strings every template reads as .Vars.<name>.",
+      "type": ["object", "null"],
+      "propertyNames": {"$ref": "#/definitions/identifier"},
+      "additionalProperties": {"type": "string"}
+    },
+    "partials": {"$ref": "#/definitions/partials"},
+    "derive": {"$ref": "#/definitions/derive"},
+    "generators": {"$ref": "#/definitions/generators"},
+    "packs": {
+      "description": "Uses of packs, by a name of your choosing, such as drivers.",
+      "type": ["object", "null"],
+      "propertyNames": {"$ref": "#/definitions/command"},
+      "additionalProperties": {"$ref": "#/definitions/use"}
+    }
+  },
+  "definitions": {
+    "identifier": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+    "command": {"description": "Lowercase words joined by hyphens.", "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"},
+    "inputName": {"description": "lowerCamelCase, such as packageName.", "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$"},
+    "directive": {"description": "The name of an //adder: directive, such as route.", "type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "regexp": {"description": "A Go regular expression.", "type": "string"},
+    "dirs": {
+      "description": "Slash-separated glob patterns relative to the repository root. ** matches any number of directories.",
+      "type": "array",
+      "items": {"type": "string"},
+      "examples": [["drivers/*"], ["internal/**/handlers"]]
+    },
+    "partials": {
+      "description": "Templates whose {{ define }} blocks every template can use, as path.Match patterns relative to this file.",
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "examples": [["templates/partials/*.tmpl"]]
+    },
+    "derive": {
+      "description": "Files rebuilt from scans of the repository's code by adder derive.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "scans": {
+          "description": "What to read from the code, by the template field that holds the results.",
+          "type": ["object", "null"],
+          "propertyNames": {"allOf": [{"$ref": "#/definitions/identifier"}], "not": {"enum": ["Inputs", "Item", "Module", "Options", "Vars"]}},
+          "additionalProperties": {"$ref": "#/definitions/scan"}
+        },
+        "outputs": {
+          "description": "Files rendered from the scans.",
+          "type": ["array", "null"],
+          "items": {"$ref": "#/definitions/output"}
+        }
+      }
+    },
+    "scan": {
+      "description": "Selects items from the code: functions and methods by default, or types, values, files, or a custom scanner's items.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dirs": {"$ref": "#/definitions/dirs"},
+        "exclude": {"description": "Directories to leave out, in the same syntax as dirs.", "type": "array", "items": {"type": "string"}},
+        "includeTests": {"description": "Also scan _test.go files.", "type": "boolean"},
+        "buildTags": {"description": "Custom build tags to treat as set, such as integration.", "type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_.]+$"}},
+        "funcs": {"$ref": "#/definitions/funcs"},
+        "types": {"$ref": "#/definitions/types"},
+        "values": {"$ref": "#/definitions/values"},
+        "files": {"$ref": "#/definitions/files"},
+        "scanner": {"$ref": "#/definitions/scanner"},
+        "typeCheck": {"description": "Load type information, for filters that compare types rather than spelling.", "type": "boolean"},
+        "platform": {"description": "With typeCheck, the GOOS/GOARCH to check. Defaults to linux/amd64.", "type": "string", "pattern": "^[a-z0-9]+/[a-z0-9]+$", "examples": ["windows/arm64"]}
+      }
+    },
+    "funcs": {
+      "description": "Filters functions and methods. Unset filters match everything.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exported": {"description": "Only exported names.", "type": "boolean"},
+        "name": {"allOf": [{"$ref": "#/definitions/regexp"}], "description": "Names containing a match for this regular expression.", "examples": ["^New$"]},
+        "kind": {"description": "Plain functions or methods only.", "enum": ["func", "method"]},
+        "receiver": {"description": "Methods on this type, with a value or pointer receiver.", "type": "string"},
+        "firstParamName": {"description": "Declarations whose first parameter has this name.", "type": "string", "examples": ["ctx"]},
+        "firstParamType": {"description": "Declarations whose first parameter has this type, with full import paths.", "type": "string", "examples": ["context.Context"]},
+        "directive": {"$ref": "#/definitions/directive"}
+      }
+    },
+    "types": {
+      "description": "Selects type declarations instead of functions.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exported": {"description": "Only exported names.", "type": "boolean"},
+        "name": {"allOf": [{"$ref": "#/definitions/regexp"}], "description": "Names containing a match for this regular expression."},
+        "kind": {"description": "Structs, interfaces, or any other type declaration.", "enum": ["struct", "interface", "other"]},
+        "directive": {"$ref": "#/definitions/directive"},
+        "implements": {"description": "With typeCheck, types whose values or pointers implement this interface, with its import path.", "type": "string", "pattern": "^(error|\\S+\\.[A-Za-z_][A-Za-z0-9_]*)$", "examples": ["io.Writer"]}
+      }
+    },
+    "values": {
+      "description": "Selects constants and variables instead of functions.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"description": "Constants or variables only.", "enum": ["const", "var"]},
+        "exported": {"description": "Only exported names.", "type": "boolean"},
+        "name": {"allOf": [{"$ref": "#/definitions/regexp"}], "description": "Names containing a match for this regular expression."},
+        "type": {"description": "The type as written, which a const group repeats.", "type": "string", "examples": ["Color"]},
+        "directive": {"$ref": "#/definitions/directive"}
+      }
+    },
+    "files": {
+      "description": "Lists files of any kind instead of Go declarations.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"allOf": [{"$ref": "#/definitions/regexp"}], "description": "File names, with their extension, containing a match for this regular expression.", "examples": ["\\.sql$"]}
+      }
+    },
+    "scanner": {
+      "description": "Runs a custom scanner from a pack in a repository's own build of adder.",
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"$ref": "#/definitions/command"},
+        "with": {"description": "Settings the scanner decodes itself."}
+      }
+    },
+    "output": {
+      "description": "A file rendered from a template with the results of every scan.",
+      "type": "object",
+      "required": ["template", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "template": {"description": "The template, relative to this file, or to the pack with pack.", "type": "string", "examples": ["templates/registry.go.tmpl"]},
+        "path": {"description": "Where to write the file, relative to the repository root. A template with each.", "type": "string"},
+        "each": {"allOf": [{"$ref": "#/definitions/identifier"}], "description": "A scan whose items each get a file of their own, as .Item."},
+        "pack": {"allOf": [{"$ref": "#/definitions/command"}], "description": "The pack holding the template."}
+      }
+    },
+    "generators": {
+      "description": "Commands that create new files from templates, as adder new <name>.",
+      "type": ["object", "null"],
+      "propertyNames": {"$ref": "#/definitions/command"},
+      "additionalProperties": {"$ref": "#/definitions/generator"}
+    },
+    "generator": {
+      "type": "object",
+      "required": ["files"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {"description": "Shown in adder new.", "type": "string"},
+        "inputs": {
+          "description": "Values given on the command line, each a flag in kebab-case and .Inputs.<name> in templates.",
+          "type": ["object", "null"],
+          "propertyNames": {"$ref": "#/definitions/inputName"},
+          "additionalProperties": {"$ref": "#/definitions/input"}
+        },
+        "files": {"description": "The files the generator creates.", "type": "array", "minItems": 1, "items": {"$ref": "#/definitions/file"}},
+        "message": {"description": "A template printed after the files are created, such as next steps.", "type": "string"},
+        "derive": {"description": "false skips updating derived outputs.", "type": "boolean"},
+        "tests": {"description": "Sample inputs and the files the generator should create from them, for adder test.", "type": "array", "items": {"$ref": "#/definitions/test"}},
+        "deprecated": {"description": "Marks the generator as on its way out, saying what to use instead.", "type": "string"}
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {"description": "string, the default, or bool.", "enum": ["string", "bool"]},
+        "help": {"description": "Shown in --help and with problems.", "type": "string"},
+        "default": {"description": "Makes a string input optional.", "type": "string"},
+        "pattern": {"allOf": [{"$ref": "#/definitions/regexp"}], "description": "A regular expression the whole value must match."},
+        "values": {"description": "The allowed values.", "type": "array", "items": {"type": "string"}},
+        "valuesFrom": {"description": "Takes the allowed values from a scan, written Scan.Field.", "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$", "examples": ["Drivers.Package"]},
+        "unique": {"description": "Rejects values a scan already has, written Scan.Field.", "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"},
+        "deprecated": {"description": "Marks the input as on its way out, saying what to use instead. A deprecated string input needs a default.", "type": "string"}
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": ["template", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "template": {"description": "The template, relative to this file, or to the pack with pack.", "type": "string"},
+        "pack": {"allOf": [{"$ref": "#/definitions/command"}], "description": "The pack holding the template."},
+        "path": {"description": "Where to create the file, relative to the repository root. A template.", "type": "string", "examples": ["drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go"]},
+        "when": {"allOf": [{"$ref": "#/definitions/inputName"}], "description": "A bool input that includes the file."},
+        "unless": {"allOf": [{"$ref": "#/definitions/inputName"}], "description": "A bool input that excludes the file."},
+        "ifExists": {"description": "fail, the default, or skip for a file that may already exist. adder never overwrites a file.", "enum": ["fail", "skip"]}
+      }
+    },
+    "test": {
+      "type": "object",
+      "required": ["name", "want"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"description": "The test's name, unique among the generator's tests.", "type": "string"},
+        "inputs": {"description": "The inputs, by name.", "type": "object"},
+        "want": {"description": "The directory of the files the generator should create, relative to this file.", "type": "string", "examples": ["testdata/driver/plain"]}
+      }
+    },
+    "use": {
+      "description": "One use of a pack, with the options it gives.",
+      "type": "object",
+      "required": ["pack"],
+      "additionalProperties": false,
+      "properties": {
+        "pack": {"allOf": [{"$ref": "#/definitions/command"}], "description": "The pack's name."},
+        "with": {"description": "The pack's options.", "type": "object"},
+        "rename": {
+          "description": "New command names for the pack's generators.",
+          "type": "object",
+          "additionalProperties": {"$ref": "#/definitions/command"}
+        },
+        "tests": {
+          "description": "Tests of the pack's generators, by command name.",
+          "type": "object",
+          "additionalProperties": {"type": "array", "items": {"$ref": "#/definitions/test"}}
+        }
+      }
+    }
+  }
+}
