@@ -75,7 +75,7 @@ func All() map[string]storage.Driver {
 A [generator](docs/configuration.md#generators) creates new drivers that are registered as soon as they exist, and `adder check` catches one added by hand without `adder derive`:
 
 ```console
-$ adder new driver --name s3
+$ adder new driver name=s3
 created    drivers/s3/s3.go
 updated    drivers/drivers.gen.go
 $ adder check
@@ -93,8 +93,8 @@ The [registry-from-functions](examples/registry-from-functions) and [scaffold-wi
 - **Packs** share scans, outputs, and generators [between repositories](examples/shared-pack), versioned as Go modules.
 - **Extensible** with your own template functions and [scanners](examples/custom-scanner) written in Go.
 - **Monorepos**: [`adder check ./...`](examples/monorepo) checks every `adder.yaml` at once.
-- **Built for [CI](docs/integrations.md) and [agents](docs/agents.md)**: `--json` on every command, stable problem codes, and a JSON Schema for each generator's inputs.
-- **Safe**: adder never overwrites a file it did not generate, writes nothing unless everything succeeds, and gives the same output on every machine.
+- **Built for [CI](docs/integrations.md) and [agents](docs/agents.md)**: `--json` on every command that reports something, stable problem codes, and a JSON Schema for each generator's inputs.
+- **Safe**: adder never overwrites a file it did not generate, wherever its header can mark one, writes nothing unless everything succeeds, and gives the same output on every machine.
 
 ## Install
 

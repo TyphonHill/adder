@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,8 +42,8 @@ func TestPrompt(t *testing.T) {
 			answers:  "\nBad\ns3\n  gcs  \n",
 			terminal: true,
 			wantCode: ExitOK,
-			wantStderr: askName + "  a value is required\n> " + `  --name "Bad" does not match [a-z][a-z0-9]*` + "\n> " +
-				`  --name "s3" already exists in Drivers.Package` + "\n> ",
+			wantStderr: askName + "  a value is required\n> " + `  input name "Bad" does not match [a-z][a-z0-9]*` + "\n> " +
+				`  input name "s3" already exists in Drivers.Package` + "\n> ",
 			wantFile: gcs,
 		},
 		{
@@ -52,7 +53,7 @@ func TestPrompt(t *testing.T) {
 			answers:  "3\n2\nfast\n",
 			terminal: true,
 			wantCode: ExitOK,
-			wantStderr: "from: Driver to copy\n  1) local\n  2) s3\n> " + `  --from "3" is not one of the Drivers.Package values: local, s3` + "\n> " +
+			wantStderr: "from: Driver to copy\n  1) local\n  2) s3\n> " + `  input from "3" is not one of the Drivers.Package values: local, s3` + "\n> " +
 				"tier: \n  1) fast\n  2) slow\n> ",
 			wantFile: "s3-fast.md",
 		},
@@ -63,14 +64,14 @@ func TestPrompt(t *testing.T) {
 			answers:        "x\n",
 			terminal:       true,
 			wantCode:       ExitUsage,
-			stderrContains: []string{"from: \n  no value is allowed: None.Package has none\n> ", "--from is required [missing-input]"},
+			stderrContains: []string{"from: \n  no value is allowed: None.Package has none\n> ", "input from is required [missing-input]"},
 		},
 		{
 			name:           "ends without an answer",
 			args:           []string{"new", "driver"},
 			terminal:       true,
 			wantCode:       ExitUsage,
-			stderrContains: []string{askName + "\n", "--name is required [missing-input]"},
+			stderrContains: []string{askName + "\n", "input name is required [missing-input]"},
 		},
 		{
 			name:           "interrupted",
@@ -81,8 +82,8 @@ func TestPrompt(t *testing.T) {
 			stderrContains: []string{"adder: interrupted"},
 		},
 		{
-			name:     "does not ask for inputs given as flags",
-			args:     []string{"new", "driver", "--name", "gcs"},
+			name:     "does not ask for inputs given as arguments",
+			args:     []string{"new", "driver", "name=gcs"},
 			terminal: true,
 			wantCode: ExitOK,
 			wantFile: gcs,
@@ -92,7 +93,7 @@ func TestPrompt(t *testing.T) {
 			args:           []string{"new", "driver"},
 			answers:        "gcs\n",
 			wantCode:       ExitUsage,
-			stderrContains: []string{"--name is required [missing-input]"},
+			stderrContains: []string{"input name is required [missing-input]"},
 		},
 		{
 			name:     "does not ask with --json",
@@ -134,7 +135,7 @@ func TestPrompt(t *testing.T) {
 				cancel()
 			}
 
-			code, _, stderr := runWithInput(ctx, tt.answers, append([]string{"--root", root}, tt.args...)...)
+			code, _, stderr := runMain(ctx, nil, tt.answers, append([]string{"--root", root}, tt.args...)...)
 
 			if code != tt.wantCode {
 				t.Errorf("exit code = %d, want %d\nstderr: %s", code, tt.wantCode, stderr)
@@ -176,30 +177,50 @@ func TestIsTerminal(t *testing.T) {
 	}
 }
 
-// TestLinesCanceled checks that a prompt waiting for an answer returns when the context is canceled, as with
-// Ctrl-C, even though reading never finishes.
-func TestLinesCanceled(t *testing.T) {
-	blocked, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+func TestLines(t *testing.T) {
+	errBroken := errors.New("broken")
+	tests := []struct {
+		name   string
+		reader func(t *testing.T) io.Reader
+		cancel bool // cancel the context while waiting for an answer
+		want   error
+	}{
+		{
+			// As with Ctrl-C: the prompt returns even though reading never finishes.
+			name: "canceled while waiting",
+			reader: func(t *testing.T) io.Reader {
+				blocked, writer, err := os.Pipe()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { writer.Close(); blocked.Close() })
+				return blocked
+			},
+			cancel: true,
+			want:   context.Canceled,
+		},
+		{
+			name:   "a read error",
+			reader: func(*testing.T) io.Reader { return iotest.ErrReader(errBroken) },
+			want:   errBroken,
+		},
 	}
-	t.Cleanup(func() { writer.Close(); blocked.Close() })
-	ctx, cancel := context.WithCancel(t.Context())
-	answers := readLines(blocked)
-	done := make(chan error)
-	go func() {
-		_, err := answers.next(ctx)
-		done <- err
-	}()
-	cancel()
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Errorf("next() error = %v, want context.Canceled", err)
-	}
-}
-
-func TestLinesReadError(t *testing.T) {
-	answers := readLines(iotest.ErrReader(errors.New("broken")))
-	if _, err := answers.next(t.Context()); err == nil || err.Error() != "broken" {
-		t.Errorf("next() error = %v, want the read error", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			answers := readLines(tt.reader(t))
+			done := make(chan error)
+			go func() {
+				_, err := answers.next(ctx)
+				done <- err
+			}()
+			if tt.cancel {
+				cancel()
+			}
+			if err := <-done; !errors.Is(err, tt.want) {
+				t.Errorf("next() error = %v, want %v", err, tt.want)
+			}
+		})
 	}
 }

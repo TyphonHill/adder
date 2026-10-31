@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/pack-v1.json
+# yaml-language-server: $schema=https://typhonhill.dev/adder/schema/pack-v1.json
 version: 1
 
 options:

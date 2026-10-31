@@ -86,6 +86,10 @@ A failure is saved under the package's `testdata/fuzz`. Commit it with the fix, 
 - Keep comments short: say what code is for, not how it works, and only explain the *why* when it is not obvious.
 - New behavior that affects generated output, configuration, or diagnostics needs a test, and the pull request should call it out.
 
+## Changing the schemas
+
+`schema/adder-v1.json` is written by hand, and `schema/pack-v1.json` is generated from it: run `go test ./internal/config -run TestPackSchema -update` after changing it. Every `adder.yaml` that `adder init` writes points at the copies `typhonhill.dev` serves, so after a change reaches `main`, copy both files to `adder/schema/` in [typhonhilldev/typhonhilldev.github.io](https://github.com/typhonhilldev/typhonhilldev.github.io). The Published schemas workflow fails until the copies match.
+
 ## Releasing
 
 Releases are tagged by hand from `main`. A Go module version can never change once anyone has downloaded it, because the checksum database records it, so a mistake in a release is fixed with a new patch release, never by moving or re-creating its tag.

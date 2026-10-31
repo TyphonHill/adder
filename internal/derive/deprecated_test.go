@@ -18,7 +18,7 @@ func TestPlanWarnings(t *testing.T) {
 	}
 	packs, err := pack.New([]pack.Pack{
 		{Name: "store", FS: store},
-		{Name: "local", Funcs: map[string]any{"shout": strings.ToUpper, "upper": strings.ToUpper}, Deprecated: map[string]string{"shout": "use upper"}},
+		{Name: "local", Funcs: map[string]any{"shout": strings.ToUpper, "upper": strings.ToUpper}, DeprecatedFuncs: map[string]string{"shout": "use upper"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -33,23 +33,28 @@ func TestPlanWarnings(t *testing.T) {
 	tests := []struct {
 		name   string
 		config string
-		want   []string // each warning, as pos: message
+		want   []string // each warning, as position and code
 	}{
 		{name: "nothing deprecated", config: "version: 1\nderive:\n" + scan + "  outputs:\n    - {template: plain.go.tmpl, path: x/x.gen.go}\n"},
 		{
 			name:   "in the configuration's own template",
 			config: "version: 1\nderive:\n" + scan + "  outputs:\n    - {template: old.go.tmpl, path: x/x.gen.go}\n",
-			want:   []string{`old.go.tmpl:3:7: function "shout" is deprecated: use upper`},
+			want:   []string{"old.go.tmpl:3:7 deprecated"},
 		},
 		{
 			name:   "once for an output with each",
 			config: "version: 1\nderive:\n" + scan + "  outputs:\n    - {template: each.go.tmpl, each: Ctors, path: \"{{ .Item.Dir }}/x.gen.go\"}\n",
-			want:   []string{`each.go.tmpl:3:7: function "shout" is deprecated: use upper`},
+			want:   []string{"each.go.tmpl:3:7 deprecated"},
+		},
+		{
+			name:   "in the path of an output with each",
+			config: "version: 1\nderive:\n" + scan + "  outputs:\n    - {template: plain.go.tmpl, each: Ctors, path: \"x/{{ shout .Item.Name }}.gen.go\"}\n",
+			want:   []string{"adder.yaml:6:7 deprecated"},
 		},
 		{
 			name:   "in a pack's template",
 			config: "version: 1\npacks:\n  lists: {pack: store}\n",
-			want:   []string{`pack store: list.go.tmpl:3:7: function "shout" is deprecated: use upper`},
+			want:   []string{"pack store: list.go.tmpl:3:7 deprecated"},
 		},
 	}
 	for _, tt := range tests {
@@ -65,7 +70,7 @@ func TestPlanWarnings(t *testing.T) {
 			}
 			var got []string
 			for _, d := range w.List() {
-				got = append(got, d.Error())
+				got = append(got, d.Pos.String()+" "+string(d.Code))
 			}
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("warnings = %q, want %q", got, tt.want)

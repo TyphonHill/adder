@@ -9,17 +9,22 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - `examples/`: ten small repositories, each showing one thing adder does and named after it, from `registry-from-functions` and `enum-strings` to `scaffold-with-generator`, `shared-pack`, `custom-scanner`, and `monorepo`. Each README says what the example shows and how, and adder's tests check and build every example with adder from the same commit.
 - `docs/`: the reference, moved from the README into one file per topic: getting started, configuration, templates, extending adder, and commands. `docs/migrating.md` explains how to move to adder from a generator of your own.
 - `docs/compatibility.md`: what v1.0 promises and what it does not, and the deprecation and Go version policies. Tests pin the lists it freezes: the file types that get a header, the initialisms, the template functions, and the reserved template fields.
-- Deprecation warnings: adder warns, at its place, wherever something deprecated is used, and says what to use instead, without failing the command or changing its exit code. Generators, inputs, and pack options take `deprecated`, and `adder.Pack` takes `Deprecated` for a pack's functions and scanners, so repositories and packs can retire what they define the same way. `--help`, `adder list`, and `adder describe` mark what is deprecated. A deprecated input or option needs a default.
+- Deprecation warnings: adder warns, at its place, wherever something deprecated is used, and says what to use instead, without failing the command or changing its exit code. Generators, inputs, and pack options take `deprecated`, and `adder.Pack` takes `DeprecatedFuncs` and `DeprecatedScanners` for a pack's functions and scanners, so repositories and packs can retire what they define the same way. `--help`, `adder list`, and `adder describe` mark what is deprecated. A deprecated input or option needs a default.
 - JSON Schemas for `adder.yaml` and `pack.yaml`, in `schema/`, for completion and checking in editors. `adder init` and the examples point editors at them with a `yaml-language-server` line.
 - The roadmap's launch milestone: what adder needs before it is published as a public tool, after v1.0.
 - Integrations: `.pre-commit-hooks.yaml` with `adder-check` and `adder-derive`, and `docs/integrations.md` with `go generate`, pre-commit, and CI jobs for GitHub Actions and GitLab CI that show problems on the pull request. `docs/agents.md` describes how coding agents run generators, with an `AGENTS.md` section to copy.
 
 ### Changed
 
+- Generator inputs are arguments, `adder new driver name=gcs cache`, instead of flags: a string input is `name=value`, and a bool input's bare name means true. Flags belong to adder alone, so an input can have any name, even one adder uses for a flag such as `json`, and later flags never clash with a generator's inputs. Arguments, `--inputs` JSON, and templates name an input the same way. Messages name an input as `input name`, and `adder describe --json` no longer has a `flag` field.
 - The README is a short introduction: what adder does, one example, its features, and links to `docs/` and `examples/`.
 - When `file-exists` blocks a file that another tool generated, its hint says so, and that deleting the file once lets adder generate it.
 - The `adder.yaml` that `adder init` writes links to `docs/configuration.md`.
 - Every JSON report has a `warnings` list beside `problems`, empty when there are none.
+
+- Two new diagnostic codes: `duplicate-name`, for a repeated generator test name, a generator name a pack use takes, and two partials defining one template, which were `invalid-name` or `template-syntax`; and `interrupted`, which was `error`.
+- `adder explain --json` always has `source`, `scans`, and `status`, empty or null when they do not apply.
+- `.Vars` and `.Options` are present in every template, empty where they do not apply.
 
 These changes settle names before v1.0 freezes them. Configurations that use an old name fail to load with `unknown-field` or `invalid-value`, naming the new one.
 
@@ -32,6 +37,9 @@ These changes settle names before v1.0 freezes them. Configurations that use an 
 
 ### Fixed
 
+- A `go.mod` or `adder.yaml` that is a symbolic link counts as the file it leads to, as `go` treats a linked `go.mod`. Wildcards stop at it, `.ImportPath` uses a linked `go.mod`'s module path instead of the root's, and `./...` finds a linked `adder.yaml`; before, only the stale-file search and finding the nearest `adder.yaml` followed the link.
+- `ScanInput.Decode` panicked on a `ScanInput` built by hand, as a scanner's tests build one. It now leaves the value as it is.
+- The help of a generator's command showed `--json`, `--quiet`, and `--verbose` with a default of `true` when they were given.
 - Positions in templates were one column to the left of the problem, since text/template counts columns from 0. They now count from 1, as every other position does.
 
 ## [0.6.0] - 2026-10-30

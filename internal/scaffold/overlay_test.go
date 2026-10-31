@@ -79,16 +79,26 @@ func TestOverlay(t *testing.T) {
 
 func TestOverlayMissing(t *testing.T) {
 	o := overlay{base: fstest.MapFS{}, files: map[string][]byte{"a/b.go": nil}}
-	for _, name := range []string{"missing", "a/missing", "../a"} {
-		if _, err := o.Open(name); err == nil {
-			t.Errorf("Open(%q) succeeded", name)
-		}
-		if _, err := o.Stat(name); err == nil {
-			t.Errorf("Stat(%q) succeeded", name)
-		}
-		if _, err := o.ReadDir(name); err == nil {
-			t.Errorf("ReadDir(%q) succeeded", name)
-		}
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "a missing file", path: "missing"},
+		{name: "a missing file beside a new one", path: "a/missing"},
+		{name: "a path outside", path: "../a"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := o.Open(tt.path); err == nil {
+				t.Errorf("Open(%q) succeeded", tt.path)
+			}
+			if _, err := o.Stat(tt.path); err == nil {
+				t.Errorf("Stat(%q) succeeded", tt.path)
+			}
+			if _, err := o.ReadDir(tt.path); err == nil {
+				t.Errorf("ReadDir(%q) succeeded", tt.path)
+			}
+		})
 	}
 }
 

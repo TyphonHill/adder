@@ -53,7 +53,10 @@ func newListCommand(opts *globalOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list [directories]",
 		Short: "List the generators and derived outputs in adder.yaml",
-		Args:  patternArgs,
+		Long: `list shows every generator in adder.yaml, with its description, and every derived output, with the
+template it renders. With directory patterns, such as ./... or ./services/api, it runs over every
+adder.yaml they match.`,
+		Args: patternArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			newReport := func() report { return &listReport{Generators: []generatorReport{}, Outputs: []config.Output{}} }
 			return runConfigs(cmd, opts, args, newReport, func(run configRun, r report) error {
@@ -151,16 +154,16 @@ func printDescription(w io.Writer, d *scaffold.Description) {
 		fmt.Fprintln(tw, "  none")
 	}
 	for _, in := range d.Inputs {
-		fmt.Fprintf(tw, "  %s\t%s\t%s\n", in.Flag, in.Type, inputNotes(in))
+		fmt.Fprintf(tw, "  %s\t%s\t%s\n", in.Name, in.Type, inputNotes(in))
 	}
 	fmt.Fprintln(tw, "files")
 	for _, f := range d.Files {
 		from := "from " + f.Template
 		switch {
 		case f.When != "":
-			from += ", with --" + config.Flag(f.When)
+			from += ", when " + f.When
 		case f.Unless != "":
-			from += ", without --" + config.Flag(f.Unless)
+			from += ", unless " + f.Unless
 		}
 		if f.IfExists == config.IfExistsSkip {
 			from += ", skipped if it exists"
@@ -173,7 +176,7 @@ func printDescription(w io.Writer, d *scaffold.Description) {
 	}
 }
 
-// inputNotes is an input's help followed by its restrictions, with the values its scans allow now.
+// inputNotes is an input's help followed by its restrictions, with the values its scans allow when they are known.
 func inputNotes(in scaffold.DescribedInput) string {
 	var notes []string
 	if in.Deprecated != "" {
@@ -193,9 +196,14 @@ func inputNotes(in scaffold.DescribedInput) string {
 		notes = append(notes, "no value is allowed: "+in.ValuesFrom+" has none")
 	case in.Values != nil:
 		notes = append(notes, "one of: "+strings.Join(in.Values, ", "))
+	case in.ValuesFrom != "":
+		notes = append(notes, "one of the "+in.ValuesFrom+" values")
 	}
-	if len(in.Existing) > 0 {
+	switch {
+	case len(in.Existing) > 0:
 		notes = append(notes, "not one of: "+strings.Join(in.Existing, ", "))
+	case in.Existing == nil && in.Unique != "":
+		notes = append(notes, "not already in "+in.Unique)
 	}
 	if len(notes) == 0 {
 		return in.Help

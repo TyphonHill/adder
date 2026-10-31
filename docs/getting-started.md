@@ -11,7 +11,7 @@ go get -tool typhonhill.dev/adder/cmd/adder
 go tool adder init
 ```
 
-`adder init` writes a starter `adder.yaml` with every section commented out. It never overwrites an existing one. The rest of this guide writes `adder` for `go tool adder`.
+`adder init` writes a starter `adder.yaml` whose sections hold commented examples. It never overwrites an existing one. The rest of this guide writes `adder` for `go tool adder`.
 
 ## Derive a registry
 
@@ -81,10 +81,10 @@ generators:
         path: "drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go"
 ```
 
-The template reads the input as `.Inputs.name`. `pattern` and `unique` reject a bad name, or one a driver has already, before anything is written:
+The input is given as an argument, `name=s3`, and the template reads it as `.Inputs.name`. `pattern` and `unique` reject a bad name, or one a driver has already, before anything is written:
 
 ```console
-$ adder new driver --name s3
+$ adder new driver name=s3
 created    drivers/s3/s3.go
 updated    drivers/drivers.gen.go
 ```

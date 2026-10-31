@@ -32,11 +32,12 @@ type testResultReport struct {
 func newTestCommand(opts *globalOptions) *cobra.Command {
 	var update bool
 	cmd := &cobra.Command{
-		Use:   "test [generator...]",
+		Use:   "test [directories] [generator...]",
 		Short: "Check generators against their golden files",
 		Long: `test runs the tests declared under each generator's tests in adder.yaml, or only those of the generators
 named, and compares the files each generator creates with the files under its want directory. It runs
-against the repository like --dry-run and writes nothing, unless --update rewrites the want directories.`,
+against the repository like --dry-run and writes nothing, unless --update rewrites the want directories.
+With directory patterns, such as ./... or ./services/api, it runs over every adder.yaml they match.`,
 		ValidArgsFunction: completeGenerators(opts, 0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var names, patterns []string
@@ -50,7 +51,7 @@ against the repository like --dry-run and writes nothing, unless --update rewrit
 			found := make(map[string]bool)
 			newReport := func() report { return &testReport{Tests: []testResultReport{}} }
 			err := runConfigs(cmd, opts, patterns, newReport, func(run configRun, r report) error {
-				return runTests(cmd, opts, run, r.(*testReport), names, len(patterns) > 0, found, update)
+				return runTests(cmd, opts, run, r.(*testReport), names, found, update)
 			})
 			if len(patterns) > 0 && err == nil {
 				for _, name := range names {
@@ -68,7 +69,7 @@ against the repository like --dry-run and writes nothing, unless --update rewrit
 
 // runTests runs the tests of the named generators, or of every generator, in one configuration. With several
 // configurations, a named generator a configuration lacks is skipped there, and found records the ones seen.
-func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testReport, names []string, several bool, found map[string]bool, update bool) error {
+func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testReport, names []string, found map[string]bool, update bool) error {
 	cfg := run.cfg
 	var selected []string
 	for _, name := range names {
@@ -76,7 +77,7 @@ func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testR
 		case ok:
 			selected = append(selected, name)
 			found[name] = true
-		case !several:
+		case !run.several:
 			return unknownGenerator(generatorsCommand(opts, cfg, run.root), cfg, name)
 		}
 	}

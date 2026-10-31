@@ -53,13 +53,13 @@ func settingWarnings(file, pack string, root *yaml.Node) diag.List {
 				switch setting := joinPath(path, k.Value); {
 				case s.Default:
 				case s.Value == "":
-					warnings = append(warnings, deprecation(at(k), setting+" is deprecated", s.Message))
+					warnings = append(warnings, Deprecation(at(k), setting+" is deprecated", s.Message))
 				case v.Kind == yaml.ScalarNode && v.Value == s.Value:
-					warnings = append(warnings, deprecation(at(v), fmt.Sprintf("%s: %q is deprecated", setting, s.Value), s.Message))
+					warnings = append(warnings, Deprecation(at(v), fmt.Sprintf("%s: %q is deprecated", setting, s.Value), s.Message))
 				}
 			}
 			if s.Default && !found {
-				warnings = append(warnings, deprecation(at(n), joinPath(path, key)+" is left out, which relies on a default that is deprecated", s.Message))
+				warnings = append(warnings, Deprecation(at(n), joinPath(path, key)+" is left out, which relies on a default that is deprecated", s.Message))
 			}
 		})
 	}
@@ -90,8 +90,8 @@ func matchPath(n *yaml.Node, path, at string, fn func(*yaml.Node, string)) {
 	}
 }
 
-// deprecation returns a warning that something deprecated was used, saying what to do instead.
-func deprecation(pos diag.Pos, message, instead string) *diag.Diagnostic {
+// Deprecation returns a warning that something deprecated was used, saying what to do instead.
+func Deprecation(pos diag.Pos, message, instead string) *diag.Diagnostic {
 	if instead != "" {
 		message += ": " + instead
 	}

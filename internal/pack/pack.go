@@ -1,12 +1,10 @@
-// Package pack registers the packs adder was built with: derive outputs, templates, and template functions that
-// repositories share.
+// Package pack registers the packs adder was built with.
 package pack
 
 import (
 	"context"
 	"io/fs"
 	"maps"
-	"regexp"
 	"slices"
 	"text/template"
 
@@ -15,17 +13,15 @@ import (
 	"typhonhill.dev/adder/internal/render"
 )
 
-// FileName is the configuration file at the root of a pack's file system.
-const FileName = config.PackFileName
-
 // Pack is a pack as the root package's adder.Pack describes it.
 type Pack struct {
 	Name     string
 	FS       fs.FS
 	Funcs    map[string]any
 	Scanners map[string]Scanner
-	// Deprecated says what to use instead of the deprecated functions and scanners, by name.
-	Deprecated map[string]string
+	// DeprecatedFuncs and DeprecatedScanners say what to use instead of the deprecated functions and scanners,
+	// by name.
+	DeprecatedFuncs, DeprecatedScanners map[string]string
 }
 
 // Scanner returns the items of a scan that uses it, as the root package's adder.Scanner does.
@@ -50,9 +46,6 @@ type Registry struct {
 	deprecatedFuncs, deprecatedScanners map[string]string
 }
 
-// name is the form of a pack name, the same as a generator's.
-var name = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
-
 // New checks packs and registers them, reporting every problem as an invalid-pack diagnostic.
 func New(packs []Pack) (*Registry, error) {
 	r := &Registry{
@@ -68,7 +61,7 @@ func New(packs []Pack) (*Registry, error) {
 	}
 	for _, p := range packs {
 		switch {
-		case !name.MatchString(p.Name):
+		case !config.IsName(p.Name):
 			invalid("pack name %q is not lowercase words joined by hyphens", p.Name)
 			continue
 		case seen[p.Name]:
@@ -77,8 +70,8 @@ func New(packs []Pack) (*Registry, error) {
 		}
 		seen[p.Name] = true
 		if p.FS != nil {
-			if info, err := fs.Stat(p.FS, FileName); err != nil || !info.Mode().IsRegular() {
-				invalid("pack %q: its FS has no %s at its root", p.Name, FileName)
+			if info, err := fs.Stat(p.FS, config.PackFileName); err != nil || !info.Mode().IsRegular() {
+				invalid("pack %q: its FS has no %s at its root", p.Name, config.PackFileName)
 			} else {
 				r.fs[p.Name] = p.FS
 			}
@@ -98,7 +91,7 @@ func New(packs []Pack) (*Registry, error) {
 		for _, s := range slices.Sorted(maps.Keys(p.Scanners)) {
 			first, dup := scannerFrom[s]
 			switch {
-			case !name.MatchString(s):
+			case !config.IsName(s):
 				invalid("pack %q: scanner name %q is not lowercase words joined by hyphens", p.Name, s)
 			case p.Scanners[s] == nil:
 				invalid("pack %q: scanner %q is nil", p.Name, s)
@@ -109,23 +102,20 @@ func New(packs []Pack) (*Registry, error) {
 				r.scanners[s] = p.Scanners[s]
 			}
 		}
-		for _, n := range slices.Sorted(maps.Keys(p.Deprecated)) {
-			_, isFunc := p.Funcs[n]
-			_, isScanner := p.Scanners[n]
-			switch instead := p.Deprecated[n]; {
-			case !isFunc && !isScanner:
-				invalid("pack %q: Deprecated names %q, which is not one of its functions or scanners", p.Name, n)
-			case instead == "":
-				invalid("pack %q: Deprecated must say what to use instead of %q", p.Name, n)
-			default:
-				if isFunc {
-					r.deprecatedFuncs[n] = instead
-				}
-				if isScanner {
-					r.deprecatedScanners[n] = instead
+		deprecate := func(field, kind string, deprecated map[string]string, defined func(string) bool, into map[string]string) {
+			for _, n := range slices.Sorted(maps.Keys(deprecated)) {
+				switch instead := deprecated[n]; {
+				case !defined(n):
+					invalid("pack %q: %s names %q, which is not one of its %s", p.Name, field, n, kind)
+				case instead == "":
+					invalid("pack %q: %s must say what to use instead of %q", p.Name, field, n)
+				default:
+					into[n] = instead
 				}
 			}
 		}
+		deprecate("DeprecatedFuncs", "functions", p.DeprecatedFuncs, func(n string) bool { _, ok := p.Funcs[n]; return ok }, r.deprecatedFuncs)
+		deprecate("DeprecatedScanners", "scanners", p.DeprecatedScanners, func(n string) bool { _, ok := p.Scanners[n]; return ok }, r.deprecatedScanners)
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err

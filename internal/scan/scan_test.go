@@ -528,6 +528,7 @@ func TestRunBuildConstraints(t *testing.T) {
 	tests := []struct {
 		name     string
 		header   string // the lines before the package clause
+		src      string // the whole file, instead of header and a body
 		file     string // the file's name, f.go when empty
 		tags     []string
 		want     bool
@@ -551,13 +552,14 @@ func TestRunBuildConstraints(t *testing.T) {
 		{name: "a go:build line wins over plus build lines", header: "//go:build linux\n// +build ignore", want: true},
 		{name: "too many platform tags to try", header: manyPlatforms, want: true},
 		{name: "file name suffixes never exclude", header: "", file: "f_windows.go", want: true},
+		{name: "a constraint after the package clause does not count", src: "package p\n\n//go:build ignore\nfunc F() {}\n", want: true},
 		{name: "an invalid constraint", header: "// Doc.\n//go:build linux &&", wantLine: 2},
 		{name: "two go:build lines", header: "//go:build linux\n//go:build darwin", wantLine: 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			name := cmp.Or(tt.file, "f.go")
-			fsys := fstest.MapFS{"p/" + name: file(tt.header + body)}
+			fsys := fstest.MapFS{"p/" + name: file(cmp.Or(tt.src, tt.header+body))}
 			items, err := Run(t.Context(), fsys, "", config.Scan{Dirs: []string{"p"}, BuildTags: tt.tags})
 			if tt.wantLine != 0 {
 				list := diag.From(err)
@@ -573,14 +575,6 @@ func TestRunBuildConstraints(t *testing.T) {
 				t.Errorf("scanned = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestRunConstraintAfterPackage(t *testing.T) {
-	fsys := fstest.MapFS{"p/f.go": file("package p\n\n//go:build ignore\nfunc F() {}\n")}
-	items, err := Run(t.Context(), fsys, "", config.Scan{Dirs: []string{"p"}})
-	if err != nil || len(items) != 1 {
-		t.Errorf("Run() = %d items, %v; a constraint after the package clause does not count", len(items), err)
 	}
 }
 
@@ -751,15 +745,29 @@ func TestRunFiles(t *testing.T) {
 }
 
 func TestRunFilesErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	fsys := fstest.MapFS{"d/a.sql": file("x")}
-	if _, err := Run(ctx, fsys, "", config.Scan{Dirs: []string{"d"}, Files: &config.FileMatch{}}); !errors.Is(err, context.Canceled) {
-		t.Errorf("Run() with a canceled context = %v", err)
+	files := fstest.MapFS{"d/a.sql": file("x")}
+	tests := []struct {
+		name     string
+		fsys     fs.FS
+		cancel   bool
+		wantErr  error     // when set, an error wrapping it
+		wantCode diag.Code // otherwise, a problem with this code
+	}{
+		{name: "a canceled context", fsys: files, cancel: true, wantErr: context.Canceled},
+		{name: "an unreadable file", fsys: unreadableFS{files}, wantCode: diag.IO},
 	}
-	unreadable := unreadableFS{fstest.MapFS{"d/a.sql": file("x")}}
-	if _, err := Run(t.Context(), unreadable, "", config.Scan{Dirs: []string{"d"}, Files: &config.FileMatch{}}); diagCode(err) != diag.IO {
-		t.Errorf("Run() over an unreadable file = %v, want an io problem", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if tt.cancel {
+				cancel()
+			}
+			_, err := Run(ctx, tt.fsys, "", config.Scan{Dirs: []string{"d"}, Files: &config.FileMatch{}})
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) || tt.wantErr == nil && diagCode(err) != tt.wantCode {
+				t.Errorf("Run() error = %v, want %v%s", err, tt.wantErr, tt.wantCode)
+			}
+		})
 	}
 }
 
@@ -790,14 +798,25 @@ func TestRunBoundaries(t *testing.T) {
 		"services/web/go.mod":     file("module example.com/web\n"),
 		"services/web/main.go":    file("package web\n\nfunc F() {}\n"),
 		"services/web/w/w.go":     file("package w\n\nfunc F() {}\n"),
+		// Markers that are links count as the files they lead to, as go counts a linked go.mod.
+		"shared/batch.mod":         file("module example.com/batch\n"),
+		"shared/cron.yaml":         file("version: 1\n"),
+		"services/batch/go.mod":    {Data: []byte("../../shared/batch.mod"), Mode: fs.ModeSymlink},
+		"services/batch/b/b.go":    file("package b\n\nfunc F() {}\n"),
+		"services/cron/adder.yaml": {Data: []byte("../../shared/cron.yaml"), Mode: fs.ModeSymlink},
+		"services/cron/c/c.go":     file("package c\n\nfunc F() {}\n"),
+		"services/broken/go.mod":   {Data: []byte("missing.mod"), Mode: fs.ModeSymlink},
+		"services/broken/x/x.go":   file("package x\n\nfunc F() {}\n"),
 	}
 	tests := []struct {
 		name string
 		dirs []string
 		want []string // "dir import-path"
 	}{
-		{name: "double star stops at nested configurations and modules", dirs: []string{"services/**"}, want: []string{"services/core example.com/m/services/core"}},
+		{name: "double star stops at nested configurations and modules", dirs: []string{"services/**"}, want: []string{"services/broken/x example.com/m/services/broken/x", "services/core example.com/m/services/core"}},
 		{name: "a wildcard stops there too", dirs: []string{"services/*"}, want: []string{"services/core example.com/m/services/core"}},
+		{name: "a package in a module whose go.mod is a link", dirs: []string{"services/batch/b"}, want: []string{"services/batch/b example.com/batch/b"}},
+		{name: "a link to nothing is no go.mod", dirs: []string{"services/broken/x"}, want: []string{"services/broken/x example.com/m/services/broken/x"}},
 		{name: "a nested module named outright", dirs: []string{"services/web"}, want: []string{"services/web example.com/web"}},
 		{name: "a package in a nested module", dirs: []string{"services/web/w"}, want: []string{"services/web/w example.com/web/w"}},
 		{name: "a nested configuration named outright", dirs: []string{"services/api/h"}, want: []string{"services/api/h example.com/m/services/api/h"}},

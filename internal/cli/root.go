@@ -123,7 +123,11 @@ func Main(ctx context.Context, version string, packs []pack.Pack, args []string,
 	case completing(ran):
 		// Warnings would interrupt the shell's completions.
 	default:
-		printWarnings(stderr, append(opts.warnings.List(), opts.configWarnings...), useColor(stderr))
+		// A pack's warnings repeat for every configuration that uses it, so each is printed once.
+		all := &diag.Warnings{}
+		all.Add(opts.warnings.List()...)
+		all.Add(opts.configWarnings...)
+		printWarnings(stderr, all.List(), useColor(stderr))
 		if err != nil {
 			printError(stderr, err, useColor(stderr))
 		}
@@ -238,6 +242,11 @@ func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
 	cmd.PersistentFlags().BoolVar(&opts.json, "json", opts.json, "print the result and any problems as one JSON object on standard output")
 	cmd.PersistentFlags().BoolVarP(&opts.quiet, "quiet", "q", opts.quiet, "print only problems")
 	cmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", opts.verbose, "also print unchanged files and how many items each scan found")
+	// The command adder new builds for generators starts from the values already found, so help shows the
+	// real defaults instead.
+	for _, name := range []string{"json", "quiet", "verbose"} {
+		cmd.PersistentFlags().Lookup(name).DefValue = "false"
+	}
 	_ = cmd.MarkPersistentFlagDirname("root")
 	_ = cmd.MarkPersistentFlagFilename("config", "yaml", "yml")
 	cmd.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
@@ -253,14 +262,7 @@ func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
 func printWarnings(w io.Writer, warnings diag.List, color bool) {
 	p := &printer{w: w, color: color}
 	for _, d := range warnings {
-		prefix := "adder: "
-		if pos := d.Pos.String(); pos != "" {
-			prefix = pos + ": "
-		}
-		fmt.Fprintf(w, "%s%s %s %s\n", prefix, p.paint(yellow, "warning:"), d.Message, p.paint(yellow, "["+string(d.Code)+"]"))
-		if d.Hint != "" {
-			fmt.Fprintf(w, "\t%s %s\n", p.paint(dim, "hint:"), d.Hint)
-		}
+		p.diagnostic(d, p.paint(yellow, "warning:")+" ", yellow)
 	}
 }
 
@@ -289,13 +291,21 @@ func printError(w io.Writer, err error, color bool) {
 		return
 	}
 	for _, d := range diag.From(err) {
-		prefix := "adder: "
-		if d.Pos.File != "" {
-			prefix = ""
-		}
-		fmt.Fprintf(w, "%s%s %s\n", prefix, d.Error(), p.paint(red, "["+string(d.Code)+"]"))
-		if d.Hint != "" {
-			fmt.Fprintf(w, "\t%s %s\n", p.paint(dim, "hint:"), d.Hint)
-		}
+		p.diagnostic(d, "", red)
+	}
+}
+
+// diagnostic writes d on one line, with label before its message and its code in color, and its hint below.
+func (p *printer) diagnostic(d *diag.Diagnostic, label, color string) {
+	prefix := ""
+	if d.Pos.File == "" {
+		prefix = "adder: "
+	}
+	if pos := d.Pos.String(); pos != "" {
+		prefix += pos + ": "
+	}
+	fmt.Fprintf(p.w, "%s%s%s %s\n", prefix, label, d.Message, p.paint(color, "["+string(d.Code)+"]"))
+	if d.Hint != "" {
+		fmt.Fprintf(p.w, "\t%s %s\n", p.paint(dim, "hint:"), d.Hint)
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"path"
 	"slices"
 	"strings"
 
@@ -92,6 +91,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 
 	res := &Result{Plan: p}
 	if gen.Message != "" {
+		diag.Warn(ctx, diag.Locate(set.TextDeprecations(gen.Message, src.Packs.DeprecatedFuncs()), "", gen.Pos)...)
 		msg, err := set.Text(gen.Message, data)
 		if err != nil {
 			problems = append(problems, diag.Prefix(err, gen.Pos, "message: ")...)
@@ -104,28 +104,25 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 	return res, created, nil
 }
 
-// newFile renders the file f of a generator, reporting the deprecated functions and fields its template uses
-// through ctx. Seen holds the paths of the files planned so far.
+// newFile renders the file f of a generator, reporting the deprecated functions and fields in its template and
+// path through ctx. Seen holds the paths of the files planned so far.
 func newFile(ctx context.Context, cfg *config.Config, src derive.Sources, gen config.Generator, set *render.Set, data map[string]any, i int, f config.File, seen map[string]bool) (plan.Change, error) {
 	field := fmt.Sprintf("file %d: path %q", i, f.Path)
 	rendered, err := set.Text(f.Path, data)
 	if err != nil {
 		return plan.Change{}, diag.Prefix(err, f.Pos, field+": ")
 	}
-	target := path.Clean(rendered)
 	if rendered != f.Path {
 		field += fmt.Sprintf(" renders as %q, which", rendered)
 	}
+	target, d := config.CheckFile(f.Pos, field, rendered)
 	switch {
-	case strings.TrimSpace(rendered) == "" || strings.HasSuffix(rendered, "/") || target == ".":
-		return plan.Change{}, diag.Errorf(diag.InvalidValue, f.Pos, "%s is not a file name", field)
+	case d != nil:
+		return plan.Change{}, d
 	case seen[target]:
 		return plan.Change{}, diag.Errorf(diag.DuplicatePath, f.Pos, "%s is also created by another file of the generator", field)
 	case slices.ContainsFunc(cfg.Outputs(), func(out config.Output) bool { return out.Path == target }):
 		return plan.Change{}, diag.Errorf(diag.DuplicatePath, f.Pos, "%s is a derived output", field)
-	}
-	if d := config.CheckPath(f.Pos, field, target); d != nil {
-		return plan.Change{}, d
 	}
 	if err := plan.CheckLinks(src.Repo, target); err != nil {
 		return plan.Change{}, diag.Locate(err, src.RepoDir, f.Pos)
@@ -151,6 +148,7 @@ func newFile(ctx context.Context, cfg *config.Config, src derive.Sources, gen co
 	if warnings, err := set.Deprecations(f.Template, src.Packs.DeprecatedFuncs()); err == nil {
 		diag.Warn(ctx, locate(warnings)...)
 	}
+	diag.Warn(ctx, diag.Locate(set.TextDeprecations(f.Path, src.Packs.DeprecatedFuncs()), "", f.Pos)...)
 	_, err = fs.Stat(src.Repo, target)
 	switch {
 	case err == nil && f.IfExists == config.IfExistsSkip:
@@ -201,27 +199,19 @@ type Options struct {
 
 // Run plans the generator called name with inputs and, unless DryRun is set, applies the plan.
 func Run(ctx context.Context, cfg *config.Config, name string, inputs map[string]any, opts Options) (*Result, error) {
+	src, closeSources, err := derive.Open(cfg, opts.Root, opts.Packs)
+	if err != nil {
+		return nil, err
+	}
+	defer closeSources()
+	res, err := Plan(ctx, cfg, src, name, inputs)
+	if err != nil || opts.DryRun {
+		return res, err
+	}
 	repo, err := os.OpenRoot(opts.Root)
 	if err != nil {
 		return nil, diag.Wrap(diag.IO, diag.Pos{File: opts.Root}, err)
 	}
 	defer repo.Close()
-
-	templates, err := os.OpenRoot(cfg.Dir)
-	if err != nil {
-		return nil, diag.Wrap(diag.IO, diag.Pos{File: cfg.Dir}, err)
-	}
-	defer templates.Close()
-
-	src := derive.Sources{
-		Repo: repo.FS(), RepoDir: opts.Root,
-		Templates: templates.FS(), TemplatesDir: cfg.Dir,
-		Existing: repo.FS(), ExistingDir: opts.Root,
-		Packs: opts.Packs,
-	}
-	res, err := Plan(ctx, cfg, src, name, inputs)
-	if err != nil || opts.DryRun {
-		return res, err
-	}
 	return res, res.Plan.Apply(ctx, repo)
 }

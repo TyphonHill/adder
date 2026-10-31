@@ -9,10 +9,8 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"golang.org/x/mod/modfile"
 
@@ -102,7 +100,7 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 	var problems diag.List
 	for _, u := range units(cfg, src) {
 		set, data, err := prepare(ctx, u, src)
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if canceled(err) {
 			return nil, err
 		}
 		problems = append(problems, diag.From(err)...)
@@ -144,6 +142,7 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 				problems = append(problems, renderOutput(r, r.data, src, out, out.Path, &p)...)
 				continue
 			}
+			diag.Warn(ctx, r.locate(r.set.TextDeprecations(out.Path, src.Packs.DeprecatedFuncs()), out.Pos)...)
 			found, err := planEach(ctx, r, src, out, &p, paths)
 			if err != nil {
 				return nil, err
@@ -221,7 +220,7 @@ func planEach(ctx context.Context, u prepared, src Sources, out config.Output, p
 	}
 
 	stale, err := staleFiles(ctx, src.Existing, out, produced)
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if canceled(err) {
 		return nil, err
 	}
 	if err != nil {
@@ -238,11 +237,11 @@ func itemPath(set *render.Set, out config.Output, item string, data map[string]a
 	if err != nil {
 		return "", diag.Prefix(err, out.Pos, field+": ")
 	}
-	target := path.Clean(rendered)
 	field += fmt.Sprintf(" renders as %q for %s, which", rendered, item)
+	target, d := config.CheckFile(out.Pos, field, rendered)
 	switch {
-	case strings.TrimSpace(rendered) == "" || strings.HasSuffix(rendered, "/") || target == ".":
-		return "", diag.Errorf(diag.InvalidValue, out.Pos, "%s is not a file name", field)
+	case d != nil:
+		return "", d
 	case paths[target]:
 		return "", &diag.Diagnostic{
 			Code:    diag.DuplicatePath,
@@ -250,9 +249,6 @@ func itemPath(set *render.Set, out config.Output, item string, data map[string]a
 			Message: field + " is also written by another item or output",
 			Hint:    "use the item in the path, such as {{ .Item.Dir }}/{{ .Item.Name | toSnakeCase }}.gen.go",
 		}
-	}
-	if d := config.CheckPath(out.Pos, field, target); d != nil {
-		return "", d
 	}
 	return target, nil
 }
@@ -293,7 +289,7 @@ func runScanner(ctx context.Context, src Sources, name string, s config.Scan) ([
 	}
 	items, err := scanner(ctx, pack.ScanInput{FS: src.Repo, Dirs: dirs, Decode: s.Scanner.Decode})
 	switch {
-	case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+	case canceled(err):
 		return nil, err
 	case err != nil:
 		list := diag.From(err)
@@ -373,7 +369,7 @@ func prepare(ctx context.Context, u unit, src Sources) (*render.Set, map[string]
 	set, err := templates(u, src)
 	problems := diag.From(err)
 	data, err := templateData(ctx, u, src)
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if canceled(err) {
 		return nil, nil, err
 	}
 	problems = append(problems, diag.From(err)...)
@@ -383,7 +379,6 @@ func prepare(ctx context.Context, u unit, src Sources) (*render.Set, map[string]
 	return set, data, nil
 }
 
-// templates parses a unit's partials into the set its outputs render with.
 // warnDeprecated reports, through ctx, the deprecated functions and data fields that template uses. Problems
 // with the template itself are left to rendering, which reports them.
 func warnDeprecated(ctx context.Context, u prepared, src Sources, template string, decl diag.Pos) {
@@ -392,6 +387,7 @@ func warnDeprecated(ctx context.Context, u prepared, src Sources, template strin
 	}
 }
 
+// templates parses a unit's partials into the set its outputs render with.
 func templates(u unit, src Sources) (*render.Set, error) {
 	var files []string
 	var problems diag.List
@@ -432,15 +428,14 @@ func templates(u unit, src Sources) (*render.Set, error) {
 // the configuration's own unit or the options of a use.
 func templateData(ctx context.Context, u unit, src Sources) (map[string]any, error) {
 	cfg := u.cfg
-	data := make(map[string]any, len(cfg.Derive.Scans)+2)
-	if u.pack != "" {
+	// .Vars and .Options are always present, empty where they do not apply, so a template can test them.
+	data := make(map[string]any, len(cfg.Derive.Scans)+3)
+	data["Vars"], data["Options"] = map[string]string{}, map[string]any{}
+	switch {
+	case u.pack != "" && u.options != nil:
 		data["Options"] = u.options
-	} else {
-		vars := cfg.Vars
-		if vars == nil {
-			vars = map[string]string{}
-		}
-		data["Vars"] = vars
+	case u.pack == "" && cfg.Vars != nil:
+		data["Vars"] = cfg.Vars
 	}
 
 	gomod, err := fs.ReadFile(src.Repo, "go.mod")
@@ -457,7 +452,7 @@ func templateData(ctx context.Context, u unit, src Sources) (map[string]any, err
 		s := cfg.Derive.Scans[name]
 		if s.Scanner != nil {
 			items, err := runScanner(ctx, src, name, s)
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if canceled(err) {
 				return nil, err
 			}
 			problems = append(problems, diag.From(err)...)
@@ -470,7 +465,7 @@ func templateData(ctx context.Context, u unit, src Sources) (map[string]any, err
 		} else {
 			items, err = scan.Run(ctx, src.Repo, module, s)
 		}
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if canceled(err) {
 			return nil, err
 		}
 		if err != nil {
@@ -575,4 +570,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) (*plan.Plan, err
 		defer out.Close()
 	}
 	return p, p.Apply(ctx, out)
+}
+
+// canceled reports whether err comes from the context ending, which stops a run instead of being a problem.
+func canceled(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

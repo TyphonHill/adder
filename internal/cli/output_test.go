@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"strings"
 	"testing"
 
 	"typhonhill.dev/adder/internal/diag"
@@ -75,19 +74,29 @@ func TestPrinter(t *testing.T) {
 }
 
 func TestPrintErrorColor(t *testing.T) {
-	err := &diag.Diagnostic{Code: diag.GoSyntax, Pos: diag.Pos{File: "a.go", Line: 1}, Message: "bad", Hint: "fix it"}
-	var plain, colored bytes.Buffer
-	printError(&plain, err, false)
-	printError(&colored, err, true)
-	if want := "a.go:1: bad [go-syntax]\n\thint: fix it\n"; plain.String() != want {
-		t.Errorf("plain = %q, want %q", plain.String(), want)
+	problem := &diag.Diagnostic{Code: diag.GoSyntax, Pos: diag.Pos{File: "a.go", Line: 1}, Message: "bad", Hint: "fix it"}
+	tests := []struct {
+		name  string
+		err   error
+		color bool
+		want  string
+	}{
+		{name: "plain", err: problem, want: "a.go:1: bad [go-syntax]\n\thint: fix it\n"},
+		{name: "colored", err: problem, color: true, want: "a.go:1: bad \x1b[31m[go-syntax]\x1b[0m\n\t\x1b[2mhint:\x1b[0m fix it\n"},
+		{
+			name:  "a usage error is never colored",
+			err:   &usageError{errors.New("unknown flag: --x"), "adder derive"},
+			color: true,
+			want:  "adder: unknown flag: --x\nRun 'adder derive --help' for usage.\n",
+		},
 	}
-	if want := "a.go:1: bad \x1b[31m[go-syntax]\x1b[0m\n\t\x1b[2mhint:\x1b[0m fix it\n"; colored.String() != want {
-		t.Errorf("colored = %q, want %q", colored.String(), want)
-	}
-	var usage bytes.Buffer
-	printError(&usage, &usageError{errors.New("unknown flag: --x"), "adder derive"}, true)
-	if strings.Contains(usage.String(), "\x1b[") {
-		t.Errorf("usage errors are not colored: %q", usage.String())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			printError(&buf, tt.err, tt.color)
+			if got := buf.String(); got != tt.want {
+				t.Errorf("printError() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

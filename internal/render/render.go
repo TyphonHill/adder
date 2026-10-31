@@ -54,7 +54,7 @@ func NewSet(fsys fs.FS, partials []string, extra template.FuncMap) (*Set, error)
 				continue // the text around the definitions is never rendered
 			}
 			if first, dup := definedIn[t.Name()]; dup {
-				problems = append(problems, diag.Errorf(diag.TemplateSyntax, diag.Pos{File: name}, "template %q is already defined in %s", t.Name(), first))
+				problems = append(problems, diag.Errorf(diag.DuplicateName, diag.Pos{File: name}, "template %q is already defined in %s", t.Name(), first))
 				continue
 			}
 			definedIn[t.Name()] = name
@@ -71,18 +71,10 @@ func NewSet(fsys fs.FS, partials []string, extra template.FuncMap) (*Set, error)
 
 // File executes the template name with data. Output for Go files is gofmt-formatted, without unused imports.
 func (s *Set) File(name, outPath string, data any) ([]byte, error) {
-	src, err := readTemplate(s.fsys, name)
+	tmpl, err := s.parse(name)
 	if err != nil {
 		return nil, err
 	}
-	tmpl, err := s.partials.Clone()
-	if err != nil {
-		return nil, diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
-	}
-	if tmpl, err = tmpl.New(name).Parse(src); err != nil {
-		return nil, templateError(diag.TemplateSyntax, name, err, data)
-	}
-
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		d := templateError(diag.TemplateExec, name, err, data)
@@ -108,20 +100,25 @@ func (s *Set) File(name, outPath string, data any) ([]byte, error) {
 // Text executes a template written inline, such as a path in adder.yaml, with the set's functions. Its
 // problems have no position.
 func (s *Set) Text(text string, data any) (string, error) {
-	const name = "inline"
-	tmpl, err := template.New(name).Funcs(s.funcs).Option("missingkey=error").Parse(text)
+	tmpl, err := template.New(inline).Funcs(s.funcs).Option("missingkey=error").Parse(text)
 	if err != nil {
-		d := templateError(diag.TemplateSyntax, name, err, data)
-		d.Pos = diag.Pos{}
-		return "", d
+		return "", inlineError(diag.TemplateSyntax, err, data)
 	}
 	var buf strings.Builder
 	if err := tmpl.Execute(&buf, data); err != nil {
-		d := templateError(diag.TemplateExec, name, err, data)
-		d.Pos = diag.Pos{}
-		return "", d
+		return "", inlineError(diag.TemplateExec, err, data)
 	}
 	return buf.String(), nil
+}
+
+// inline names a template written inline, such as a path in adder.yaml.
+const inline = "inline"
+
+// inlineError is templateError for a template written inline, whose problems have no position.
+func inlineError(code diag.Code, err error, data any) *diag.Diagnostic {
+	d := templateError(code, inline, err, data)
+	d.Pos = diag.Pos{}
+	return d
 }
 
 // readTemplate reads a template with its line endings normalized, so CRLF checkouts render the same everywhere.
@@ -236,12 +233,10 @@ func invalidGo(name, outPath string, out []byte, err error) *diag.Diagnostic {
 // by a wildcard that may span directories, and the deepest directory that holds all of them. Function names are
 // checked when the path renders, with the functions of the packs adder was built with.
 func PathPattern(text string) (*regexp.Regexp, string, error) {
-	tree := parse.New("inline")
+	tree := parse.New(inline)
 	tree.Mode = parse.SkipFuncCheck
 	if _, err := tree.Parse(text, "", "", map[string]*parse.Tree{}); err != nil {
-		d := templateError(diag.TemplateSyntax, "inline", err, nil)
-		d.Pos = diag.Pos{}
-		return nil, "", d
+		return nil, "", inlineError(diag.TemplateSyntax, err, nil)
 	}
 	var pattern, prefix strings.Builder
 	pattern.WriteString("^")
@@ -269,8 +264,12 @@ func PathPattern(text string) (*regexp.Regexp, string, error) {
 // .Drivers or $.Drivers, including in the partials it calls. Fields reached indirectly, such as through index,
 // are not found, and a field of an item with one of the names is counted too.
 func (s *Set) References(name string, names []string) ([]string, error) {
+	tmpl, err := s.parse(name)
+	if err != nil {
+		return nil, err
+	}
 	found := make(map[string]bool)
-	err := s.inspect(name, func(_ *parse.Tree, node parse.Node) {
+	walk(tmpl, name, func(_ *parse.Tree, node parse.Node) {
 		switch n := node.(type) {
 		case *parse.FieldNode:
 			found[n.Ident[0]] = true
@@ -280,10 +279,7 @@ func (s *Set) References(name string, names []string) ([]string, error) {
 			}
 		}
 	})
-	if err != nil {
-		return nil, err
-	}
-	var refs []string
+	refs := []string{}
 	for _, n := range names {
 		if found[n] {
 			refs = append(refs, n)
@@ -305,9 +301,35 @@ var (
 // in the template name and the partials it calls, at its position. Extra says what to use instead of deprecated
 // functions that are not built in, such as a pack's.
 func (s *Set) Deprecations(name string, extra map[string]string) (diag.List, error) {
+	tmpl, err := s.parse(name)
+	if err != nil {
+		return nil, err
+	}
+	return deprecations(tmpl, name, extra, nodePos), nil
+}
+
+// TextDeprecations is Deprecations for a template written inline, such as a path in adder.yaml. Its warnings
+// have no position, since the text has none of its own.
+func (s *Set) TextDeprecations(text string, extra map[string]string) diag.List {
+	return InlineDeprecations(text, s.funcs, extra)
+}
+
+// InlineDeprecations is TextDeprecations for text that renders with funcs besides the built-in functions, outside
+// a set. Text that does not parse has none: rendering it reports the problem.
+func InlineDeprecations(text string, funcs template.FuncMap, extra map[string]string) diag.List {
+	tmpl, err := template.New(inline).Funcs(Funcs()).Funcs(funcs).Parse(text)
+	if err != nil {
+		return nil
+	}
+	return deprecations(tmpl, inline, extra, func(*parse.Tree, parse.Node) diag.Pos { return diag.Pos{} })
+}
+
+// deprecations walks the template name in tmpl, and the partials it calls, for deprecated functions and fields,
+// reporting each at the position at gives it.
+func deprecations(tmpl *template.Template, name string, extra map[string]string, at func(*parse.Tree, parse.Node) diag.Pos) diag.List {
 	var warnings diag.List
 	warn := func(tree *parse.Tree, node parse.Node, message, instead string) {
-		d := &diag.Diagnostic{Code: diag.Deprecated, Pos: nodePos(tree, node), Message: message + ": " + instead}
+		d := &diag.Diagnostic{Code: diag.Deprecated, Pos: at(tree, node), Message: message + ": " + instead}
 		warnings = append(warnings, d)
 	}
 	fields := func(tree *parse.Tree, node parse.Node, idents []string) {
@@ -317,7 +339,7 @@ func (s *Set) Deprecations(name string, extra map[string]string) (diag.List, err
 			}
 		}
 	}
-	err := s.inspect(name, func(tree *parse.Tree, node parse.Node) {
+	walk(tmpl, name, func(tree *parse.Tree, node parse.Node) {
 		switch n := node.(type) {
 		case *parse.IdentifierNode:
 			instead, ok := deprecatedFuncs[n.Ident]
@@ -335,58 +357,47 @@ func (s *Set) Deprecations(name string, extra map[string]string) (diag.List, err
 			fields(tree, node, n.Ident[1:])
 		}
 	})
-	return warnings, err
+	return warnings
 }
 
 // nodePos returns where node is in the file tree was parsed from.
 func nodePos(tree *parse.Tree, node parse.Node) diag.Pos {
 	location, _ := tree.ErrorContext(node)
-	file, line, column := location, 0, 0
-	if rest, col, ok := cutLast(location); ok {
-		if f, l, ok := cutLast(rest); ok {
-			file, line, column = f, atoi(l), atoi(col)+1 // text/template counts columns from 0
-		}
+	pos := diag.ParsePos(location)
+	if pos.Line > 0 {
+		pos.Column++ // text/template counts columns from 0
 	}
-	return diag.Pos{File: file, Line: line, Column: column}
+	return pos
 }
 
-func cutLast(s string) (before, after string, ok bool) {
-	i := strings.LastIndexByte(s, ':')
-	if i < 0 {
-		return s, "", false
-	}
-	return s[:i], s[i+1:], true
-}
-
-func atoi(s string) int {
-	n, _ := strconv.Atoi(s)
-	return n
-}
-
-// inspect parses the template name and calls fn with every node of it and of the partials it calls, once each,
-// with the tree the node belongs to.
-func (s *Set) inspect(name string, fn func(*parse.Tree, parse.Node)) error {
+// parse parses the template name with the set's partials.
+func (s *Set) parse(name string) (*template.Template, error) {
 	src, err := readTemplate(s.fsys, name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	tmpl, err := s.partials.Clone()
 	if err != nil {
-		return diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
+		return nil, diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
 	}
 	if tmpl, err = tmpl.New(name).Parse(src); err != nil {
-		return templateError(diag.TemplateSyntax, name, err, nil)
+		return nil, templateError(diag.TemplateSyntax, name, err, nil)
 	}
+	return tmpl, nil
+}
 
+// walk calls fn with every node of the template name in tmpl and of the templates it calls, once each, with the
+// tree the node belongs to.
+func walk(tmpl *template.Template, name string, fn func(*parse.Tree, parse.Node)) {
 	visited := make(map[string]bool)
-	var walk func(*parse.Tree, parse.Node)
+	var visit func(*parse.Tree, parse.Node)
 	walkTemplate := func(name string) {
 		if t := tmpl.Lookup(name); t != nil && t.Tree != nil && !visited[name] {
 			visited[name] = true
-			walk(t.Tree, t.Root)
+			visit(t.Tree, t.Root)
 		}
 	}
-	walk = func(tree *parse.Tree, node parse.Node) {
+	visit = func(tree *parse.Tree, node parse.Node) {
 		if node == nil || reflect.ValueOf(node).IsNil() {
 			return
 		}
@@ -394,37 +405,36 @@ func (s *Set) inspect(name string, fn func(*parse.Tree, parse.Node)) error {
 		switch n := node.(type) {
 		case *parse.ListNode:
 			for _, child := range n.Nodes {
-				walk(tree, child)
+				visit(tree, child)
 			}
 		case *parse.ActionNode:
-			walk(tree, n.Pipe)
+			visit(tree, n.Pipe)
 		case *parse.PipeNode:
 			for _, cmd := range n.Cmds {
-				walk(tree, cmd)
+				visit(tree, cmd)
 			}
 		case *parse.CommandNode:
 			for _, arg := range n.Args {
-				walk(tree, arg)
+				visit(tree, arg)
 			}
 		case *parse.ChainNode:
-			walk(tree, n.Node)
+			visit(tree, n.Node)
 		case *parse.IfNode:
-			walkBranch(tree, walk, &n.BranchNode)
+			walkBranch(tree, visit, &n.BranchNode)
 		case *parse.RangeNode:
-			walkBranch(tree, walk, &n.BranchNode)
+			walkBranch(tree, visit, &n.BranchNode)
 		case *parse.WithNode:
-			walkBranch(tree, walk, &n.BranchNode)
+			walkBranch(tree, visit, &n.BranchNode)
 		case *parse.TemplateNode:
-			walk(tree, n.Pipe)
+			visit(tree, n.Pipe)
 			walkTemplate(n.Name)
 		}
 	}
 	walkTemplate(name)
-	return nil
 }
 
-func walkBranch(tree *parse.Tree, walk func(*parse.Tree, parse.Node), b *parse.BranchNode) {
-	walk(tree, b.Pipe)
-	walk(tree, b.List)
-	walk(tree, b.ElseList)
+func walkBranch(tree *parse.Tree, visit func(*parse.Tree, parse.Node), b *parse.BranchNode) {
+	visit(tree, b.Pipe)
+	visit(tree, b.List)
+	visit(tree, b.ElseList)
 }

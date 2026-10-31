@@ -118,7 +118,7 @@ func (c *Config) checkScanners(packs Packs) diag.List {
 		}
 		if packs != nil && packs.HasScanner(s.Scanner.Name) {
 			if instead := packs.ScannerDeprecation(s.Scanner.Name); instead != "" {
-				c.Warnings = append(c.Warnings, deprecation(s.Scanner.Pos, fmt.Sprintf("scan %q: scanner %q is deprecated", name, s.Scanner.Name), instead))
+				c.Warnings = append(c.Warnings, Deprecation(s.Scanner.Pos, fmt.Sprintf("scan %q: scanner %q is deprecated", name, s.Scanner.Name), instead))
 			}
 			continue
 		}

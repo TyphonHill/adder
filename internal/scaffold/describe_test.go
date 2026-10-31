@@ -46,27 +46,31 @@ func TestDescribe(t *testing.T) {
 	}
 	tests := []struct {
 		input        string
-		wantFlag     string
 		wantRequired bool
 		wantValues   []string
 		wantExisting []string
 	}{
-		{input: "base", wantFlag: "--base", wantValues: []string{"local", "s3"}},
-		{input: "cache", wantFlag: "--cache"},
-		{input: "name", wantFlag: "--name", wantRequired: true, wantExisting: []string{"local", "s3"}},
-		{input: "summary", wantFlag: "--summary"},
-		{input: "tier", wantFlag: "--tier", wantValues: []string{"fast", "slow"}},
+		{input: "base", wantValues: []string{"local", "s3"}},
+		{input: "cache"},
+		{input: "name", wantRequired: true, wantExisting: []string{"local", "s3"}},
+		{input: "summary"},
+		{input: "tier", wantValues: []string{"fast", "slow"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			got := byName[tt.input]
-			if got.Flag != tt.wantFlag || got.Required != tt.wantRequired || !slices.Equal(got.Values, tt.wantValues) || !slices.Equal(got.Existing, tt.wantExisting) {
-				t.Errorf("input = %+v, want flag %s, required %v, values %v, existing %v", got, tt.wantFlag, tt.wantRequired, tt.wantValues, tt.wantExisting)
+			if got.Required != tt.wantRequired || !slices.Equal(got.Values, tt.wantValues) || !slices.Equal(got.Existing, tt.wantExisting) {
+				t.Errorf("input = %+v, want required %v, values %v, existing %v", got, tt.wantRequired, tt.wantValues, tt.wantExisting)
 			}
 		})
 	}
-	if len(d.Files) != 3 || d.Files[1].When != "cache" || d.Files[2].IfExists != config.IfExistsSkip || !d.Derive {
-		t.Errorf("files = %+v, derive = %v", d.Files, d.Derive)
+	wantFiles := []DescribedFile{
+		{Template: "templates/new/driver.go.tmpl", Path: "drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go", IfExists: config.IfExistsFail},
+		{Template: "templates/new/cache.go.tmpl", Path: "drivers/{{ .Inputs.name }}/cache.go", When: "cache", IfExists: config.IfExistsFail},
+		{Template: "templates/new/README.md.tmpl", Path: "drivers/README.md", IfExists: config.IfExistsSkip},
+	}
+	if !slices.Equal(d.Files, wantFiles) || !d.Derive {
+		t.Errorf("files = %+v, derive = %v, want %+v, true", d.Files, d.Derive, wantFiles)
 	}
 	if !slices.Equal(d.InputSchema.Required, []string{"name"}) {
 		t.Errorf("required = %v, want [name]", d.InputSchema.Required)

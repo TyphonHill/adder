@@ -4,7 +4,7 @@ Templates are Go's [`text/template`](https://pkg.go.dev/text/template), with the
 
 ```text
 templates/registry.go.tmpl:12:4: <.Drivrs>: map has no entry for key "Drivrs" [template-exec]
-	hint: available fields: Drivers, Module, Vars
+	hint: available fields: Drivers, Module, Options, Vars
 ```
 
 ## Data
@@ -13,10 +13,10 @@ templates/registry.go.tmpl:12:4: <.Drivrs>: map has no entry for key "Drivrs" [t
 | --- | --- | --- |
 | `.<Scan>` | every template | The items of each scan, by the scan's name, such as `.Drivers`. |
 | `.Module` | every template | The module path from the root's `go.mod`, or `""` without one. |
-| `.Vars` | every template but a pack's | The strings in `vars`. |
+| `.Vars` | every template | The strings in `vars`, empty in a pack's templates. |
 | `.Item` | outputs with `each` | The item being rendered. |
 | `.Inputs` | generators | The inputs, by name, such as `.Inputs.name`. |
-| `.Options` | a pack's templates | The options of the use, such as `.Options.out`. |
+| `.Options` | every template | The options of the use, such as `.Options.out`, empty outside a pack's templates. |
 
 ### Scan items
 

@@ -201,11 +201,7 @@ func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Ite
 				continue
 			}
 
-			// A lone type declaration's comment belongs to the declaration; in a group, to each spec.
-			doc := ts.Doc
-			if doc == nil && !gen.Lparen.IsValid() {
-				doc = gen.Doc
-			}
+			doc := specDoc(gen, ts.Doc)
 			found, err := directives(fset, doc)
 			if err != nil {
 				return nil, err
@@ -226,9 +222,7 @@ func typeItems(fset *token.FileSet, file *ast.File, m config.TypeMatch, base Ite
 			item.Kind = kind
 			item.Pointer = pointer
 			item.Line = fset.Position(ts.Pos()).Line
-			if doc != nil {
-				item.Doc = strings.TrimSpace(doc.Text())
-			}
+			item.Doc = strings.TrimSpace(doc.Text())
 			if st, ok := ts.Type.(*ast.StructType); ok && !ts.Assign.IsValid() {
 				item.Fields = structFields(st)
 			}
@@ -300,10 +294,7 @@ func valueItems(fset *token.FileSet, file *ast.File, m config.ValueMatch, base I
 				}
 			}
 
-			doc := vs.Doc
-			if doc == nil && !gen.Lparen.IsValid() {
-				doc = gen.Doc
-			}
+			doc := specDoc(gen, vs.Doc)
 			own, err := directives(fset, doc)
 			if err != nil {
 				return nil, err
@@ -327,9 +318,7 @@ func valueItems(fset *token.FileSet, file *ast.File, m config.ValueMatch, base I
 				item.Name = name.Name
 				item.Kind = kind
 				item.Line = fset.Position(name.Pos()).Line
-				if doc != nil {
-					item.Doc = strings.TrimSpace(doc.Text())
-				}
+				item.Doc = strings.TrimSpace(doc.Text())
 				item.Type = typ
 				if len(vs.Values) == len(vs.Names) {
 					item.Value = written(vs.Values[j])
@@ -408,9 +397,7 @@ func funcItem(fset *token.FileSet, fn *ast.FuncDecl, item Item) Item {
 		item.Receiver = receiverName(fn)
 	}
 	item.Line = fset.Position(fn.Pos()).Line
-	if fn.Doc != nil {
-		item.Doc = strings.TrimSpace(fn.Doc.Text())
-	}
+	item.Doc = strings.TrimSpace(fn.Doc.Text())
 	item.Signature = strings.TrimPrefix(written(fn.Type), "func")
 	item.Params = params(fn.Type.Params)
 	item.Results = params(fn.Type.Results)
@@ -512,4 +499,13 @@ func receiverName(fn *ast.FuncDecl) string {
 		return ident.Name
 	}
 	return ""
+}
+
+// specDoc returns the comment of a spec in gen, whose own comment is doc: a lone declaration's comment belongs to
+// the declaration, and in a group to each spec.
+func specDoc(gen *ast.GenDecl, doc *ast.CommentGroup) *ast.CommentGroup {
+	if doc == nil && !gen.Lparen.IsValid() {
+		return gen.Doc
+	}
+	return doc
 }

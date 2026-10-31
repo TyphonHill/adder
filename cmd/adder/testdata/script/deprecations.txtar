@@ -1,15 +1,15 @@
 # A deprecated generator and input still work, and adder new warns about each, at its place in adder.yaml.
-exec adder new driver --name gcs --cache memory
+exec adder new driver name=gcs cache=memory
 stdout '^created    drivers/gcs/gcs.go$'
 cmp stderr new.err
 
 # Without the deprecated input, only the generator is reported.
-exec adder new driver --name s3 --dry-run
+exec adder new driver name=s3 --dry-run
 stderr -count=1 'warning:'
 stderr 'generator "driver" is deprecated'
 
 # With --json, warnings are a list beside problems, and standard error stays empty.
-exec adder new driver --name r2 --cache disk --dry-run --json
+exec adder new driver name=r2 cache=disk --dry-run --json
 cmp stdout new.json
 ! stderr .
 
@@ -18,7 +18,7 @@ exec adder list
 stdout '^  driver  Add a storage driver \(deprecated: use adder new store\)$'
 exec adder describe driver
 stdout '^deprecated: use adder new store$'
-stdout '--cache  string  Cache to put in front \(deprecated: caching moved to the store generator; default "none"\)'
+stdout 'cache  string  Cache to put in front \(deprecated: caching moved to the store generator; default "none"\)'
 exec adder describe driver --json
 stdout '"deprecated": "use adder new store"'
 stdout '"deprecated": true'

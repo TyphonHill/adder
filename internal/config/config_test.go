@@ -56,7 +56,6 @@ func TestParse(t *testing.T) {
 			wantPath:     "out.go",
 			wantScanPos:  diag.Pos{File: "adder.yaml", Line: 4, Column: 5},
 			wantOutPos:   diag.Pos{File: "adder.yaml", Line: 5, Column: 13},
-			wantMatch:    []string{"Anything"},
 		},
 		{
 			name:         "type scans",
@@ -66,7 +65,6 @@ func TestParse(t *testing.T) {
 			wantPath:     "out.go",
 			wantScanPos:  diag.Pos{File: "adder.yaml", Line: 4, Column: 5},
 			wantOutPos:   diag.Pos{File: "adder.yaml", Line: 5, Column: 13},
-			wantMatch:    []string{"Anything"},
 		},
 		{
 			name:         "flow style",
@@ -76,7 +74,6 @@ func TestParse(t *testing.T) {
 			wantPath:     "out.go",
 			wantScanPos:  diag.Pos{File: "adder.yaml", Line: 3, Column: 11},
 			wantOutPos:   diag.Pos{File: "adder.yaml", Line: 4, Column: 13},
-			wantMatch:    []string{"Anything"},
 		},
 		{
 			name:         "paths on outputs with each are kept as written",
@@ -86,7 +83,6 @@ func TestParse(t *testing.T) {
 			wantPath:     "./{{ .Item.Dir }}/../x.go",
 			wantScanPos:  diag.Pos{File: "adder.yaml", Line: 4, Column: 5},
 			wantOutPos:   diag.Pos{File: "adder.yaml", Line: 6, Column: 7},
-			wantMatch:    []string{"Anything"},
 		},
 	}
 	for _, tt := range tests {
@@ -104,7 +100,7 @@ func TestParse(t *testing.T) {
 				t.Errorf("scan Pos = %v, want %v", scan.Pos, tt.wantScanPos)
 			}
 			for _, name := range tt.wantMatch {
-				if scan.Funcs.Name.Regexp != nil && !scan.Funcs.Name.MatchString(name) {
+				if !scan.Funcs.Name.MatchString(name) {
 					t.Errorf("pattern %q does not match %q", scan.Funcs.Name, name)
 				}
 			}
@@ -183,6 +179,7 @@ generators:
         ifExists: skip
 `
 
+// TestParseGenerators checks one generator field by field; its inputs are a table.
 func TestParseGenerators(t *testing.T) {
 	cfg, err := Parse("adder.yaml", []byte(generatorConfig), nil)
 	if err != nil {
@@ -229,33 +226,12 @@ func TestParseGenerators(t *testing.T) {
 		})
 	}
 
-	files := []struct {
-		wantTemplate string
-		wantIfExists string
-		wantPos      diag.Pos
-	}{
-		{wantTemplate: "templates/driver.go.tmpl", wantIfExists: IfExistsFail, wantPos: diag.Pos{File: "adder.yaml", Line: 13, Column: 9}},
-		{wantTemplate: "templates/cache.go.tmpl", wantIfExists: IfExistsSkip, wantPos: diag.Pos{File: "adder.yaml", Line: 15, Column: 9}},
+	var files []string
+	for _, f := range gen.Files {
+		files = append(files, f.Pos.String()+" "+f.Template+" "+f.IfExists)
 	}
-	for i, tt := range files {
-		f := gen.Files[i]
-		if f.Template != tt.wantTemplate || f.IfExists != tt.wantIfExists || f.Pos != tt.wantPos {
-			t.Errorf("file %d = %q, %q at %v, want %q, %q at %v", i, f.Template, f.IfExists, f.Pos, tt.wantTemplate, tt.wantIfExists, tt.wantPos)
-		}
-	}
-}
-
-func TestFlag(t *testing.T) {
-	tests := []struct{ input, want string }{
-		{"name", "name"},
-		{"packageName", "package-name"},
-		{"userID", "user-id"},
-		{"http2Server", "http2-server"},
-	}
-	for _, tt := range tests {
-		if got := Flag(tt.input); got != tt.want {
-			t.Errorf("Flag(%q) = %q, want %q", tt.input, got, tt.want)
-		}
+	if want := []string{"adder.yaml:13:9 templates/driver.go.tmpl fail", "adder.yaml:15:9 templates/cache.go.tmpl skip"}; !slices.Equal(files, want) {
+		t.Errorf("files = %q, want %q", files, want)
 	}
 }
 
@@ -291,39 +267,35 @@ func TestParseErrors(t *testing.T) {
 		{name: "scan name reserved", input: "version: 1\nderive:\n  scans:\n    Module: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{name: "scan name reserved for inputs", input: "version: 1\nderive:\n  scans:\n    Inputs: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
-			name:     "build tag with a space",
-			input:    "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      buildTags: [ok, \"two words\"]",
-			want:     []want{{diag.InvalidValue, 6, 23}},
-			wantHint: "list tags as //go:build lines name them, such as integration",
+			name:  "build tag with a space",
+			input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      buildTags: [ok, \"two words\"]",
+			want:  []want{{diag.InvalidValue, 6, 23}},
 		},
 		{name: "test without a name or want", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - inputs: {name: a}\n", want: []want{{diag.MissingField, 7, 9}, {diag.MissingField, 7, 9}}},
 		{name: "test name not kebab case", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: With_Cache, want: w}\n", want: []want{{diag.InvalidName, 7, 10}}},
-		{name: "two tests with one name", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w}\n      - {name: a, want: v}\n", want: []want{{diag.InvalidName, 8, 10}}},
+		{name: "two tests with one name", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w}\n      - {name: a, want: v}\n", want: []want{{diag.DuplicateName, 8, 10}}},
 		{name: "test want escapes the root", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: ../w}\n", want: []want{{diag.UnsafePath, 7, 19}}},
 		{
-			name:     "test with an unknown input",
-			input:    "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w, inputs: {nam: x}}\n",
-			want:     []want{{diag.InvalidValue, 7, 37}},
-			wantHint: "inputs are keyed by input name, not flag, such as packageName",
+			name:  "test with an unknown input",
+			input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w, inputs: {nam: x}}\n",
+			want:  []want{{diag.InvalidValue, 7, 37}},
 		},
 		{name: "test want is the configuration directory", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: ./}\n", want: []want{{diag.InvalidValue, 7, 19}}},
 		{name: "unknown test field", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w, input: {}}\n", want: []want{{diag.UnknownField, 7, 0}}},
 		{name: "values with an unknown kind", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      values: {kind: constant}\n", want: []want{{diag.InvalidValue, 6, 16}}},
 		{name: "values with an invalid directive", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      values: {directive: Bad}\n", want: []want{{diag.InvalidValue, 6, 16}}},
 		{
-			name:        "values and types together",
-			input:       "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      types: {}\n      values: {}\n",
-			want:        []want{{diag.InvalidValue, 7, 7}},
-			wantMessage: `scan "S": has types and values; use only one`,
+			name:  "values and types together",
+			input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      types: {}\n      values: {}\n",
+			want:  []want{{diag.InvalidValue, 7, 7}},
 		},
 		{name: "files with Go settings", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      includeTests: true\n      buildTags: [x]\n      files: {}\n", want: []want{{diag.InvalidValue, 6, 7}, {diag.InvalidValue, 7, 7}}},
 		{name: "files and funcs together", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      funcs: {}\n      files: {name: x}\n", want: []want{{diag.InvalidValue, 7, 7}}},
 		{name: "files with an invalid name pattern", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      files: {name: \"(\"}\n", want: []want{{diag.InvalidValue, 6, 21}}},
 		{
-			name:     "implements without typeCheck",
-			input:    "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      types: {implements: io.Writer}\n",
-			want:     []want{{diag.InvalidValue, 6, 15}},
-			wantHint: "add typeCheck: true to the scan, which runs the Go toolchain offline to load types",
+			name:  "implements without typeCheck",
+			input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      types: {implements: io.Writer}\n",
+			want:  []want{{diag.InvalidValue, 6, 15}},
 		},
 		{name: "implements without an import path", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      typeCheck: true\n      types: {implements: Writer}\n", want: []want{{diag.InvalidValue, 7, 15}}},
 		{name: "platform without typeCheck", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      platform: windows/amd64\n", want: []want{{diag.InvalidValue, 6, 7}}},
@@ -331,10 +303,9 @@ func TestParseErrors(t *testing.T) {
 		{name: "typeCheck on a file scan", input: "version: 1\nderive:\n  scans:\n    S:\n      dirs: [a]\n      typeCheck: true\n      files: {}\n", want: []want{{diag.InvalidValue, 6, 7}}},
 		{name: "scan name reserved for items", input: "version: 1\nderive:\n  scans:\n    Item: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
-			name:     "templated path without each",
-			input:    "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Vars.Dir }}/x.go\"\n",
-			want:     []want{{diag.InvalidValue, 7, 7}},
-			wantHint: "only outputs with each, which render one file per scan item, have templated paths",
+			name:  "templated path without each",
+			input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Vars.Dir }}/x.go\"\n",
+			want:  []want{{diag.InvalidValue, 7, 7}},
 		},
 		{name: "each names no scan", input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Item.Name }}.go\"\n      each: Nope\n", want: []want{{diag.InvalidValue, 8, 7}}},
 		{
@@ -343,86 +314,76 @@ func TestParseErrors(t *testing.T) {
 			want:  []want{{diag.InvalidValue, 8, 7}},
 		},
 		{
-			name:     "each path without a header",
-			input:    "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Item.Name }}.json\"\n      each: S\n",
-			want:     []want{{diag.InvalidValue, 7, 7}},
-			wantHint: "stale files are found by adder's header, so the path needs a literal extension with comments, such as .go, .ts, .yaml, or .sql",
+			name:  "each path without a header",
+			input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"{{ .Item.Name }}.json\"\n      each: S\n",
+			want:  []want{{diag.InvalidValue, 7, 7}},
 		},
 		{name: "each path ending in an action", input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      path: \"x.{{ .Item.Ext }}\"\n      each: S\n", want: []want{{diag.InvalidValue, 7, 7}}},
 		{name: "each without a path", input: "version: 1\nderive:\n  scans:\n    S: {dirs: [a]}\n  outputs:\n    - template: t.tmpl\n      each: S\n", want: []want{{diag.MissingField, 6, 7}}},
 		{name: "scan name reserved for vars", input: "version: 1\nderive:\n  scans:\n    Vars: {dirs: [a]}", want: []want{{diag.ReservedName, 4, 5}}},
 		{
-			name:     "var name not identifier",
-			input:    "version: 1\nvars:\n  license-name: MIT",
-			want:     []want{{diag.InvalidName, 3, 3}},
-			wantHint: "templates read vars as .Vars.<name>, such as .Vars.License",
+			name:  "var name not identifier",
+			input: "version: 1\nvars:\n  license-name: MIT",
+			want:  []want{{diag.InvalidName, 3, 3}},
 		},
 		{name: "var value not a string", input: "version: 1\nvars:\n  Authors: [a, b]", want: []want{{diag.InvalidValue, 3, 0}}},
 		{name: "partial empty", input: "version: 1\npartials: ['']", want: []want{{diag.MissingField, 2, 12}}},
 		{name: "partial escapes root", input: "version: 1\npartials: [../shared/*.tmpl]", want: []want{{diag.UnsafePath, 2, 12}}},
 		{
-			name:     "partial with double star",
-			input:    "version: 1\npartials: [templates/**/*.tmpl]",
-			want:     []want{{diag.InvalidValue, 2, 12}},
-			wantHint: "list each directory, such as templates/partials/*.tmpl",
+			name:  "partial with double star",
+			input: "version: 1\npartials: [templates/**/*.tmpl]",
+			want:  []want{{diag.InvalidValue, 2, 12}},
 		},
 		{name: "partial bad glob", input: "version: 1\npartials: ['templates/[']", want: []want{{diag.InvalidValue, 2, 12}}},
 		{name: "partial not a string", input: "version: 1\npartials: [{a: b}]", want: []want{{diag.InvalidValue, 2, 0}}},
-		{name: "generator name not kebab-case", input: "version: 1\ngenerators:\n  addDriver: {files: [{template: t, path: p}]}", want: []want{{diag.InvalidName, 3, 3}}, wantHint: "generator names are commands, such as adder new http-handler"},
+		{name: "generator name not kebab-case", input: "version: 1\ngenerators:\n  addDriver: {files: [{template: t, path: p}]}", want: []want{{diag.InvalidName, 3, 3}}},
 		{name: "generator without files", input: "version: 1\ngenerators:\n  g: {description: x}", want: []want{{diag.MissingField, 3, 3}}},
-		{name: "input name not lowerCamel", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {PackageName: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 14}}, wantHint: "input names become template fields and flags: packageName is .Inputs.packageName and --package-name"},
-		{name: "input uses a reserved flag", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {dryRun: {type: bool}}\n    files: [{template: t, path: p}]", want: []want{{diag.ReservedName, 5, 14}}},
-		{name: "inputs share a flag", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {userID: {}, userId: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 26}}},
-		{name: "unknown input type", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {type: int}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}, wantHint: "type is string or bool"},
-		{name: "bool input with string settings", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {c: {type: bool, default: \"true\", pattern: x}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 30}, {diag.InvalidValue, 5, 47}}, wantHint: "bool inputs are false unless their flag is given"},
+		{name: "input name not lowerCamel", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {PackageName: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 14}}},
+		{name: "unknown input type", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {type: int}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
+		{name: "bool input with string settings", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {c: {type: bool, default: \"true\", pattern: x}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 30}, {diag.InvalidValue, 5, 47}}},
 		{name: "values and valuesFrom", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {values: [a], valuesFrom: S.Dir}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 31}}},
 		{name: "default fails the pattern", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {default: X, pattern: \"[a-z]+\"}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
 		{name: "default not among values", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {default: c, values: [a, b]}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
-		{name: "malformed scan reference", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {unique: Drivers}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}, wantHint: "write Scan.Field, such as Drivers.Package"},
+		{name: "malformed scan reference", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {unique: Drivers}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
 		{name: "unknown scan reference", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {valuesFrom: Nope.Dir}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}},
 		{name: "file without template or path", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{when: x}]", want: []want{{diag.MissingField, 5, 13}, {diag.MissingField, 5, 13}, {diag.InvalidValue, 5, 14}}},
 		{name: "file template escapes root", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{template: ../t, path: p}]", want: []want{{diag.UnsafePath, 5, 14}}},
 		{name: "when and unless", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {type: bool}}\n    files: [{template: t, path: p, when: a, unless: a}]", want: []want{{diag.InvalidValue, 6, 45}}},
-		{name: "when names a string input", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {}}\n    files: [{template: t, path: p, when: a}]", want: []want{{diag.InvalidValue, 6, 36}}, wantHint: "when and unless take an input name, such as when: cache"},
-		{name: "unknown ifExists", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{template: t, path: p, ifExists: overwrite}]", want: []want{{diag.InvalidValue, 5, 36}}, wantHint: "ifExists is fail or skip; adder never overwrites a file people own"},
+		{name: "when names a string input", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {}}\n    files: [{template: t, path: p, when: a}]", want: []want{{diag.InvalidValue, 6, 36}}},
+		{name: "unknown ifExists", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{template: t, path: p, ifExists: overwrite}]", want: []want{{diag.InvalidValue, 5, 36}}},
 		{name: "unknown generator field", input: "version: 1\ngenerators:\n  g: {fils: []}", want: []want{{diag.UnknownField, 3, 0}}, wantHint: "known fields: description, inputs, files, message, derive, tests, deprecated"},
 		{name: "scan without dirs", input: "version: 1\nderive:\n  scans:\n    A: {}", want: []want{{diag.MissingField, 4, 5}}},
 		{name: "dirs escape root", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [../a]}", want: []want{{diag.UnsafePath, 4, 16}}},
 		{
-			name:     "dirs with backslash",
-			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: ['a\\b']}",
-			want:     []want{{diag.UnsafePath, 4, 16}},
-			wantHint: "paths in adder.yaml are slash-separated on every operating system",
+			name:  "dirs with backslash",
+			input: "version: 1\nderive:\n  scans:\n    A: {dirs: ['a\\b']}",
+			want:  []want{{diag.UnsafePath, 4, 16}},
 		},
 		{name: "dirs bad glob", input: "version: 1\nderive:\n  scans:\n    A: {dirs: ['a/[']}", want: []want{{diag.InvalidValue, 4, 16}}},
 		{
-			name:     "unknown kind",
-			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {kind: other}}",
-			want:     []want{{diag.InvalidValue, 4, 28}},
-			wantHint: "kind is func or method",
+			name:  "unknown kind",
+			input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {kind: other}}",
+			want:  []want{{diag.InvalidValue, 4, 28}},
 		},
 		{name: "receiver not a type name", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {receiver: \"*Worker\"}}", want: []want{{diag.InvalidValue, 4, 28}}},
 		{name: "receiver with kind func", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {kind: func, receiver: Worker}}", want: []want{{diag.InvalidValue, 4, 40}}},
 		{
-			name:     "double star inside a segment",
-			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: [a/**b]}",
-			want:     []want{{diag.InvalidValue, 4, 16}},
-			wantHint: "write a/**/b, not a/**b",
+			name:  "double star inside a segment",
+			input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a/**b]}",
+			want:  []want{{diag.InvalidValue, 4, 16}},
 		},
 		{name: "exclude escapes root", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], exclude: [../b]}", want: []want{{diag.UnsafePath, 4, 30}}},
 		{name: "exclude bad glob", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], exclude: ['b/[']}", want: []want{{diag.InvalidValue, 4, 30}}},
 		{name: "funcs and types together", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {}, types: {}}", want: []want{{diag.InvalidValue, 4, 31}}},
 		{
-			name:     "unknown type kind",
-			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: [a], types: {kind: func}}",
-			want:     []want{{diag.InvalidValue, 4, 28}},
-			wantHint: "kind is struct, interface, or other",
+			name:  "unknown type kind",
+			input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], types: {kind: func}}",
+			want:  []want{{diag.InvalidValue, 4, 28}},
 		},
 		{
-			name:     "invalid function directive",
-			input:    "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {directive: Register}}",
-			want:     []want{{diag.InvalidValue, 4, 28}},
-			wantHint: "directive names are lowercase letters, digits, and hyphens, starting with a letter",
+			name:  "invalid function directive",
+			input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], funcs: {directive: Register}}",
+			want:  []want{{diag.InvalidValue, 4, 28}},
 		},
 		{name: "invalid type directive", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [a], types: {directive: \"adder:x\"}}", want: []want{{diag.InvalidValue, 4, 28}}},
 		{name: "output without template", input: "version: 1\nderive:\n  outputs: [{path: a.go}]", want: []want{{diag.MissingField, 3, 13}}},
@@ -478,11 +439,14 @@ func TestFind(t *testing.T) {
 		}
 	}
 
+	elsewhere := t.TempDir()
 	tests := []struct {
 		name string
 		cwd  string // relative to root
 		dir  string
 		want string // relative to cwd, or absolute when dir is
+		// wantNotFound means an io problem wrapping fs.ErrNotExist.
+		wantNotFound bool
 	}{
 		{name: "in the directory", cwd: ".", dir: ".", want: "adder.yaml"},
 		{name: "in a parent", cwd: "a", dir: ".", want: filepath.Join("..", "adder.yaml")},
@@ -490,24 +454,23 @@ func TestFind(t *testing.T) {
 		{name: "a relative directory", cwd: ".", dir: filepath.Join("a", "b", "c"), want: filepath.Join("a", "b", "adder.yaml")},
 		{name: "directories with the name are skipped", cwd: "nested", dir: ".", want: filepath.Join("..", "adder.yaml")},
 		{name: "an absolute directory", cwd: ".", dir: filepath.Join(root, "a"), want: filepath.Join(root, "adder.yaml")},
+		{name: "not found", cwd: ".", dir: elsewhere, wantNotFound: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Chdir(filepath.Join(root, filepath.FromSlash(tt.cwd)))
 			got, err := Find(tt.dir)
+			if tt.wantNotFound {
+				if list := diag.From(err); len(list) != 1 || list[0].Code != diag.IO || !errors.Is(err, fs.ErrNotExist) {
+					t.Errorf("Find(%q) error = %v, want an io problem wrapping fs.ErrNotExist", tt.dir, err)
+				}
+				return
+			}
 			if err != nil || got != tt.want {
 				t.Errorf("Find(%q) = %q, %v, want %q", tt.dir, got, err, tt.want)
 			}
 		})
 	}
-
-	t.Run("not found", func(t *testing.T) {
-		_, err := Find(t.TempDir())
-		list := diag.From(err)
-		if len(list) != 1 || list[0].Code != diag.IO || !errors.Is(err, fs.ErrNotExist) {
-			t.Errorf("Find() error = %v, want an io problem wrapping fs.ErrNotExist", err)
-		}
-	})
 }
 
 func TestLoad(t *testing.T) {

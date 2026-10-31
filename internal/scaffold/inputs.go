@@ -30,13 +30,13 @@ func resolve(gen config.Generator, given map[string]any, data map[string]any) (m
 	values := make(map[string]any, len(gen.Inputs))
 	for _, name := range slices.Sorted(maps.Keys(gen.Inputs)) {
 		in := gen.Inputs[name]
-		flag := "--" + config.Flag(name)
+		label := "input " + name
 		value, ok := given[name]
 
 		if in.Type == config.InputBool {
 			b, isBool := value.(bool)
 			if ok && !isBool {
-				problems = append(problems, diag.Errorf(diag.InvalidInput, diag.Pos{}, "%s must be true or false, not %v", flag, value))
+				problems = append(problems, diag.Errorf(diag.InvalidInput, diag.Pos{}, "%s must be true or false, not %v", label, value))
 			}
 			values[name] = b
 			continue
@@ -44,17 +44,17 @@ func resolve(gen config.Generator, given map[string]any, data map[string]any) (m
 
 		if !ok {
 			if in.Default == nil {
-				problems = append(problems, &diag.Diagnostic{Code: diag.MissingInput, Message: flag + " is required", Hint: in.Help})
+				problems = append(problems, &diag.Diagnostic{Code: diag.MissingInput, Message: label + " is required", Hint: in.Help})
 				continue
 			}
 			value = *in.Default
 		}
 		s, isString := value.(string)
 		if !isString {
-			problems = append(problems, diag.Errorf(diag.InvalidInput, diag.Pos{}, "%s must be a string, not %v", flag, value))
+			problems = append(problems, diag.Errorf(diag.InvalidInput, diag.Pos{}, "%s must be a string, not %v", label, value))
 			continue
 		}
-		if err := check(flag, s, in, data); err != nil {
+		if err := check(label, s, in, data); err != nil {
 			problems = append(problems, diag.From(err)...)
 			continue
 		}
@@ -67,9 +67,9 @@ func resolve(gen config.Generator, given map[string]any, data map[string]any) (m
 }
 
 // check reports a string value that the input's restrictions reject.
-func check(flag, value string, in config.Input, data map[string]any) error {
+func check(label, value string, in config.Input, data map[string]any) error {
 	invalid := func(format string, args ...any) error {
-		return &diag.Diagnostic{Code: diag.InvalidInput, Message: fmt.Sprintf("%s %q ", flag, value) + fmt.Sprintf(format, args...), Hint: in.Help}
+		return &diag.Diagnostic{Code: diag.InvalidInput, Message: fmt.Sprintf("%s %q ", label, value) + fmt.Sprintf(format, args...), Hint: in.Help}
 	}
 	if !in.MatchesPattern(value) {
 		return invalid("does not match %s", in.Pattern)

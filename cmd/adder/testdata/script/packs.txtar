@@ -30,7 +30,7 @@ stdout '^  pack      store$'
 exec go tool adder list
 stdout '^  driver  Add an implementation \(pack store for drivers\)$'
 stdout '^  cache   Add an implementation \(pack store for caches\)$'
-exec go tool adder new driver --name gcs
+exec go tool adder new driver name=gcs
 stdout '^created    drivers/gcs/gcs.go$'
 stdout '^updated    drivers/registry.gen.go$'
 stdout '^Implement New in drivers/gcs/gcs.go.$'
@@ -38,9 +38,9 @@ grep '"disk", "gcs", "s3"' drivers/registry.gen.go
 exec go tool adder check
 
 # unique applies to the use's own scan.
-exits 2 go tool adder new cache --name mem
+exits 2 go tool adder new cache name=mem
 stderr 'invalid-input'
-exec go tool adder new cache --name disk
+exec go tool adder new cache name=disk
 stdout '^created    caches/disk/disk.go$'
 
 # A use tests its pack's generators against golden files in the repository.

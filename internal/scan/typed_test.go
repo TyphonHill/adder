@@ -212,6 +212,8 @@ func TestRunTypedProblems(t *testing.T) {
 	}
 }
 
+// TestRunTypedNothingToLoad checks directories without packages to type-check. It has a single case, so it is not a
+// table.
 func TestRunTypedNothingToLoad(t *testing.T) {
 	root := typedModule(t, map[string]string{"docs/README.md": "x", "only/t_test.go": "package only\n"})
 	items, err := RunTyped(t.Context(), TypedSource{FS: os.DirFS(root), Dir: root}, config.Scan{Dirs: []string{"docs", "only"}, TypeCheck: true})
@@ -220,60 +222,59 @@ func TestRunTypedNothingToLoad(t *testing.T) {
 	}
 }
 
-func TestSplitPos(t *testing.T) {
-	tests := []struct {
-		pos       string
-		file      string
-		line, col int
-	}{
-		{pos: "/a/b.go:3:4", file: "/a/b.go", line: 3, col: 4},
-		{pos: "/a/b.go:3", file: "/a/b.go", line: 3},
-		{pos: `C:\a\b.go:3:4`, file: `C:\a\b.go`, line: 3, col: 4},
-		{pos: "/a/b.go", file: "/a/b.go"},
-		{pos: "-"},
-		{pos: ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.pos, func(t *testing.T) {
-			file, line, col := splitPos(tt.pos)
-			if file != tt.file || line != tt.line || col != tt.col {
-				t.Errorf("splitPos(%q) = %q, %d, %d, want %q, %d, %d", tt.pos, file, line, col, tt.file, tt.line, tt.col)
-			}
-		})
-	}
-}
-
 func TestGoEnv(t *testing.T) {
 	t.Setenv("GOOS", "darwin")
 	t.Setenv("GOFLAGS", "-tags=local")
 	t.Setenv("GOPROXY", "https://proxy.golang.org")
-	root := t.TempDir()
-	env := goEnv(root, "")
-	for _, want := range []string{"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0", "GOFLAGS=-mod=readonly", "GOPROXY=off", "GOWORK=off"} {
-		if !slices.Contains(env, want) {
-			t.Errorf("environment lacks %s", want)
-		}
+	tests := []struct {
+		name     string
+		files    []string // files in the module's root, such as go.work
+		platform string
+		want     []string
+		wantWork bool // GOWORK names the root's go.work
+		unwanted []string
+	}{
+		{
+			name:     "the defaults, whatever the environment says",
+			want:     []string{"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0", "GOFLAGS=-mod=readonly", "GOPROXY=off", "GOWORK=off"},
+			unwanted: []string{"GOOS=darwin", "GOFLAGS=-tags=local", "GOPROXY=https://proxy.golang.org"},
+		},
+		{
+			name:     "a platform, a workspace, and vendored modules",
+			files:    []string{"go.work", filepath.Join("vendor", "modules.txt")},
+			platform: "windows/arm64",
+			want:     []string{"GOOS=windows", "GOARCH=arm64", "GOFLAGS=-mod=vendor"},
+			wantWork: true,
+		},
 	}
-	for _, unwanted := range []string{"GOOS=darwin", "GOFLAGS=-tags=local", "GOPROXY=https://proxy.golang.org"} {
-		if slices.Contains(env, unwanted) {
-			t.Errorf("environment keeps %s", unwanted)
-		}
-	}
-
-	for _, name := range []string{"go.work", filepath.Join("vendor", "modules.txt")} {
-		path := filepath.Join(root, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	env = goEnv(root, "windows/arm64")
-	for _, want := range []string{"GOOS=windows", "GOARCH=arm64", "GOFLAGS=-mod=vendor", "GOWORK=" + filepath.Join(root, "go.work")} {
-		if !slices.Contains(env, want) {
-			t.Errorf("environment lacks %s", want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for _, name := range tt.files {
+				path := filepath.Join(root, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			env := goEnv(root, tt.platform)
+			want := tt.want
+			if tt.wantWork {
+				want = append(want, "GOWORK="+filepath.Join(root, "go.work"))
+			}
+			for _, want := range want {
+				if !slices.Contains(env, want) {
+					t.Errorf("environment lacks %s", want)
+				}
+			}
+			for _, unwanted := range tt.unwanted {
+				if slices.Contains(env, unwanted) {
+					t.Errorf("environment keeps %s", unwanted)
+				}
+			}
+		})
 	}
 }
 

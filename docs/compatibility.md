@@ -43,7 +43,7 @@ adder.yaml:7:12: warning: derive.scans.Drivers.funcs.name is deprecated: use fun
 
 Diagnostic codes, exit codes, and JSON fields are read by scripts rather than used in a configuration, so nothing can warn about them: the changelog and the documentation say when one is deprecated, and a renamed JSON field is written under both names until v2.
 
-Repositories and packs deprecate what they define in the same way, so that their users are warned too: generators, inputs, and pack options with [`deprecated`](configuration.md#generators), and a pack's functions and scanners with [`adder.Pack.Deprecated`](extending.md#deprecating-what-a-pack-defines).
+Repositories and packs deprecate what they define in the same way, so that their users are warned too: generators, inputs, and pack options with [`deprecated`](configuration.md#generators), and a pack's functions and scanners with [`DeprecatedFuncs` and `DeprecatedScanners`](extending.md#deprecating-what-a-pack-defines) on `adder.Pack`.
 
 ## Go versions
 

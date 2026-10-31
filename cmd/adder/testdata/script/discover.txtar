@@ -63,12 +63,12 @@ outputs
 driver: Add a storage driver
 
 inputs
-  --cache    bool    Add an in-memory cache in front of the driver
-  --name     string  Driver name, used as the package name (required; must match [a-z][a-z0-9]*; not one of: local, s3)
-  --summary  string  One-line description for the package documentation (default "stores objects")
+  cache    bool    Add an in-memory cache in front of the driver
+  name     string  Driver name, used as the package name (required; must match [a-z][a-z0-9]*; not one of: local, s3)
+  summary  string  One-line description for the package documentation (default "stores objects")
 files
   drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go  from templates/new/driver.go.tmpl
-  drivers/{{ .Inputs.name }}/cache.go               from templates/new/cache.go.tmpl, with --cache
+  drivers/{{ .Inputs.name }}/cache.go               from templates/new/cache.go.tmpl, when cache
   drivers/README.md                                 from templates/new/README.md.tmpl, skipped if it exists
 
 Derived outputs are updated in the same run.
@@ -79,7 +79,6 @@ Derived outputs are updated in the same run.
   "inputs": [
     {
       "name": "cache",
-      "flag": "--cache",
       "type": "bool",
       "help": "Add an in-memory cache in front of the driver",
       "required": false,
@@ -88,7 +87,6 @@ Derived outputs are updated in the same run.
     },
     {
       "name": "name",
-      "flag": "--name",
       "type": "string",
       "help": "Driver name, used as the package name",
       "required": true,
@@ -102,7 +100,6 @@ Derived outputs are updated in the same run.
     },
     {
       "name": "summary",
-      "flag": "--summary",
       "type": "string",
       "help": "One-line description for the package documentation",
       "required": false,

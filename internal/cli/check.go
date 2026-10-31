@@ -23,11 +23,12 @@ func (e *staleError) Error() string {
 func newCheckCommand(opts *globalOptions) *cobra.Command {
 	var showDiff bool
 	cmd := &cobra.Command{
-		Use:   "check",
+		Use:   "check [directories]",
 		Short: "Report derived files that are out of date",
 		Long: `check computes what derive would write and reports every output that differs, without writing anything.
 
-It exits with status 3 when any output is out of date, so it can guard CI and repositories that commit generated files.`,
+It exits with status 3 when any output is out of date, so it can guard CI and repositories that commit generated files.
+With directory patterns, such as ./... or ./services/api, it runs over every adder.yaml they match.`,
 		Args: patternArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			newReport := func() report { return &planReport{Changes: []changeReport{}} }

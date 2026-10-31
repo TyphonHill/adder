@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/adder-v1.json",
+  "$id": "https://typhonhill.dev/adder/schema/adder-v1.json",
   "title": "adder.yaml",
   "description": "adder configuration, version 1: https://github.com/typhonhilldev/adder/blob/main/docs/configuration.md",
   "type": "object",
@@ -66,9 +66,9 @@
       "additionalProperties": false,
       "properties": {
         "dirs": {"$ref": "#/definitions/dirs"},
-        "exclude": {"description": "Directories to leave out, in the same syntax as dirs.", "type": "array", "items": {"type": "string"}},
+        "exclude": {"description": "Directories to leave out, in the same syntax as dirs.", "type": ["array", "null"], "items": {"type": "string"}},
         "includeTests": {"description": "Also scan _test.go files.", "type": "boolean"},
-        "buildTags": {"description": "Custom build tags to treat as set, such as integration.", "type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_.]+$"}},
+        "buildTags": {"description": "Custom build tags to treat as set, such as integration.", "type": ["array", "null"], "items": {"type": "string", "pattern": "^[A-Za-z0-9_.]+$"}},
         "funcs": {"$ref": "#/definitions/funcs"},
         "types": {"$ref": "#/definitions/types"},
         "values": {"$ref": "#/definitions/values"},
@@ -153,13 +153,14 @@
       "additionalProperties": {"$ref": "#/definitions/generator"}
     },
     "generator": {
+      "description": "A command that creates files from templates, run as adder new <name>.",
       "type": "object",
       "required": ["files"],
       "additionalProperties": false,
       "properties": {
         "description": {"description": "Shown in adder new.", "type": "string"},
         "inputs": {
-          "description": "Values given on the command line, each a flag in kebab-case and .Inputs.<name> in templates.",
+          "description": "Values given to the generator, as name=value arguments or with --inputs, and read as .Inputs.<name> in templates.",
           "type": ["object", "null"],
           "propertyNames": {"$ref": "#/definitions/inputName"},
           "additionalProperties": {"$ref": "#/definitions/input"}
@@ -172,6 +173,7 @@
       }
     },
     "input": {
+      "description": "A value the generator takes.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -179,13 +181,14 @@
         "help": {"description": "Shown in --help and with problems.", "type": "string"},
         "default": {"description": "Makes a string input optional.", "type": "string"},
         "pattern": {"allOf": [{"$ref": "#/definitions/regexp"}], "description": "A regular expression the whole value must match."},
-        "values": {"description": "The allowed values.", "type": "array", "items": {"type": "string"}},
+        "values": {"description": "The allowed values.", "type": ["array", "null"], "items": {"type": "string"}},
         "valuesFrom": {"description": "Takes the allowed values from a scan, written Scan.Field.", "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$", "examples": ["Drivers.Package"]},
         "unique": {"description": "Rejects values a scan already has, written Scan.Field.", "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"},
         "deprecated": {"description": "Marks the input as on its way out, saying what to use instead. A deprecated string input needs a default.", "type": "string"}
       }
     },
     "file": {
+      "description": "A file the generator creates.",
       "type": "object",
       "required": ["template", "path"],
       "additionalProperties": false,
@@ -199,12 +202,13 @@
       }
     },
     "test": {
+      "description": "Inputs and the files the generator should create from them.",
       "type": "object",
       "required": ["name", "want"],
       "additionalProperties": false,
       "properties": {
-        "name": {"description": "The test's name, unique among the generator's tests.", "type": "string"},
-        "inputs": {"description": "The inputs, by name.", "type": "object"},
+        "name": {"description": "The test's name, unique among the generator's tests.", "allOf": [{"$ref": "#/definitions/command"}]},
+        "inputs": {"description": "The inputs, by name.", "type": ["object", "null"]},
         "want": {"description": "The directory of the files the generator should create, relative to this file.", "type": "string", "examples": ["testdata/driver/plain"]}
       }
     },
@@ -215,15 +219,15 @@
       "additionalProperties": false,
       "properties": {
         "pack": {"allOf": [{"$ref": "#/definitions/command"}], "description": "The pack's name."},
-        "with": {"description": "The pack's options.", "type": "object"},
+        "with": {"description": "The pack's options.", "type": ["object", "null"]},
         "rename": {
           "description": "New command names for the pack's generators.",
-          "type": "object",
+          "type": ["object", "null"],
           "additionalProperties": {"$ref": "#/definitions/command"}
         },
         "tests": {
           "description": "Tests of the pack's generators, by command name.",
-          "type": "object",
+          "type": ["object", "null"],
           "additionalProperties": {"type": "array", "items": {"$ref": "#/definitions/test"}}
         }
       }

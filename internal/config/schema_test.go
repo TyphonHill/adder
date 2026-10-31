@@ -44,31 +44,30 @@ func readSchema(t *testing.T, path string) map[string]any {
 // no others, so that neither drifts from the other.
 func TestSchemaMatchesTypes(t *testing.T) {
 	tests := []struct {
+		name   string
 		schema string
 		typ    reflect.Type
 		skip   []string // field paths the schema leaves out, as pack.yaml leaves out generator tests
 	}{
-		{schema: adderSchema, typ: reflect.TypeFor[Config]()},
-		{schema: packSchema, typ: reflect.TypeFor[packFile](), skip: []string{"generators.*.tests"}},
+		{name: "adder.yaml", schema: adderSchema, typ: reflect.TypeFor[Config]()},
+		{name: "pack.yaml", schema: packSchema, typ: reflect.TypeFor[packFile](), skip: []string{"generators.*.tests", "derive.outputs.*.pack", "generators.*.files.*.pack"}},
 	}
 	for _, tt := range tests {
-		t.Run(filepath.Base(tt.schema), func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			doc := readSchema(t, tt.schema)
 			compareType(t, doc, doc, tt.typ, "", tt.skip)
 		})
 	}
 }
 
-var unmarshaler = reflect.TypeFor[yaml.Unmarshaler]()
-
-// compareType compares the fields of t, at path, with the properties of the schema s, within doc.
+// compareType compares the fields of typ, at path, with the properties of the schema s, within doc.
 func compareType(t *testing.T, doc, s map[string]any, typ reflect.Type, path string, skip []string) {
 	t.Helper()
 	s = resolve(doc, s)
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
-	if reflect.PointerTo(typ).Implements(unmarshaler) || typ == reflect.TypeFor[yaml.Node]() {
+	if reflect.PointerTo(typ).Implements(unmarshalerType) || typ == reflect.TypeFor[yaml.Node]() {
 		return // decoded from a scalar or kept as written
 	}
 	switch typ.Kind() {
@@ -108,7 +107,7 @@ func cmpPath(path string) string {
 	return strings.TrimPrefix(path, ".")
 }
 
-// resolve follows $ref, a sole allOf, and the anyOf the pack schema wraps around values, to the schema they stand
+// resolve follows $ref, allOf, and the anyOf the pack schema wraps around values, to the schema they stand
 // for.
 func resolve(doc, s map[string]any) map[string]any {
 	for {
@@ -116,15 +115,16 @@ func resolve(doc, s map[string]any) map[string]any {
 		case s["$ref"] != nil:
 			name := strings.TrimPrefix(s["$ref"].(string), "#/definitions/")
 			s = doc["definitions"].(map[string]any)[name].(map[string]any)
-		case s["properties"] == nil && s["items"] == nil && s["additionalProperties"] == nil && len(anyOf(s)) > 0:
-			s = anyOf(s)[0].(map[string]any)
+		case s["properties"] == nil && s["items"] == nil && s["additionalProperties"] == nil && len(branches(s)) > 0:
+			s = branches(s)[0].(map[string]any)
 		default:
 			return s
 		}
 	}
 }
 
-func anyOf(s map[string]any) []any {
+// branches returns the schemas of an allOf or anyOf.
+func branches(s map[string]any) []any {
 	if list, ok := s["allOf"].([]any); ok {
 		return list
 	}
@@ -155,6 +155,9 @@ func makePackSchema(adder map[string]any) map[string]any {
 	defs := clone(adder["definitions"]).(map[string]any)
 	delete(defs, "use")
 	delete(defs["generator"].(map[string]any)["properties"].(map[string]any), "tests")
+	// A pack renders only its own templates.
+	delete(defs["output"].(map[string]any)["properties"].(map[string]any), "pack")
+	delete(defs["file"].(map[string]any)["properties"].(map[string]any), "pack")
 	for name, def := range defs {
 		if name != "partials" {
 			defs[name] = optionable(def)
@@ -246,6 +249,7 @@ func clone(v any) any {
 func compile(t *testing.T, path string) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
+	ids := make(map[string]string)
 	for _, p := range []string{adderSchema, packSchema} {
 		f, err := os.Open(p)
 		if err != nil {
@@ -256,11 +260,12 @@ func compile(t *testing.T, path string) *jsonschema.Schema {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := c.AddResource(readSchema(t, p)["$id"].(string), doc); err != nil {
+		ids[p] = doc.(map[string]any)["$id"].(string)
+		if err := c.AddResource(ids[p], doc); err != nil {
 			t.Fatal(err)
 		}
 	}
-	s, err := c.Compile(readSchema(t, path)["$id"].(string))
+	s, err := c.Compile(ids[path])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,6 +387,9 @@ func TestSchemaRejects(t *testing.T) {
 		{name: "tests in a pack's generator", pack: true, config: "version: 1\ngenerators: {g: {files: [{template: t, path: p}], tests: []}}"},
 		{name: "an option placeholder with another key", pack: true, config: "version: 1\nderive: {scans: {A: {dirs: {option: dirs, x: y}}}}"},
 		{name: "an unknown option type", pack: true, config: "version: 1\noptions: {dirs: {type: map}}"},
+		{name: "a test name in capitals", config: "version: 1\ngenerators: {g: {files: [{template: t, path: p}], tests: [{name: Plain, want: w}]}}"},
+		{name: "pack on a pack's output", pack: true, config: "version: 1\nderive: {outputs: [{template: t, path: p, pack: other}]}"},
+		{name: "pack on a pack generator's file", pack: true, config: "version: 1\ngenerators: {g: {files: [{template: t, path: p, pack: other}]}}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -391,6 +399,31 @@ func TestSchemaRejects(t *testing.T) {
 			}
 			if err := s.Validate(instance(t, []byte(tt.config))); err == nil {
 				t.Errorf("the schema accepts:\n%s", tt.config)
+			}
+		})
+	}
+}
+
+// TestSchemaAcceptsEmpty checks that the schemas accept the empty settings adder accepts, which YAML reads as null.
+func TestSchemaAcceptsEmpty(t *testing.T) {
+	adder := compile(t, adderSchema)
+	tests := []struct {
+		name   string
+		config string
+	}{
+		{name: "an empty with", config: "version: 1\npacks:\n  a:\n    pack: store\n    with:\n"},
+		{name: "an empty rename and tests", config: "version: 1\npacks:\n  a:\n    pack: store\n    rename:\n    tests:\n"},
+		{name: "an empty exclude and buildTags", config: "version: 1\nderive:\n  scans:\n    A:\n      dirs: [a]\n      exclude:\n      buildTags:\n"},
+		{name: "an input with empty values", config: "version: 1\ngenerators:\n  g:\n    inputs:\n      n:\n        values:\n    files: [{template: t, path: p}]\n"},
+		{name: "a test with empty inputs", config: "version: 1\ngenerators:\n  g:\n    files: [{template: t, path: p}]\n    tests:\n      - name: plain\n        want: w\n        inputs:\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !loads([]byte(tt.config)) {
+				t.Fatalf("adder does not load it:\n%s", tt.config)
+			}
+			if err := adder.Validate(instance(t, []byte(tt.config))); err != nil {
+				t.Errorf("the schema rejects it: %v", err)
 			}
 		})
 	}

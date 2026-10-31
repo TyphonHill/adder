@@ -107,7 +107,7 @@ func problemsFrom(err error) diag.List {
 		return diag.List{} // each configuration's problems are in its own report
 	}
 	if errors.Is(err, context.Canceled) {
-		return diag.List{{Code: diag.Other, Message: "interrupted"}}
+		return diag.List{{Code: diag.Interrupted, Message: "interrupted"}}
 	}
 	return diag.From(err)
 }

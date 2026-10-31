@@ -51,7 +51,7 @@ type Pack struct {
 	// the pack it uses.
 	Name string
 	// FS holds the pack's pack.yaml at its root, and the templates it names. It is usually an embed.FS, and nil for
-	// a pack of only functions.
+	// a pack of only functions and scanners.
 	FS fs.FS
 	// Funcs are template functions, available to every template, by name. Each follows the rules of
 	// text/template and must be deterministic. A name may not be built in or used by another pack.
@@ -59,10 +59,12 @@ type Pack struct {
 	// Scanners are custom scanners, by the name a scan's scanner block gives: lowercase words joined by hyphens,
 	// not used by another pack.
 	Scanners map[string]Scanner
-	// Deprecated marks functions and scanners of the pack as on their way out, by name, saying what to use
-	// instead, such as "use title". They keep working, and adder warns wherever a template calls such a function
-	// or a scan names such a scanner. A name used by both a function and a scanner deprecates both.
-	Deprecated map[string]string
+	// DeprecatedFuncs marks functions of the pack as on their way out, by name, saying what to use instead, such
+	// as "use title". They keep working, and adder warns wherever a template calls one.
+	DeprecatedFuncs map[string]string
+	// DeprecatedScanners marks scanners of the pack as on their way out, by name, saying what to use instead.
+	// They keep working, and adder warns wherever a scan names one.
+	DeprecatedScanners map[string]string
 }
 
 // Scanner returns the items of a scan that names it, for information no built-in scan can find, such as routes
@@ -88,8 +90,12 @@ type ScanInput struct {
 }
 
 // Decode decodes the scan's with settings into v, a pointer, rejecting fields v does not have. Its problems
-// point at the settings in adder.yaml.
+// point at the settings in adder.yaml. Without settings, as for a ScanInput a scanner's own tests build, v is
+// left as it is.
 func (in *ScanInput) Decode(v any) error {
+	if in.decode == nil {
+		return nil
+	}
 	return in.decode(v)
 }
 
@@ -124,7 +130,7 @@ func Main(packs ...Pack) {
 func internal(packs []Pack) []pack.Pack {
 	out := make([]pack.Pack, len(packs))
 	for i, p := range packs {
-		out[i] = pack.Pack{Name: p.Name, FS: p.FS, Funcs: p.Funcs, Scanners: make(map[string]pack.Scanner, len(p.Scanners)), Deprecated: p.Deprecated}
+		out[i] = pack.Pack{Name: p.Name, FS: p.FS, Funcs: p.Funcs, Scanners: make(map[string]pack.Scanner, len(p.Scanners)), DeprecatedFuncs: p.DeprecatedFuncs, DeprecatedScanners: p.DeprecatedScanners}
 		for name, s := range p.Scanners {
 			out[i].Scanners[name] = wrap(s)
 		}

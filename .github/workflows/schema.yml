@@ -1,0 +1,31 @@
+name: Published schemas
+
+# typhonhill.dev serves copies of schema/, which every adder.yaml that adder init writes points at. This fails
+# when the copies differ from main, so they are updated in typhonhilldev/typhonhilldev.github.io.
+on:
+  push:
+    branches: [main]
+    paths: [schema/**]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare with typhonhill.dev
+        run: |
+          status=0
+          for file in adder-v1.json pack-v1.json; do
+            url="https://typhonhill.dev/adder/schema/$file"
+            if ! curl -fsSL "$url" | diff -u "schema/$file" -; then
+              echo "::error file=schema/$file::$url differs from schema/$file; copy it to typhonhilldev.github.io"
+              status=1
+            fi
+          done
+          exit $status

@@ -1,6 +1,6 @@
 {
   "$comment": "Generated from adder-v1.json by TestPackSchema in internal/config. Do not edit.",
-  "$id": "https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/pack-v1.json",
+  "$id": "https://typhonhill.dev/adder/schema/pack-v1.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "definitions": {
@@ -112,6 +112,7 @@
     },
     "file": {
       "additionalProperties": false,
+      "description": "A file the generator creates.",
       "properties": {
         "ifExists": {
           "anyOf": [
@@ -121,21 +122,6 @@
                 "fail",
                 "skip"
               ]
-            },
-            {
-              "$ref": "#/definitions/option"
-            }
-          ]
-        },
-        "pack": {
-          "anyOf": [
-            {
-              "allOf": [
-                {
-                  "$ref": "#/definitions/command"
-                }
-              ],
-              "description": "The pack holding the template."
             },
             {
               "$ref": "#/definitions/option"
@@ -330,6 +316,7 @@
     },
     "generator": {
       "additionalProperties": false,
+      "description": "A command that creates files from templates, run as adder new \u003cname\u003e.",
       "properties": {
         "deprecated": {
           "anyOf": [
@@ -399,7 +386,7 @@
                   }
                 ]
               },
-              "description": "Values given on the command line, each a flag in kebab-case and .Inputs.\u003cname\u003e in templates.",
+              "description": "Values given to the generator, as name=value arguments or with --inputs, and read as .Inputs.\u003cname\u003e in templates.",
               "propertyNames": {
                 "$ref": "#/definitions/inputName"
               },
@@ -456,6 +443,7 @@
     },
     "input": {
       "additionalProperties": false,
+      "description": "A value the generator takes.",
       "properties": {
         "default": {
           "anyOf": [
@@ -545,7 +533,10 @@
                   }
                 ]
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -601,21 +592,6 @@
                 }
               ],
               "description": "A scan whose items each get a file of their own, as .Item."
-            },
-            {
-              "$ref": "#/definitions/option"
-            }
-          ]
-        },
-        "pack": {
-          "anyOf": [
-            {
-              "allOf": [
-                {
-                  "$ref": "#/definitions/command"
-                }
-              ],
-              "description": "The pack holding the template."
             },
             {
               "$ref": "#/definitions/option"
@@ -729,7 +705,10 @@
                   }
                 ]
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -760,7 +739,10 @@
                   }
                 ]
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -889,12 +871,16 @@
     },
     "test": {
       "additionalProperties": false,
+      "description": "Inputs and the files the generator should create from them.",
       "properties": {
         "inputs": {
           "anyOf": [
             {
               "description": "The inputs, by name.",
-              "type": "object"
+              "type": [
+                "object",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -904,8 +890,12 @@
         "name": {
           "anyOf": [
             {
-              "description": "The test's name, unique among the generator's tests.",
-              "type": "string"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/command"
+                }
+              ],
+              "description": "The test's name, unique among the generator's tests."
             },
             {
               "$ref": "#/definitions/option"

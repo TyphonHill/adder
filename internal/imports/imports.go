@@ -98,15 +98,22 @@ func Prune(src []byte) ([]byte, error) {
 }
 
 func isUsed(spec *ast.ImportSpec, used map[string]bool) bool {
+	name, importPath, ok := LocalName(spec)
+	return !ok || importPath == "C" || used[name]
+}
+
+// LocalName returns the name a file refers to an import by, and the import's path. It reports false for an
+// import a file cannot refer to by name: a blank, dot, or malformed one.
+func LocalName(spec *ast.ImportSpec) (name, importPath string, ok bool) {
 	importPath, err := strconv.Unquote(spec.Path.Value)
-	if err != nil || importPath == "C" {
-		return true
+	if err != nil {
+		return "", "", false
 	}
-	name := Name(importPath)
+	name = Name(importPath)
 	if spec.Name != nil {
 		name = spec.Name.Name
 	}
-	return name == "_" || name == "." || used[name]
+	return name, importPath, name != "_" && name != "."
 }
 
 // span is a range of bytes in a file.

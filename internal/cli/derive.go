@@ -12,11 +12,12 @@ func newDeriveCommand(opts *globalOptions) *cobra.Command {
 	var derived derive.Options
 	var showDiff bool
 	cmd := &cobra.Command{
-		Use:   "derive",
+		Use:   "derive [directories]",
 		Short: "Rebuild files derived from the repository's source code",
 		Long: `derive runs every scan in adder.yaml and re-renders the derived outputs.
 
-Files whose content has not changed are left untouched.`,
+Files whose content has not changed are left untouched. With directory patterns, such as ./... or
+./services/api, it runs over every adder.yaml they match.`,
 		Args: patternArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			derived.DryRun = derived.DryRun || showDiff

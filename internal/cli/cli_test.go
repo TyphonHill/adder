@@ -7,15 +7,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"typhonhill.dev/adder/internal/pack"
 )
 
 func run(ctx context.Context, args ...string) (code int, stdout, stderr string) {
-	return runWithInput(ctx, "", args...)
+	return runMain(ctx, nil, "", args...)
 }
 
-func runWithInput(ctx context.Context, stdin string, args ...string) (code int, stdout, stderr string) {
+// runMain runs adder built with packs, reading stdin.
+func runMain(ctx context.Context, packs []pack.Pack, stdin string, args ...string) (code int, stdout, stderr string) {
 	var out, errOut bytes.Buffer
-	code = Main(ctx, "v0.0.0-test", nil, args, strings.NewReader(stdin), &out, &errOut)
+	code = Main(ctx, "v0.0.0-test", packs, args, strings.NewReader(stdin), &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 
@@ -406,7 +409,7 @@ func TestCLI(t *testing.T) {
 			args:           func(root string) []string { return []string{"--root", root, "derive", "--json"} },
 			canceled:       true,
 			wantCode:       ExitError,
-			stdoutContains: `"code": "error",` + "\n" + `      "message": "interrupted"`,
+			stdoutContains: `"code": "interrupted",` + "\n" + `      "message": "interrupted"`,
 			wantStderr:     func(string) string { return "" },
 		},
 		{
