@@ -1,52 +1,11 @@
 package config
 
 import (
-	"io/fs"
 	"slices"
-	"strings"
 	"testing"
-	"testing/fstest"
-	"text/template"
 
 	"typhonhill.dev/adder/internal/diag"
 )
-
-// deprecationPacks has the packs it maps to their pack.yaml, and the scanners it maps to what to use instead,
-// "" for one that is not deprecated.
-type deprecationPacks struct {
-	packs    map[string]string
-	scanners map[string]string
-	funcs    map[string]string // what to use instead of each function, "" for one that is not deprecated
-}
-
-func (p deprecationPacks) FS(name string) (fs.FS, bool) {
-	content, ok := p.packs[name]
-	return fstest.MapFS{PackFileName: {Data: []byte(content)}}, ok
-}
-
-func (p deprecationPacks) Funcs() template.FuncMap {
-	funcs := template.FuncMap{}
-	for name := range p.funcs {
-		funcs[name] = strings.ToUpper
-	}
-	return funcs
-}
-
-func (p deprecationPacks) HasScanner(name string) bool {
-	_, ok := p.scanners[name]
-	return ok
-}
-
-func (p deprecationPacks) ScannerDeprecation(name string) string { return p.scanners[name] }
-func (p deprecationPacks) DeprecatedFuncs() map[string]string {
-	deprecated := map[string]string{}
-	for name, instead := range p.funcs {
-		if instead != "" {
-			deprecated[name] = instead
-		}
-	}
-	return deprecated
-}
 
 const registryPack = `version: 1
 options:
@@ -63,7 +22,7 @@ func TestWarnings(t *testing.T) {
 		name     string
 		settings []deprecatedSetting
 		config   string
-		packs    deprecationPacks
+		packs    fakePacks
 		want     []string // each warning, as pos: message
 		wantErr  []string // each problem, as pos code, instead of warnings
 	}{
@@ -93,25 +52,25 @@ func TestWarnings(t *testing.T) {
 			name:     "a setting in a pack",
 			settings: []deprecatedSetting{{Path: "derive.scans.*.funcs.name", Message: "use funcs.match"}},
 			config:   "version: 1\npacks:\n  caches: {pack: registry, with: {dirs: [\"caches/*\"]}}\n",
-			packs:    deprecationPacks{packs: map[string]string{"registry": registryPack}},
+			packs:    fakePacks{packs: map[string]string{"registry": registryPack}},
 			want:     []string{"pack registry: pack.yaml:8:45: derive.scans.Entries.funcs.name is deprecated: use funcs.match"},
 		},
 		{
 			name:   "a deprecated option a use gives",
 			config: "version: 1\npacks:\n  caches: {pack: registry, with: {dirs: [\"caches/*\"], out: caches}}\n  queues: {pack: registry, with: {dirs: [\"queues/*\"], dir: queues}}\n",
-			packs:  deprecationPacks{packs: map[string]string{"registry": registryPack}},
+			packs:  fakePacks{packs: map[string]string{"registry": registryPack}},
 			want:   []string{`adder.yaml:3:55: pack use "caches": option "out" is deprecated: use dir`},
 		},
 		{
 			name:   "a deprecated function in a pack's output path",
 			config: "version: 1\npacks:\n  caches: {pack: p, with: {out: caches}}\n",
-			packs:  deprecationPacks{packs: map[string]string{"p": "version: 1\noptions: {out: {}}\nderive:\n  outputs:\n    - {template: t.tmpl, path: \"{{ shout .Options.out }}/x.go\"}\n"}, funcs: map[string]string{"shout": "use upper"}},
+			packs:  fakePacks{packs: map[string]string{"p": "version: 1\noptions: {out: {}}\nderive:\n  outputs:\n    - {template: t.tmpl, path: \"{{ shout .Options.out }}/x.go\"}\n"}, funcs: map[string]string{"shout": "use upper"}},
 			want:   []string{`pack p: pack.yaml:5:26: function "shout" is deprecated: use upper`},
 		},
 		{
 			name:   "a deprecated scanner",
 			config: "version: 1\nderive:\n  scans:\n    A: {scanner: {name: env}}\n    B: {scanner: {name: dotenv}}\n",
-			packs:  deprecationPacks{scanners: map[string]string{"env": "use dotenv", "dotenv": ""}},
+			packs:  fakePacks{scanners: map[string]string{"env": "use dotenv", "dotenv": ""}},
 			want:   []string{`adder.yaml:4:19: scan "A": scanner "env" is deprecated: use dotenv`},
 		},
 		{
@@ -122,7 +81,7 @@ func TestWarnings(t *testing.T) {
 		{
 			name:    "a deprecated option needs a default",
 			config:  "version: 1\npacks:\n  caches: {pack: p}\n",
-			packs:   deprecationPacks{packs: map[string]string{"p": "version: 1\noptions:\n  out: {deprecated: use dir}\n  on: {type: bool, deprecated: use dir}\n"}},
+			packs:   fakePacks{packs: map[string]string{"p": "version: 1\noptions:\n  out: {deprecated: use dir}\n  on: {type: bool, deprecated: use dir}\n"}},
 			wantErr: []string{"pack p: pack.yaml:3:9 missing-field"},
 		},
 	}

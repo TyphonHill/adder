@@ -153,6 +153,7 @@
       "additionalProperties": {"$ref": "#/definitions/generator"}
     },
     "generator": {
+      "description": "A command that creates files from templates, run as adder new <name>.",
       "type": "object",
       "required": ["files"],
       "additionalProperties": false,
@@ -172,6 +173,7 @@
       }
     },
     "input": {
+      "description": "A value the generator takes.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -186,6 +188,7 @@
       }
     },
     "file": {
+      "description": "A file the generator creates.",
       "type": "object",
       "required": ["template", "path"],
       "additionalProperties": false,
@@ -199,6 +202,7 @@
       }
     },
     "test": {
+      "description": "Inputs and the files the generator should create from them.",
       "type": "object",
       "required": ["name", "want"],
       "additionalProperties": false,

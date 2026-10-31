@@ -44,31 +44,30 @@ func readSchema(t *testing.T, path string) map[string]any {
 // no others, so that neither drifts from the other.
 func TestSchemaMatchesTypes(t *testing.T) {
 	tests := []struct {
+		name   string
 		schema string
 		typ    reflect.Type
 		skip   []string // field paths the schema leaves out, as pack.yaml leaves out generator tests
 	}{
-		{schema: adderSchema, typ: reflect.TypeFor[Config]()},
-		{schema: packSchema, typ: reflect.TypeFor[packFile](), skip: []string{"generators.*.tests", "derive.outputs.*.pack", "generators.*.files.*.pack"}},
+		{name: "adder.yaml", schema: adderSchema, typ: reflect.TypeFor[Config]()},
+		{name: "pack.yaml", schema: packSchema, typ: reflect.TypeFor[packFile](), skip: []string{"generators.*.tests", "derive.outputs.*.pack", "generators.*.files.*.pack"}},
 	}
 	for _, tt := range tests {
-		t.Run(filepath.Base(tt.schema), func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			doc := readSchema(t, tt.schema)
 			compareType(t, doc, doc, tt.typ, "", tt.skip)
 		})
 	}
 }
 
-var unmarshaler = reflect.TypeFor[yaml.Unmarshaler]()
-
-// compareType compares the fields of t, at path, with the properties of the schema s, within doc.
+// compareType compares the fields of typ, at path, with the properties of the schema s, within doc.
 func compareType(t *testing.T, doc, s map[string]any, typ reflect.Type, path string, skip []string) {
 	t.Helper()
 	s = resolve(doc, s)
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
-	if reflect.PointerTo(typ).Implements(unmarshaler) || typ == reflect.TypeFor[yaml.Node]() {
+	if reflect.PointerTo(typ).Implements(unmarshalerType) || typ == reflect.TypeFor[yaml.Node]() {
 		return // decoded from a scalar or kept as written
 	}
 	switch typ.Kind() {
@@ -108,7 +107,7 @@ func cmpPath(path string) string {
 	return strings.TrimPrefix(path, ".")
 }
 
-// resolve follows $ref, a sole allOf, and the anyOf the pack schema wraps around values, to the schema they stand
+// resolve follows $ref, allOf, and the anyOf the pack schema wraps around values, to the schema they stand
 // for.
 func resolve(doc, s map[string]any) map[string]any {
 	for {
@@ -116,15 +115,16 @@ func resolve(doc, s map[string]any) map[string]any {
 		case s["$ref"] != nil:
 			name := strings.TrimPrefix(s["$ref"].(string), "#/definitions/")
 			s = doc["definitions"].(map[string]any)[name].(map[string]any)
-		case s["properties"] == nil && s["items"] == nil && s["additionalProperties"] == nil && len(anyOf(s)) > 0:
-			s = anyOf(s)[0].(map[string]any)
+		case s["properties"] == nil && s["items"] == nil && s["additionalProperties"] == nil && len(branches(s)) > 0:
+			s = branches(s)[0].(map[string]any)
 		default:
 			return s
 		}
 	}
 }
 
-func anyOf(s map[string]any) []any {
+// branches returns the schemas of an allOf or anyOf.
+func branches(s map[string]any) []any {
 	if list, ok := s["allOf"].([]any); ok {
 		return list
 	}
@@ -249,6 +249,7 @@ func clone(v any) any {
 func compile(t *testing.T, path string) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
+	ids := make(map[string]string)
 	for _, p := range []string{adderSchema, packSchema} {
 		f, err := os.Open(p)
 		if err != nil {
@@ -259,11 +260,12 @@ func compile(t *testing.T, path string) *jsonschema.Schema {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := c.AddResource(readSchema(t, p)["$id"].(string), doc); err != nil {
+		ids[p] = doc.(map[string]any)["$id"].(string)
+		if err := c.AddResource(ids[p], doc); err != nil {
 			t.Fatal(err)
 		}
 	}
-	s, err := c.Compile(readSchema(t, path)["$id"].(string))
+	s, err := c.Compile(ids[path])
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,14 +19,6 @@ type positions struct {
 	overrides map[string]diag.Pos
 }
 
-func indexPositions(file string, data []byte) positions {
-	var root yaml.Node
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return positions{file: file, byPath: make(map[string]diag.Pos)}
-	}
-	return indexNode(file, "", &root)
-}
-
 // indexNode indexes the positions in a parsed file, which belongs to pack when it is not empty.
 func indexNode(file, pack string, root *yaml.Node) positions {
 	idx := positions{file: file, pack: pack, byPath: make(map[string]diag.Pos), overrides: make(map[string]diag.Pos)}

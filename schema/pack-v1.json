@@ -112,6 +112,7 @@
     },
     "file": {
       "additionalProperties": false,
+      "description": "A file the generator creates.",
       "properties": {
         "ifExists": {
           "anyOf": [
@@ -315,6 +316,7 @@
     },
     "generator": {
       "additionalProperties": false,
+      "description": "A command that creates files from templates, run as adder new \u003cname\u003e.",
       "properties": {
         "deprecated": {
           "anyOf": [
@@ -441,6 +443,7 @@
     },
     "input": {
       "additionalProperties": false,
+      "description": "A value the generator takes.",
       "properties": {
         "default": {
           "anyOf": [
@@ -868,6 +871,7 @@
     },
     "test": {
       "additionalProperties": false,
+      "description": "Inputs and the files the generator should create from them.",
       "properties": {
         "inputs": {
           "anyOf": [

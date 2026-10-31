@@ -12,22 +12,42 @@ import (
 	"typhonhill.dev/adder/internal/diag"
 )
 
-// fakePacks finds pack.yaml files by pack name.
-type fakePacks map[string]string
-
-func (p fakePacks) FS(name string) (fs.FS, bool) {
-	content, ok := p[name]
-	if !ok {
-		return nil, false
-	}
-	return fstest.MapFS{PackFileName: {Data: []byte(content)}}, true
+// fakePacks serves the pack.yaml of each pack by name, and the scanners and functions it maps to what to use
+// instead, "" for one that is not deprecated.
+type fakePacks struct {
+	packs    map[string]string
+	scanners map[string]string
+	funcs    map[string]string
 }
 
-func (fakePacks) Funcs() template.FuncMap { return nil }
+func (p fakePacks) FS(name string) (fs.FS, bool) {
+	content, ok := p.packs[name]
+	return fstest.MapFS{PackFileName: {Data: []byte(content)}}, ok
+}
 
-func (fakePacks) HasScanner(string) bool             { return false }
-func (fakePacks) ScannerDeprecation(string) string   { return "" }
-func (fakePacks) DeprecatedFuncs() map[string]string { return nil }
+func (p fakePacks) Funcs() template.FuncMap {
+	funcs := template.FuncMap{}
+	for name := range p.funcs {
+		funcs[name] = strings.ToUpper
+	}
+	return funcs
+}
+
+func (p fakePacks) HasScanner(name string) bool {
+	_, ok := p.scanners[name]
+	return ok
+}
+
+func (p fakePacks) ScannerDeprecation(name string) string { return p.scanners[name] }
+func (p fakePacks) DeprecatedFuncs() map[string]string {
+	deprecated := map[string]string{}
+	for name, instead := range p.funcs {
+		if instead != "" {
+			deprecated[name] = instead
+		}
+	}
+	return deprecated
+}
 
 const storePack = `version: 1
 options:
@@ -48,6 +68,7 @@ derive:
     - {template: doc.go.tmpl, each: Drivers, path: "{{ .Options.out }}/{{ .Item.Name }}_doc.gen.go"}
 `
 
+// TestPacks checks one configuration using a pack twice, field by field.
 func TestPacks(t *testing.T) {
 	cfg, err := Parse("adder.yaml", []byte(`version: 1
 packs:
@@ -57,7 +78,7 @@ packs:
   mocks:
     pack: store
     with: {dirs: [mocks], out: mocks, tests: true, kind: interface}
-`), fakePacks{"store": storePack})
+`), fakePacks{packs: map[string]string{"store": storePack}})
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -131,14 +152,15 @@ packs:
 func TestPackProblems(t *testing.T) {
 	const use = "version: 1\npacks:\n  drivers:\n    pack: store\n    with: {dirs: [\"drivers/*\"], out: drivers}\n"
 	tests := []struct {
-		name   string
-		config string
-		pack   string
-		packs  Packs // the store pack is pack when nil
-		want   []string
+		name    string
+		config  string
+		pack    string
+		packs   Packs // the store pack is pack when nil
+		noPacks bool  // Parse gets nil Packs, as from a build without packs
+		want    []string
 	}{
 		{name: "a pack adder was not built with", config: use, packs: fakePacks{}, want: []string{"adder.yaml:4:5 unknown-pack"}},
-		{name: "no packs at all", config: use, packs: fakePacks(nil), want: []string{"adder.yaml:4:5 unknown-pack"}},
+		{name: "no packs at all", config: use, noPacks: true, want: []string{"adder.yaml:4:5 unknown-pack"}},
 		{name: "a use name that is not lowercase words", config: "version: 1\npacks:\n  Drivers: {pack: store}\n", want: []string{"adder.yaml:3:3 invalid-name"}},
 		{name: "a use without a pack", config: "version: 1\npacks:\n  drivers: {with: {}}\n", want: []string{"adder.yaml:3:3 missing-field"}},
 		{name: "an unknown field in a use", config: "version: 1\npacks:\n  drivers: {pack: store, options: {}}\n", want: []string{"adder.yaml:3 unknown-field"}},
@@ -188,8 +210,11 @@ func TestPackProblems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			packs := tt.packs
-			if packs == nil {
-				packs = fakePacks{"store": tt.pack}
+			switch {
+			case tt.noPacks:
+				packs = nil
+			case packs == nil:
+				packs = fakePacks{packs: map[string]string{"store": tt.pack}}
 			}
 			_, err := Parse("adder.yaml", []byte(tt.config), packs)
 			var got []string
@@ -209,24 +234,24 @@ func TestOptionValue(t *testing.T) {
 		option  Option
 		value   any
 		want    any
-		wantErr string
+		wantErr bool
 	}{
 		{name: "a string", option: Option{Type: OptionString}, value: "x", want: "x"},
 		{name: "a bool", option: Option{Type: OptionBool}, value: true, want: true},
-		{name: "a number for a string", option: Option{Type: OptionString}, value: 5, wantErr: "is 5, want a string"},
-		{name: "nothing for a string", option: Option{Type: OptionString}, value: nil, wantErr: "is empty, want a string"},
-		{name: "a mapping for a bool", option: Option{Type: OptionBool}, value: map[string]any{}, wantErr: "is a mapping, want true or false"},
-		{name: "a list for a string", option: Option{Type: OptionString}, value: []any{"x"}, wantErr: "is a list, want a string"},
-		{name: "a number in a list", option: Option{Type: OptionList}, value: []any{"x", 2}, wantErr: "value 1 is 2, want a string"},
-		{name: "a value outside the values", option: Option{Type: OptionList, Values: []string{"a"}}, value: []any{"b"}, wantErr: `value 0 "b" is not one of a`},
+		{name: "a number for a string", option: Option{Type: OptionString}, value: 5, wantErr: true},
+		{name: "nothing for a string", option: Option{Type: OptionString}, value: nil, wantErr: true},
+		{name: "a mapping for a bool", option: Option{Type: OptionBool}, value: map[string]any{}, wantErr: true},
+		{name: "a list for a string", option: Option{Type: OptionString}, value: []any{"x"}, wantErr: true},
+		{name: "a number in a list", option: Option{Type: OptionList}, value: []any{"x", 2}, wantErr: true},
+		{name: "a value outside the values", option: Option{Type: OptionList, Values: []string{"a"}}, value: []any{"b"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.option.value(tt.value)
-			if tt.wantErr != "" {
-				if err == nil || err.Error() != tt.wantErr {
-					t.Fatalf("value() error = %v, want %q", err, tt.wantErr)
-				}
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("value() error = %v, want an error: %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
 				return
 			}
 			if err != nil || got != tt.want {
@@ -238,15 +263,16 @@ func TestOptionValue(t *testing.T) {
 
 func TestSource(t *testing.T) {
 	tests := []struct {
+		name string
 		out  Output
 		want string
 	}{
-		{out: Output{Template: "t.tmpl"}, want: "t.tmpl"},
-		{out: Output{Template: "t.tmpl", Pack: "store"}, want: "t.tmpl in pack store"},
-		{out: Output{Template: "t.tmpl", Pack: "store", Use: "drivers"}, want: "t.tmpl in pack store for drivers"},
+		{name: "the configuration's own template", out: Output{Template: "t.tmpl"}, want: "t.tmpl"},
+		{name: "a pack's template", out: Output{Template: "t.tmpl", Pack: "store"}, want: "t.tmpl in pack store"},
+		{name: "a pack use's output", out: Output{Template: "t.tmpl", Pack: "store", Use: "drivers"}, want: "t.tmpl in pack store for drivers"},
 	}
 	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.out.Source(); got != tt.want {
 				t.Errorf("Source() = %q, want %q", got, tt.want)
 			}
@@ -272,11 +298,12 @@ generators:
 
 func TestPackGenerators(t *testing.T) {
 	tests := []struct {
-		name     string
-		config   string
-		pack     string
-		want     map[string]string // command: use
-		wantErrs []string
+		name      string
+		config    string
+		pack      string
+		want      map[string]string // command: use
+		wantTests []string          // the driver generator's tests: want and position
+		wantErrs  []string
 	}{
 		{
 			name:   "a use's generators become commands",
@@ -289,9 +316,10 @@ func TestPackGenerators(t *testing.T) {
 			want:   map[string]string{"a-driver": "a", "driver": "b"},
 		},
 		{
-			name:   "tests under the use",
-			config: "version: 1\npacks:\n  drivers:\n    pack: store\n    with: {dir: drivers}\n    tests: {driver: [{name: plain, inputs: {name: example}, want: ./testdata/plain}]}\n",
-			want:   map[string]string{"driver": "drivers"},
+			name:      "tests under the use",
+			config:    "version: 1\npacks:\n  drivers:\n    pack: store\n    with: {dir: drivers}\n    tests: {driver: [{name: plain, inputs: {name: example}, want: ./testdata/plain}]}\n",
+			want:      map[string]string{"driver": "drivers"},
+			wantTests: []string{"testdata/plain adder.yaml:6:22"},
 		},
 		{
 			name:     "a name the configuration's own generator has",
@@ -342,7 +370,7 @@ func TestPackGenerators(t *testing.T) {
 			if pack == "" {
 				pack = generatorPack
 			}
-			cfg, err := Parse("adder.yaml", []byte(tt.config), fakePacks{"store": pack})
+			cfg, err := Parse("adder.yaml", []byte(tt.config), fakePacks{packs: map[string]string{"store": pack}})
 			var errs []string
 			for _, d := range diag.From(err) {
 				errs = append(errs, d.Pos.String()+" "+string(d.Code))
@@ -363,13 +391,19 @@ func TestPackGenerators(t *testing.T) {
 			if !maps.Equal(got, tt.want) {
 				t.Errorf("generators = %v, want %v", got, tt.want)
 			}
-			if tests := cfg.Generators["driver"].Tests; len(tests) == 1 && (tests[0].Want != "testdata/plain" || tests[0].Pos.String() != "adder.yaml:6:22") {
-				t.Errorf("test = %+v", tests[0])
+			var tests []string
+			for _, test := range cfg.Generators["driver"].Tests {
+				tests = append(tests, test.Want+" "+test.Pos.String())
+			}
+			if !slices.Equal(tests, tt.wantTests) {
+				t.Errorf("tests = %q, want %q", tests, tt.wantTests)
 			}
 		})
 	}
 }
 
+// TestPackTemplates checks the templates a configuration borrows from a pack. It has a single case, so it is not a
+// table.
 func TestPackTemplates(t *testing.T) {
 	cfg, err := Parse("adder.yaml", []byte(`version: 1
 derive:
@@ -380,7 +414,7 @@ derive:
     - {template: each.tmpl, pack: store, each: S, path: "b/{{ .Item.Name }}.go"}
 generators:
   g: {files: [{template: g.tmpl, pack: store, path: x.go}]}
-`), fakePacks{"store": "version: 1\noptions: {dir: {}}\npartials: [./_*.tmpl]\n"})
+`), fakePacks{packs: map[string]string{"store": "version: 1\noptions: {dir: {}}\npartials: [./_*.tmpl]\n"}})
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}

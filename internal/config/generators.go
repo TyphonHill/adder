@@ -117,10 +117,16 @@ type File struct {
 }
 
 var (
-	generatorName = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
-	inputName     = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
-	scanField     = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$`)
+	kebabName = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
+	inputName = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
+	scanField = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$`)
 )
+
+// IsName reports whether s has the form of the names of generators, tests, packs, and scanners: lowercase
+// words joined by hyphens.
+func IsName(s string) bool {
+	return kebabName.MatchString(s)
+}
 
 func (c *Config) normalizeGenerators() {
 	for name, gen := range c.Generators {
@@ -128,9 +134,7 @@ func (c *Config) normalizeGenerators() {
 			if in.Type == "" {
 				in.Type = InputString
 			}
-			if in.Pattern.Regexp != nil {
-				in.whole = regexp.MustCompile(`^(?:` + in.Pattern.String() + `)$`)
-			}
+			in.whole = in.Pattern.anchored()
 			gen.Inputs[key] = in
 		}
 		for i := range gen.Tests {
@@ -170,7 +174,7 @@ func (c *Config) validateGenerators(pos positions) diag.List {
 	for _, name := range slices.Sorted(maps.Keys(c.Generators)) {
 		gen := c.Generators[name]
 		at := "generators." + name
-		if !generatorName.MatchString(name) {
+		if !IsName(name) {
 			errs = append(errs, &diag.Diagnostic{
 				Code:    diag.InvalidName,
 				Pos:     pos.at(at),
@@ -227,7 +231,7 @@ func (c *Config) validateInput(gen, name string, in Input, at string, pos positi
 					Code:    diag.InvalidValue,
 					Pos:     pos.at(at + "." + setting.key),
 					Message: fmt.Sprintf("%s: %s only applies to string inputs", field, setting.key),
-					Hint:    "bool inputs are false unless their flag is given",
+					Hint:    "bool inputs are false unless given, as cache or cache=true",
 				})
 			}
 		}
@@ -242,12 +246,7 @@ func (c *Config) validateInput(gen, name string, in Input, at string, pos positi
 	}
 
 	if in.Deprecated != "" && in.Default == nil {
-		errs = append(errs, &diag.Diagnostic{
-			Code:    diag.MissingField,
-			Pos:     pos.at(at + ".deprecated"),
-			Message: field + ": a deprecated input needs a default",
-			Hint:    "leaving a deprecated input out must keep working, so give it the default that matches what it did",
-		})
+		errs = append(errs, needsDefault(pos.at(at+".deprecated"), field, "input"))
 	}
 	if in.Values != nil && in.ValuesFrom != "" {
 		errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".valuesFrom"), "%s: use values or valuesFrom, not both", field))
@@ -291,7 +290,7 @@ func validateFile(gen string, i int, f File, inputs map[string]Input, at string,
 	field := fmt.Sprintf("generator %q: file %d", gen, i)
 	if f.Template == "" {
 		errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "%s: template is required", field))
-	} else if d := checkPath(pos.at(at+".template"), fmt.Sprintf("%s: template %q", field, f.Template), f.Template); d != nil {
+	} else if d := CheckPath(pos.at(at+".template"), fmt.Sprintf("%s: template %q", field, f.Template), f.Template); d != nil {
 		errs = append(errs, d)
 	}
 	if strings.TrimSpace(f.Path) == "" {
@@ -336,7 +335,7 @@ func validateTest(gen string, i int, test GeneratorTest, inputs map[string]Input
 	switch {
 	case test.Name == "":
 		errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "%s: name is required", field))
-	case !generatorName.MatchString(test.Name):
+	case !IsName(test.Name):
 		errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".name"), "%s: name %q must be lowercase words joined by hyphens", field, test.Name))
 	case names[test.Name]:
 		errs = append(errs, diag.Errorf(diag.DuplicateName, pos.at(at+".name"), "%s: another test is also called %q", field, test.Name))
@@ -353,7 +352,7 @@ func validateTest(gen string, i int, test GeneratorTest, inputs map[string]Input
 			Hint:    "use a directory under testdata, such as testdata/generators/<generator>/<test>",
 		})
 	default:
-		if d := checkPath(pos.at(at+".want"), fmt.Sprintf("%s: want %q", field, test.Want), test.Want); d != nil {
+		if d := CheckPath(pos.at(at+".want"), fmt.Sprintf("%s: want %q", field, test.Want), test.Want); d != nil {
 			errs = append(errs, d)
 		}
 	}
@@ -363,7 +362,7 @@ func validateTest(gen string, i int, test GeneratorTest, inputs map[string]Input
 				Code:    diag.InvalidValue,
 				Pos:     pos.at(at + ".inputs." + key),
 				Message: fmt.Sprintf("%s: unknown input %q", field, key),
-				Hint:    "inputs are keyed by input name, not flag, such as packageName",
+				Hint:    "inputs are keyed by input name, such as packageName",
 			})
 		}
 	}

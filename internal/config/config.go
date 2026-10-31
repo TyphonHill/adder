@@ -139,8 +139,7 @@ type ValueMatch struct {
 	Kind     string  `yaml:"kind"`
 	Exported bool    `yaml:"exported"`
 	Name     Pattern `yaml:"name"`
-	// Type matches the type as written, which a name in a const group without its own repeats from the name
-	// before it, as Go does.
+	// Type matches the type as written; in a const group, a name without one has the type of the name before it.
 	Type      string `yaml:"type"`
 	Directive string `yaml:"directive"`
 }
@@ -170,8 +169,7 @@ type Output struct {
 	Path string `yaml:"path" json:"path"`
 	// Each names a scan; the template is rendered once per item, as .Item.
 	Each string `yaml:"each" json:"each,omitempty"`
-	// Pack names the pack holding the template, for an output a pack declares or one rendering a pack's
-	// template. Use names the use an output a pack declares comes from.
+	// Pack names the pack holding the template. Use names the pack use that declared the output, if any.
 	Pack string `yaml:"pack" json:"pack,omitempty"`
 	Use  string `yaml:"-" json:"use,omitempty"`
 
@@ -195,6 +193,14 @@ func (p *Partial) UnmarshalYAML(node *yaml.Node) error {
 // Pattern is a regular expression compiled when the configuration is decoded.
 type Pattern struct {
 	*regexp.Regexp
+}
+
+// anchored returns the pattern made to match whole values, or nil without one.
+func (p Pattern) anchored() *regexp.Regexp {
+	if p.Regexp == nil {
+		return nil
+	}
+	return regexp.MustCompile(`^(?:` + p.String() + `)$`)
 }
 
 // UnmarshalYAML compiles the pattern so invalid expressions fail at load time.
@@ -278,11 +284,10 @@ func Parse(file string, data []byte, packs Packs) (*Config, error) {
 		return nil, decodeError(file, err)
 	}
 
-	pos := indexPositions(file, data)
 	var root yaml.Node
-	if yaml.Unmarshal(data, &root) == nil {
-		cfg.Warnings = settingWarnings(file, "", &root)
-	}
+	_ = yaml.Unmarshal(data, &root) // the decoder has accepted data
+	pos := indexNode(file, "", &root)
+	cfg.Warnings = settingWarnings(file, "", &root)
 	cfg.normalize()
 	cfg.recordPositions(pos)
 	problems := diag.From(cfg.validate(pos))
@@ -471,7 +476,7 @@ func (c *Config) validate(pos positions) error {
 		at := "derive.outputs." + strconv.Itoa(i)
 		if out.Template == "" {
 			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "output %d: template is required", i))
-		} else if d := checkPath(pos.at(at+".template"), fmt.Sprintf("output %d: template %q", i, out.Template), out.Template); d != nil {
+		} else if d := CheckPath(pos.at(at+".template"), fmt.Sprintf("output %d: template %q", i, out.Template), out.Template); d != nil {
 			errs = append(errs, d)
 		}
 		if out.Each != "" {
@@ -491,7 +496,7 @@ func (c *Config) validate(pos positions) error {
 		case seen[out.Path]:
 			errs = append(errs, diag.Errorf(diag.DuplicatePath, pos.at(at+".path"), "output %d: path %q is already used by another output", i, out.Path))
 		default:
-			if d := checkPath(pos.at(at+".path"), fmt.Sprintf("output %d: path %q", i, out.Path), out.Path); d != nil {
+			if d := CheckPath(pos.at(at+".path"), fmt.Sprintf("output %d: path %q", i, out.Path), out.Path); d != nil {
 				errs = append(errs, d)
 			}
 		}
@@ -560,7 +565,6 @@ func validateFuncs(name string, m FuncMatch, at string, pos positions) diag.List
 	return errs
 }
 
-// validateTypes checks the type filters of the scan called name.
 // validateTypeCheck checks the settings that only type-aware scans use.
 func validateTypeCheck(name string, scan Scan, at string, pos positions) diag.List {
 	var errs diag.List
@@ -619,6 +623,7 @@ func validateValues(name string, m ValueMatch, at string, pos positions) diag.Li
 	return append(errs, validateDirective(name, m.Directive, at, pos)...)
 }
 
+// validateTypes checks the type filters of the scan called name.
 func validateTypes(name string, m TypeMatch, at string, pos positions) diag.List {
 	var errs diag.List
 	switch m.Kind {
@@ -656,7 +661,7 @@ func checkPattern(pos diag.Pos, field, pattern string) *diag.Diagnostic {
 			Hint:    "in a pack, fill a list from an option instead, such as dirs: {option: dirs}",
 		}
 	}
-	if d := checkPath(pos, field, pattern); d != nil {
+	if d := CheckPath(pos, field, pattern); d != nil {
 		return d
 	}
 	for segment := range strings.SplitSeq(pattern, "/") {
@@ -675,7 +680,7 @@ func checkPattern(pos diag.Pos, field, pattern string) *diag.Diagnostic {
 
 // checkGlob reports file patterns that are unsafe or malformed. Unlike directory patterns, they have no "**".
 func checkGlob(pos diag.Pos, field, pattern string) *diag.Diagnostic {
-	if d := checkPath(pos, field, pattern); d != nil {
+	if d := CheckPath(pos, field, pattern); d != nil {
 		return d
 	}
 	if strings.Contains(pattern, "**") {
@@ -689,11 +694,6 @@ func checkGlob(pos diag.Pos, field, pattern string) *diag.Diagnostic {
 
 // CheckPath reports a path that is not relative, slash-separated, and confined to its root, describing it as field.
 func CheckPath(pos diag.Pos, field, p string) *diag.Diagnostic {
-	return checkPath(pos, field, p)
-}
-
-// checkPath reports paths that are not relative, slash-separated, and confined to their root.
-func checkPath(pos diag.Pos, field, p string) *diag.Diagnostic {
 	switch {
 	case strings.Contains(p, `\`):
 		return &diag.Diagnostic{Code: diag.UnsafePath, Pos: pos, Message: field + " must use forward slashes", Hint: "paths in adder.yaml are slash-separated on every operating system"}

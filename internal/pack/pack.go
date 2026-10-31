@@ -1,12 +1,10 @@
-// Package pack registers the packs adder was built with: derive outputs, templates, and template functions that
-// repositories share.
+// Package pack registers the packs adder was built with.
 package pack
 
 import (
 	"context"
 	"io/fs"
 	"maps"
-	"regexp"
 	"slices"
 	"text/template"
 
@@ -14,9 +12,6 @@ import (
 	"typhonhill.dev/adder/internal/diag"
 	"typhonhill.dev/adder/internal/render"
 )
-
-// FileName is the configuration file at the root of a pack's file system.
-const FileName = config.PackFileName
 
 // Pack is a pack as the root package's adder.Pack describes it.
 type Pack struct {
@@ -51,9 +46,6 @@ type Registry struct {
 	deprecatedFuncs, deprecatedScanners map[string]string
 }
 
-// name is the form of a pack name, the same as a generator's.
-var name = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
-
 // New checks packs and registers them, reporting every problem as an invalid-pack diagnostic.
 func New(packs []Pack) (*Registry, error) {
 	r := &Registry{
@@ -69,7 +61,7 @@ func New(packs []Pack) (*Registry, error) {
 	}
 	for _, p := range packs {
 		switch {
-		case !name.MatchString(p.Name):
+		case !config.IsName(p.Name):
 			invalid("pack name %q is not lowercase words joined by hyphens", p.Name)
 			continue
 		case seen[p.Name]:
@@ -78,8 +70,8 @@ func New(packs []Pack) (*Registry, error) {
 		}
 		seen[p.Name] = true
 		if p.FS != nil {
-			if info, err := fs.Stat(p.FS, FileName); err != nil || !info.Mode().IsRegular() {
-				invalid("pack %q: its FS has no %s at its root", p.Name, FileName)
+			if info, err := fs.Stat(p.FS, config.PackFileName); err != nil || !info.Mode().IsRegular() {
+				invalid("pack %q: its FS has no %s at its root", p.Name, config.PackFileName)
 			} else {
 				r.fs[p.Name] = p.FS
 			}
@@ -99,7 +91,7 @@ func New(packs []Pack) (*Registry, error) {
 		for _, s := range slices.Sorted(maps.Keys(p.Scanners)) {
 			first, dup := scannerFrom[s]
 			switch {
-			case !name.MatchString(s):
+			case !config.IsName(s):
 				invalid("pack %q: scanner name %q is not lowercase words joined by hyphens", p.Name, s)
 			case p.Scanners[s] == nil:
 				invalid("pack %q: scanner %q is nil", p.Name, s)

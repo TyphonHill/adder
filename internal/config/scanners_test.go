@@ -1,23 +1,12 @@
 package config
 
 import (
-	"io/fs"
+	"reflect"
 	"slices"
-	"strings"
 	"testing"
-	"text/template"
 
 	"typhonhill.dev/adder/internal/diag"
 )
-
-// scannerPacks provides the scanners it lists, and no packs.
-type scannerPacks []string
-
-func (scannerPacks) FS(string) (fs.FS, bool)            { return nil, false }
-func (scannerPacks) Funcs() template.FuncMap            { return nil }
-func (p scannerPacks) HasScanner(name string) bool      { return slices.Contains(p, name) }
-func (scannerPacks) ScannerDeprecation(string) string   { return "" }
-func (scannerPacks) DeprecatedFuncs() map[string]string { return nil }
 
 func TestScannerScans(t *testing.T) {
 	tests := []struct {
@@ -38,7 +27,7 @@ func TestScannerScans(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse("adder.yaml", []byte("version: 1\nderive:\n  scans:\n    "+tt.scans+"\n"), scannerPacks{"routes"})
+			_, err := Parse("adder.yaml", []byte("version: 1\nderive:\n  scans:\n    "+tt.scans+"\n"), fakePacks{scanners: map[string]string{"routes": ""}})
 			var got []string
 			for _, d := range diag.From(err) {
 				got = append(got, d.Pos.String()+" "+string(d.Code))
@@ -66,13 +55,16 @@ func TestScannerDecode(t *testing.T) {
 		Skipped string `yaml:"-"`
 	}
 	tests := []struct {
-		name    string
-		with    string
-		want    settings
-		wantErr []string
+		name     string
+		with     string
+		want     settings
+		wantName string // the pattern of the name field, which is compared as written
+		wantErr  []string
 	}{
 		{name: "no settings", with: "", want: settings{}},
-		{name: "every kind of field", with: "{prefix: /v1, owner: api, routes: [{path: /a, methods: [GET]}], named: {x: {path: /x}}, name: ^R}", want: settings{Prefix: "/v1", Routes: []route{{Path: "/a", Methods: []string{"GET"}}}, Named: map[string]route{"x": {Path: "/x"}}}},
+		{name: "every kind of field", with: "{prefix: /v1, owner: api, routes: [{path: /a, methods: [GET]}], named: {x: {path: /x}}, name: ^R}", want: settings{Prefix: "/v1", Routes: []route{{Path: "/a", Methods: []string{"GET"}}}, Named: map[string]route{"x": {Path: "/x"}}, Common: struct {
+			Owner string `yaml:"owner"`
+		}{Owner: "api"}}, wantName: "^R"},
 		{name: "an unknown field", with: "{prefx: /v1}", wantErr: []string{"adder.yaml:4:40 unknown-field"}},
 		{name: "unknown fields deep inside", with: "{routes: [{path: /a, verb: GET}], named: {x: {pth: /x}}, Skipped: x}", wantErr: []string{"adder.yaml:4:60 unknown-field", "adder.yaml:4:85 unknown-field", "adder.yaml:4:96 unknown-field"}},
 		{name: "a value of the wrong type", with: "{routes: x}", wantErr: []string{"adder.yaml:4 invalid-value"}},
@@ -83,7 +75,7 @@ func TestScannerDecode(t *testing.T) {
 			if tt.with != "" {
 				scanner = "{name: routes, with: " + tt.with + "}"
 			}
-			cfg, err := Parse("adder.yaml", []byte("version: 1\nderive:\n  scans:\n    R: {scanner: "+scanner+"}\n"), scannerPacks{"routes"})
+			cfg, err := Parse("adder.yaml", []byte("version: 1\nderive:\n  scans:\n    R: {scanner: "+scanner+"}\n"), fakePacks{scanners: map[string]string{"routes": ""}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,12 +91,13 @@ func TestScannerDecode(t *testing.T) {
 			if err != nil {
 				return
 			}
-			got.Name = Pattern{}
-			if got.Prefix != tt.want.Prefix || len(got.Routes) != len(tt.want.Routes) || len(got.Named) != len(tt.want.Named) {
-				t.Errorf("Decode() = %+v, want %+v", got, tt.want)
+			var name string
+			if got.Name.Regexp != nil {
+				name = got.Name.String()
 			}
-			if strings.Contains(tt.with, "owner") && got.Common.Owner != "api" {
-				t.Errorf("inline field = %q", got.Common.Owner)
+			got.Name = Pattern{}
+			if !reflect.DeepEqual(got, tt.want) || name != tt.wantName {
+				t.Errorf("Decode() = %+v with name %q, want %+v with name %q", got, name, tt.want, tt.wantName)
 			}
 		})
 	}

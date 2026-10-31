@@ -116,6 +116,28 @@ func (o Output) Source() string {
 	}
 }
 
+// unknownPackHint explains where packs come from, for a pack adder was built without.
+const unknownPackHint = "packs are part of a repository's own build of adder, such as go tool adder, whose main package passes them to adder.Main"
+
+// packFS returns the file system of the pack called name, if adder was built with it.
+func packFS(packs Packs, name string) (fs.FS, bool) {
+	if packs == nil {
+		return nil, false
+	}
+	return packs.FS(name)
+}
+
+// needsDefault reports a deprecated input or option, named by noun, without the default that keeps leaving it out
+// working.
+func needsDefault(pos diag.Pos, field, noun string) *diag.Diagnostic {
+	return &diag.Diagnostic{
+		Code:    diag.MissingField,
+		Pos:     pos,
+		Message: fmt.Sprintf("%s: a deprecated %s needs a default", field, noun),
+		Hint:    fmt.Sprintf("leaving a deprecated %s out must keep working, so give it the default that matches what it did", noun),
+	}
+}
+
 // loadPacks loads the pack of every use, checking the options it gives.
 func (c *Config) loadPacks(packs Packs, pos positions) diag.List {
 	var errs diag.List
@@ -123,13 +145,9 @@ func (c *Config) loadPacks(packs Packs, pos positions) diag.List {
 		use := c.Packs[name]
 		at := "packs." + name
 		use.Pos = pos.at(at)
-		var fsys fs.FS
-		found := false
-		if packs != nil {
-			fsys, found = packs.FS(use.Pack)
-		}
+		fsys, found := packFS(packs, use.Pack)
 		switch {
-		case !generatorName.MatchString(name):
+		case !IsName(name):
 			errs = append(errs, &diag.Diagnostic{
 				Code:    diag.InvalidName,
 				Pos:     use.Pos,
@@ -143,7 +161,7 @@ func (c *Config) loadPacks(packs Packs, pos positions) diag.List {
 				Code:    diag.UnknownPack,
 				Pos:     pos.at(at + ".pack"),
 				Message: fmt.Sprintf("pack use %q: adder was built without pack %q", name, use.Pack),
-				Hint:    "packs are part of a repository's own build of adder, such as go tool adder, whose main package passes them to adder.Main",
+				Hint:    unknownPackHint,
 			})
 		default:
 			cfg, values, problems := loadPack(use.Pack, fsys, name, use.With, packs, at, pos)
@@ -178,17 +196,13 @@ func (c *Config) loadPackTemplates(packs Packs, pos positions) diag.List {
 	}
 	var errs diag.List
 	for _, pack := range slices.Sorted(maps.Keys(at)) {
-		var fsys fs.FS
-		found := false
-		if packs != nil {
-			fsys, found = packs.FS(pack)
-		}
+		fsys, found := packFS(packs, pack)
 		if !found {
 			errs = append(errs, &diag.Diagnostic{
 				Code:    diag.UnknownPack,
 				Pos:     pos.at(at[pack]),
 				Message: fmt.Sprintf("adder was built without pack %q", pack),
-				Hint:    "packs are part of a repository's own build of adder, such as go tool adder, whose main package passes them to adder.Main",
+				Hint:    unknownPackHint,
 			})
 			continue
 		}
@@ -262,7 +276,7 @@ func (c *Config) addUseGenerators(pos positions) diag.List {
 			switch _, ok := use.Config.Generators[name]; {
 			case !ok:
 				errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".rename."+name), "pack use %q: pack %q has no generator %q", useName, use.Pack, name))
-			case !generatorName.MatchString(renamed):
+			case !IsName(renamed):
 				errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".rename."+name), "pack use %q: generator name %q must be lowercase words joined by hyphens", useName, renamed))
 			}
 		}
@@ -375,7 +389,7 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, packs Pa
 	warnings := settingWarnings(PackFileName, pack, &root)
 	for _, key := range slices.Sorted(maps.Keys(with)) {
 		if opt, ok := written.Options[key]; ok && opt.Deprecated != "" {
-			warnings = append(warnings, deprecation(adder.at(at+".with."+key), fmt.Sprintf("pack use %q: option %q is deprecated", use, key), opt.Deprecated))
+			warnings = append(warnings, Deprecation(adder.at(at+".with."+key), fmt.Sprintf("pack use %q: option %q is deprecated", use, key), opt.Deprecated))
 		}
 	}
 	values, problems := optionValues(use, written.Options, with, at, adder)
@@ -393,11 +407,11 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, packs Pa
 	if err := root.Decode(&filled); err != nil {
 		return nil, nil, inPack(decodeError(PackFileName, err))
 	}
-	if problems := ownTemplates(filled, indexNode(PackFileName, pack, &root)); len(problems) > 0 {
+	pos := indexNode(PackFileName, pack, &root)
+	if problems := ownTemplates(filled, pos); len(problems) > 0 {
 		return nil, nil, problems
 	}
 	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive, Generators: filled.Generators, Warnings: warnings}
-	pos := indexNode(PackFileName, pack, &root)
 	pos.overrides = overrides
 	if problems := cfg.renderPaths(values, packs, adder.at(at), pos); len(problems) > 0 {
 		return nil, nil, problems
@@ -522,9 +536,7 @@ func valueNode(v any, line, column int) *yaml.Node {
 	}
 }
 
-// renderPaths renders the paths of outputs without each, which may use .Options and the template functions.
-// Paths of outputs with each render for every item, with .Options too. A problem with the result is reported at
-// use.
+// renderPaths renders the paths of outputs without each, which may use .Options; problems are reported at use.
 func (c *Config) renderPaths(values map[string]any, packs Packs, use diag.Pos, pos positions) diag.List {
 	var errs diag.List
 	for i := range c.Derive.Outputs {
@@ -562,9 +574,7 @@ func normalizeOptions(options map[string]Option, pos positions) {
 		if opt.Type == "" {
 			opt.Type = OptionString
 		}
-		if opt.Pattern.Regexp != nil {
-			opt.whole = regexp.MustCompile(`^(?:` + opt.Pattern.String() + `)$`)
-		}
+		opt.whole = opt.Pattern.anchored()
 		opt.Pos = pos.at("options." + name)
 		options[name] = opt
 	}
@@ -606,12 +616,7 @@ func validateOptions(options map[string]Option, pos positions) diag.List {
 			continue
 		}
 		if opt.Deprecated != "" && opt.Default == nil && opt.Type != OptionBool {
-			errs = append(errs, &diag.Diagnostic{
-				Code:    diag.MissingField,
-				Pos:     pos.at(at + ".deprecated"),
-				Message: field + ": a deprecated option needs a default",
-				Hint:    "leaving a deprecated option out must keep working, so give it the default that matches what it did",
-			})
+			errs = append(errs, needsDefault(pos.at(at+".deprecated"), field, "option"))
 		}
 		if opt.Default != nil {
 			if _, err := opt.value(opt.Default); err != nil {

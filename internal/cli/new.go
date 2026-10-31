@@ -182,11 +182,11 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 func generatorWarnings(name string, gen config.Generator, inputs map[string]any) diag.List {
 	var warnings diag.List
 	if gen.Deprecated != "" {
-		warnings = append(warnings, &diag.Diagnostic{Code: diag.Deprecated, Pos: gen.Pos, Message: fmt.Sprintf("generator %q is deprecated: %s", name, gen.Deprecated)})
+		warnings = append(warnings, config.Deprecation(gen.Pos, fmt.Sprintf("generator %q is deprecated", name), gen.Deprecated))
 	}
 	for _, input := range slices.Sorted(maps.Keys(inputs)) {
 		if in, ok := gen.Inputs[input]; ok && in.Deprecated != "" {
-			warnings = append(warnings, &diag.Diagnostic{Code: diag.Deprecated, Pos: in.Pos, Message: fmt.Sprintf("generator %q: input %q is deprecated: %s", name, input, in.Deprecated)})
+			warnings = append(warnings, config.Deprecation(in.Pos, fmt.Sprintf("generator %q: input %q is deprecated", name, input), in.Deprecated))
 		}
 	}
 	return warnings
