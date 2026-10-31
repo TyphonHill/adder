@@ -1,0 +1,25 @@
+package {{ .Options.package }}
+
+import (
+{{- range .Entries }}
+	"{{ .ImportPath }}"
+{{- end }}
+)
+
+// Names lists the packages in this registry, in name order.
+var Names = []string{
+{{- range .Entries }}
+	"{{ .Package }}",
+{{- end }}
+}
+
+// New returns a new instance of the entry called name, or nil if there is none.
+func New(name string) any {
+	switch name {
+{{- range .Entries }}
+	case "{{ .Package }}":
+		return {{ .Package }}.New()
+{{- end }}
+	}
+	return nil
+}

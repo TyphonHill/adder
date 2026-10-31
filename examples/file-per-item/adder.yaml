@@ -1,0 +1,13 @@
+version: 1
+
+derive:
+  scans:
+    # Every exported struct in config/ is a section of the configuration file.
+    Sections:
+      dirs: [config]
+      types: {kind: struct, exported: true}
+  outputs:
+    # One page per section. Removing a section removes its page.
+    - template: templates/section.md.tmpl
+      each: Sections
+      path: "docs/config/{{ .Item.Name | toKebabCase }}.md"

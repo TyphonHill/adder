@@ -1,0 +1,33 @@
+version: 1
+
+derive:
+  scans:
+    # The commands that exist, so the generator can refuse a name that is taken.
+    Commands:
+      dirs: ["commands/*"]
+      funcs: {exported: true, name: ^Run$}
+
+generators:
+  command:
+    description: Add a command
+    inputs:
+      name:
+        help: Command name, used as the package name
+        pattern: "[a-z][a-z0-9]*"
+        unique: Commands.Package
+      summary:
+        help: What the command does, for its documentation
+        default: does nothing yet
+      withTest:
+        type: bool
+        help: Add a test file
+    files:
+      - template: templates/command.go.tmpl
+        path: "commands/{{ .Inputs.name }}/{{ .Inputs.name }}.go"
+      - template: templates/command_test.go.tmpl
+        path: "commands/{{ .Inputs.name }}/{{ .Inputs.name }}_test.go"
+        when: withTest
+    message: Write the command in commands/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
+    tests:
+      - {name: plain, inputs: {name: example}, want: testdata/command/plain}
+      - {name: with-test, inputs: {name: example, withTest: true}, want: testdata/command/with-test}

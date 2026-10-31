@@ -1,20 +1,41 @@
 # Examples
 
-Each directory is a complete repository with its own `go.mod`, `adder.yaml`, templates, Go code, and the files adder derived from them, committed as a repository using adder would commit them.
+Each directory is a small, complete repository that shows one thing adder does. It has its own `go.mod`, `adder.yaml`, templates, and Go code, and the files adder derived from them, committed as a repository using adder would commit them. Each README says what the example shows, how it works, and what to try.
+
+## Deriving files from code
 
 | Example | Shows |
 | --- | --- |
-| [`registry`](registry) | A registry of storage drivers derived from their `New` functions, a generator that adds a driver, and a generator test. |
-| [`handlers`](handlers) | HTTP routes declared in comment directives, a route table grouped by package, and one page per route. |
-| [`packs`](packs) | A pack that registers plugins, used by an application that builds its own adder with it, plus a template function and a custom scanner. |
+| [`registry-from-functions`](registry-from-functions) | A function scan, and a registry that constructs every package with a `New` function. |
+| [`routes-from-directives`](routes-from-directives) | Declarations selected by a `//adder:route` comment, with the directive's arguments in the template. |
+| [`enum-strings`](enum-strings) | A constant scan, and a `String` method for every `iota` enum, one per type with `groupBy`. |
+| [`types-implementing-interface`](types-implementing-interface) | A type-aware scan that lists the types implementing an interface, by value or by pointer. |
+| [`list-sql-migrations`](list-sql-migrations) | A file scan that lists the SQL files in a directory, in order. |
+| [`file-per-item`](file-per-item) | An output with `each`, which writes one Markdown page per struct and removes the pages of deleted ones. |
 
-To try one from a checkout of adder, change into its directory and run the adder in the checkout:
+## Creating files
+
+| Example | Shows |
+| --- | --- |
+| [`scaffold-with-generator`](scaffold-with-generator) | `adder new` with validated inputs, an optional file, `--dry-run`, and golden-file tests. |
+
+## Sharing and extending
+
+| Example | Shows |
+| --- | --- |
+| [`shared-pack`](shared-pack) | A pack used twice with different options, in the repository's own build of adder. |
+| [`custom-scanner`](custom-scanner) | A scanner written in Go, which reads settings from an `.env` file and reports problems at their line. |
+| [`monorepo`](monorepo) | One `adder.yaml` per service, all checked at once with `adder check ./...`. |
+
+## Running them
+
+From a checkout of adder, change into an example's directory and run the adder in the checkout:
 
 ```sh
-cd examples/registry
+cd examples/registry-from-functions
 go run ../../cmd/adder check   # exits 0: every derived file is current
 ```
 
-`packs` builds its own adder, so it runs as `go tool adder` instead. The examples follow adder's `main` branch, which may be ahead of the latest release.
+`shared-pack` and `custom-scanner` build their own adder, so they run as `go tool adder` instead. The examples follow adder's `main` branch, which may be ahead of the latest release.
 
-adder's tests run `adder check`, `adder test`, and `go build ./...` in each example with adder from the same commit, so the examples always match the adder they document.
+adder's tests run `adder check`, `adder test`, `go build ./...`, and `go vet ./...` in every example with adder from the same commit, so the examples always match the adder they document.

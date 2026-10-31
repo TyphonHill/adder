@@ -1,0 +1,12 @@
+version: 1
+
+derive:
+  scans:
+    # Every function marked //adder:route is a handler, with its method and path as arguments.
+    Routes:
+      dirs: ["api/*"]
+      funcs: {directive: route}
+  outputs:
+    # One function registers every route, grouped by package.
+    - template: templates/routes.go.tmpl
+      path: api/routes.gen.go

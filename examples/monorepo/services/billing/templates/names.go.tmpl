@@ -1,0 +1,8 @@
+package handlers
+
+// Names lists every handler, in name order.
+var Names = []string{
+{{- range .Handlers }}
+	{{ quote .Name }},
+{{- end }}
+}

@@ -1,0 +1,10 @@
+version: 1
+
+derive:
+  scans:
+    # Settings from .env files, read by this repository's own env-file scanner.
+    Settings:
+      scanner: {name: env-file, with: {files: [config/defaults.env]}}
+  outputs:
+    - template: templates/settings.go.tmpl
+      path: config/settings.gen.go

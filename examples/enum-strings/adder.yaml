@@ -1,0 +1,11 @@
+version: 1
+
+derive:
+  scans:
+    # Every exported constant in order/, with the type it is declared with.
+    Constants:
+      dirs: [order]
+      values: {kind: const, exported: true}
+  outputs:
+    - template: templates/strings.go.tmpl
+      path: order/strings.gen.go

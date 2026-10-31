@@ -1,0 +1,11 @@
+version: 1
+
+derive:
+  scans:
+    # Every exported New function in a package under drivers/ is a driver.
+    Drivers:
+      dirs: ["drivers/*"]
+      funcs: {exported: true, name: ^New$}
+  outputs:
+    - template: templates/registry.go.tmpl
+      path: drivers/drivers.gen.go
