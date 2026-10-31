@@ -9,7 +9,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -245,7 +244,7 @@ func loadError(root string, e packages.Error) *diag.Diagnostic {
 	if first, rest, ok := strings.Cut(msg, "\n"); ok && strings.HasPrefix(first, "# ") && pos == "" {
 		// The compiler's output: "# package" and then "file:line:col: message".
 		if at, text, ok := strings.Cut(rest, ": "); ok {
-			if _, line, _ := splitPos(at); line > 0 {
+			if diag.ParsePos(at).Line > 0 {
 				msg, pos = text, at
 			}
 		}
@@ -256,7 +255,8 @@ func loadError(root string, e packages.Error) *diag.Diagnostic {
 			d.Hint = "adder never downloads modules; run go mod download, then try again"
 		}
 	}
-	file, line, col := splitPos(pos)
+	p := diag.ParsePos(pos)
+	file := p.File
 	if file == "" {
 		return d
 	}
@@ -265,32 +265,8 @@ func loadError(root string, e packages.Error) *diag.Diagnostic {
 			file = rel
 		}
 	}
-	d.Pos = diag.Pos{File: filepath.ToSlash(file), Line: line, Column: col}
+	d.Pos = diag.Pos{File: filepath.ToSlash(file), Line: p.Line, Column: p.Column}
 	return d
-}
-
-// splitPos splits a position the toolchain reports, "file:line:col" or "file:line", where the file name may
-// contain colons, as on Windows.
-func splitPos(pos string) (file string, line, col int) {
-	if pos == "" || pos == "-" {
-		return "", 0, 0
-	}
-	parts := strings.Split(pos, ":")
-	nums := 0
-	for nums < 2 && nums < len(parts)-1 {
-		if _, err := strconv.Atoi(parts[len(parts)-1-nums]); err != nil {
-			break
-		}
-		nums++
-	}
-	file = strings.Join(parts[:len(parts)-nums], ":")
-	if nums >= 1 {
-		line, _ = strconv.Atoi(parts[len(parts)-nums])
-	}
-	if nums == 2 {
-		col, _ = strconv.Atoi(parts[len(parts)-1])
-	}
-	return file, line, col
 }
 
 // lookupInterface finds the interface a scan's implements names among the loaded packages.

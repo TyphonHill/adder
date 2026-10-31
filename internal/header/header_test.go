@@ -234,6 +234,7 @@ func TestSupported(t *testing.T) {
 	}
 }
 
+// TestLanguages checks each entry of the languages table; the table under test is its cases.
 func TestLanguages(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, lang := range languages {

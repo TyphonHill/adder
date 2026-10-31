@@ -77,7 +77,7 @@ func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) 
 	if err != nil {
 		return nil, owner.locate(err, output.Pos)
 	}
-	e.Output, e.Scans, e.Status = output, nonNil(scans), &p.Changes[i].Status
+	e.Output, e.Scans, e.Status = output, scans, &p.Changes[i].Status
 	return e, nil
 }
 
@@ -89,11 +89,4 @@ func writes(out config.Output, name string) bool {
 	}
 	pattern, _, err := render.PathPattern(out.Path)
 	return err == nil && pattern.MatchString(name)
-}
-
-func nonNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
 }

@@ -43,8 +43,11 @@ func (l *listing) has(dir, name string) bool {
 }
 
 func (l *listing) boundary(dir string) bool {
-	return l.has(dir, config.FileName) || l.has(dir, "go.mod")
+	return slices.ContainsFunc(boundaryFiles, func(name string) bool { return l.has(dir, name) })
 }
+
+// boundaryFiles are the files that make a directory another configuration's or module's.
+var boundaryFiles = []string{config.FileName, "go.mod"}
 
 // importPath returns the import path of the package in dir: from the nearest go.mod between dir and the root, or
 // from module, the root's module path, when there is none.
@@ -122,8 +125,7 @@ func segments(p string) []string {
 	return strings.Split(p, "/")
 }
 
-// walkPattern appends the directories below dir that match pattern. Like go's ./..., directories matched by a
-// wildcard are skipped when they are named testdata or vendor or start with "." or "_".
+// walkPattern appends the directories below dir that match pattern.
 func walkPattern(l *listing, dir string, pattern []string, out *[]string) error {
 	if len(pattern) == 0 {
 		*out = append(*out, dir)
@@ -178,8 +180,7 @@ func wildcardChildren(l *listing, dir string) ([]string, error) {
 		if !entry.IsDir() || Ignored(entry.Name()) || l.boundary(path.Join(dir, entry.Name())) {
 			continue
 		}
-		name := entry.Name()
-		children = append(children, path.Join(dir, name))
+		children = append(children, path.Join(dir, entry.Name()))
 	}
 	return children, nil
 }
@@ -193,7 +194,7 @@ func Ignored(name string) bool {
 // Boundary reports whether dir holds its own adder.yaml or go.mod, which makes it another configuration's or
 // module's, so wildcards and the search for stale files stop there, as go's ./... stops at nested modules.
 func Boundary(fsys fs.FS, dir string) bool {
-	for _, name := range []string{config.FileName, "go.mod"} {
+	for _, name := range boundaryFiles {
 		if info, err := fs.Stat(fsys, path.Join(dir, name)); err == nil && info.Mode().IsRegular() {
 			return true
 		}

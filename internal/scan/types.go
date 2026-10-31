@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
-	"strconv"
 	"strings"
 
 	"typhonhill.dev/adder/internal/imports"
@@ -15,15 +14,7 @@ import (
 func fileImports(f *ast.File) map[string]string {
 	byName := make(map[string]string, len(f.Imports))
 	for _, spec := range f.Imports {
-		importPath, err := strconv.Unquote(spec.Path.Value)
-		if err != nil {
-			continue
-		}
-		name := imports.Name(importPath)
-		if spec.Name != nil {
-			name = spec.Name.Name
-		}
-		if name != "_" && name != "." {
+		if name, importPath, ok := imports.LocalName(spec); ok {
 			byName[name] = importPath
 		}
 	}

@@ -64,8 +64,13 @@ func TestDescribe(t *testing.T) {
 			}
 		})
 	}
-	if len(d.Files) != 3 || d.Files[1].When != "cache" || d.Files[2].IfExists != config.IfExistsSkip || !d.Derive {
-		t.Errorf("files = %+v, derive = %v", d.Files, d.Derive)
+	wantFiles := []DescribedFile{
+		{Template: "templates/new/driver.go.tmpl", Path: "drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go", IfExists: config.IfExistsFail},
+		{Template: "templates/new/cache.go.tmpl", Path: "drivers/{{ .Inputs.name }}/cache.go", When: "cache", IfExists: config.IfExistsFail},
+		{Template: "templates/new/README.md.tmpl", Path: "drivers/README.md", IfExists: config.IfExistsSkip},
+	}
+	if !slices.Equal(d.Files, wantFiles) || !d.Derive {
+		t.Errorf("files = %+v, derive = %v, want %+v, true", d.Files, d.Derive, wantFiles)
 	}
 	if !slices.Equal(d.InputSchema.Required, []string{"name"}) {
 		t.Errorf("required = %v, want [name]", d.InputSchema.Required)

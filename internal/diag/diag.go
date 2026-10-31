@@ -80,6 +80,30 @@ func (p Pos) String() string {
 	return strings.Join(parts, ":")
 }
 
+// ParsePos parses a position as tools write it, "file:line:col" or "file:line", where the file name may contain
+// colons, as on Windows. "" and "-" are no position.
+func ParsePos(s string) Pos {
+	if s == "" || s == "-" {
+		return Pos{}
+	}
+	parts := strings.Split(s, ":")
+	nums := 0
+	for nums < 2 && nums < len(parts)-1 {
+		if _, err := strconv.Atoi(parts[len(parts)-1-nums]); err != nil {
+			break
+		}
+		nums++
+	}
+	p := Pos{File: strings.Join(parts[:len(parts)-nums], ":")}
+	if nums >= 1 {
+		p.Line, _ = strconv.Atoi(parts[len(parts)-nums])
+	}
+	if nums == 2 {
+		p.Column, _ = strconv.Atoi(parts[len(parts)-1])
+	}
+	return p
+}
+
 // Diagnostic is one problem, with where it is and how to fix it when that is known.
 type Diagnostic struct {
 	Code    Code   `json:"code"`

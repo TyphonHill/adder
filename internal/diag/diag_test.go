@@ -32,6 +32,28 @@ func TestPosString(t *testing.T) {
 	}
 }
 
+func TestParsePos(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want Pos
+	}{
+		{name: "with a column", in: "/a/b.go:3:4", want: Pos{File: "/a/b.go", Line: 3, Column: 4}},
+		{name: "with a line", in: "/a/b.go:3", want: Pos{File: "/a/b.go", Line: 3}},
+		{name: "a Windows path", in: `C:\a\b.go:3:4`, want: Pos{File: `C:\a\b.go`, Line: 3, Column: 4}},
+		{name: "a file", in: "/a/b.go", want: Pos{File: "/a/b.go"}},
+		{name: "a dash", in: "-"},
+		{name: "nothing", in: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ParsePos(tt.in); got != tt.want {
+				t.Errorf("ParsePos(%q) = %+v, want %+v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDiagnostic(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -7,27 +7,23 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
-	"text/template"
 
 	"typhonhill.dev/adder/internal/config"
 	"typhonhill.dev/adder/internal/diag"
 	"typhonhill.dev/adder/internal/header"
+	"typhonhill.dev/adder/internal/pack"
 	"typhonhill.dev/adder/internal/plan"
 )
 
-// testPacks holds pack file systems by name.
-type testPacks map[string]fstest.MapFS
-
-func (p testPacks) FS(name string) (fs.FS, bool) {
-	fsys, ok := p[name]
-	return fsys, ok
+// storePacks returns the packs of a build with one pack, store, whose files are fsys.
+func storePacks(t *testing.T, fsys fs.FS) *pack.Registry {
+	t.Helper()
+	packs, err := pack.New([]pack.Pack{{Name: "store", FS: fsys}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return packs
 }
-
-func (testPacks) Funcs() template.FuncMap { return nil }
-
-func (testPacks) HasScanner(string) bool             { return false }
-func (testPacks) ScannerDeprecation(string) string   { return "" }
-func (testPacks) DeprecatedFuncs() map[string]string { return nil }
 
 // storePack lists the functions of the directories each use names, with a registry and one file per function.
 var storePack = fstest.MapFS{
@@ -113,7 +109,7 @@ packs:
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := config.Parse("adder.yaml", []byte(config2), testPacks{"store": tt.pack})
+			cfg, err := config.Parse("adder.yaml", []byte(config2), storePacks(t, tt.pack))
 			if err != nil {
 				t.Fatalf("Parse() error = %v", err)
 			}
@@ -157,7 +153,7 @@ func contentOf(p *plan.Plan, i int) string {
 }
 
 func TestExplainPack(t *testing.T) {
-	cfg, err := config.Parse("adder.yaml", []byte("version: 1\npacks:\n  stores: {pack: store, with: {dirs: [\"stores/*\"], out: gen/stores}}\n"), testPacks{"store": storePack})
+	cfg, err := config.Parse("adder.yaml", []byte("version: 1\npacks:\n  stores: {pack: store, with: {dirs: [\"stores/*\"], out: gen/stores}}\n"), storePacks(t, storePack))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +214,7 @@ func TestPlanPackTemplates(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := config.Parse("adder.yaml", []byte(adderYAML(tt.template)), testPacks{"store": pack})
+			cfg, err := config.Parse("adder.yaml", []byte(adderYAML(tt.template)), storePacks(t, pack))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -242,6 +238,44 @@ func TestPlanPackTemplates(t *testing.T) {
 			e, err := Explain(t.Context(), cfg, Sources{Repo: withOutput, Templates: fstest.MapFS{}, Existing: withOutput}, "x/list.gen.go")
 			if err != nil || e.Output == nil || e.Output.Pack != "store" || e.Output.Use != "" || !slices.Equal(e.Scans, []string{"Ctors"}) {
 				t.Errorf("Explain() = %+v, %v", e, err)
+			}
+		})
+	}
+}
+
+func TestTemplateDataVarsAndOptions(t *testing.T) {
+	const tmpl = "package x\n\n// vars {{ len .Vars }}, options {{ len .Options }}\n"
+	store := fstest.MapFS{
+		"pack.yaml":    {Data: []byte("version: 1\noptions: {out: {}}\nderive:\n  outputs:\n    - {template: t.go.tmpl, path: \"{{ .Options.out }}/x.gen.go\"}\n")},
+		"t.go.tmpl":    {Data: []byte(tmpl)},
+		"with.go.tmpl": {Data: []byte(tmpl)},
+	}
+	packs, err := pack.New([]pack.Pack{{Name: "store", FS: store}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name   string
+		config string
+		want   string // the comment line of the one output
+	}{
+		{name: "the configuration's own template", config: "version: 1\nvars: {A: a}\nderive:\n  outputs:\n    - {template: own.go.tmpl, path: x/x.gen.go}\n", want: "// vars 1, options 0"},
+		{name: "a pack's template under a use", config: "version: 1\nvars: {A: a}\npacks:\n  x: {pack: store, with: {out: x}}\n", want: "// vars 0, options 1"},
+		{name: "a pack's template with the configuration's data", config: "version: 1\nvars: {A: a}\nderive:\n  outputs:\n    - {template: with.go.tmpl, pack: store, path: x/x.gen.go}\n", want: "// vars 1, options 0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := config.Parse("adder.yaml", []byte(tt.config), packs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			templates := fstest.MapFS{"own.go.tmpl": {Data: []byte(tmpl)}}
+			p, err := Plan(t.Context(), cfg, Sources{Repo: fstest.MapFS{}, Templates: templates, Packs: packs})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(p.Changes) != 1 || !strings.Contains(string(p.Changes[0].New), tt.want) {
+				t.Errorf("changes = %+v, want one with %q", p.Changes, tt.want)
 			}
 		})
 	}

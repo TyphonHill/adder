@@ -82,11 +82,20 @@ func FieldValues(field string, list any) ([]string, error) {
 	return stringFields("fieldValues", field, list)
 }
 
-// stringFields returns the named string field of every struct or map in list, for the template function fn.
-func stringFields(fn, field string, list any) ([]string, error) {
+// listValue returns list, a slice or an array given to the template function fn.
+func listValue(fn string, list any) (reflect.Value, error) {
 	v := reflect.ValueOf(list)
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
-		return nil, fmt.Errorf("%s: want a list, got %T", fn, list)
+		return reflect.Value{}, fmt.Errorf("%s: want a list, got %T", fn, list)
+	}
+	return v, nil
+}
+
+// stringFields returns the named string field of every struct or map in list, for the template function fn.
+func stringFields(fn, field string, list any) ([]string, error) {
+	v, err := listValue(fn, list)
+	if err != nil {
+		return nil, err
 	}
 
 	out := make([]string, 0, v.Len())
@@ -161,9 +170,9 @@ func groupBy(field string, list any) ([]Group, error) {
 // sortBy returns a copy of list sorted by the named field of its structs or maps, a string or a number. Items with equal
 // values keep their order, so sortBy "Iota" puts an enum in declaration order.
 func sortBy(field string, list any) (any, error) {
-	v := reflect.ValueOf(list)
-	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
-		return nil, fmt.Errorf("sortBy: want a list, got %T", list)
+	v, err := listValue("sortBy", list)
+	if err != nil {
+		return nil, err
 	}
 	type keyed struct {
 		elem reflect.Value
@@ -211,9 +220,9 @@ func compareValues(a, b reflect.Value) int {
 
 // join joins the elements of list with sep, writing each as fmt.Sprint does.
 func join(sep string, list any) (string, error) {
-	v := reflect.ValueOf(list)
-	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
-		return "", fmt.Errorf("join: want a list, got %T", list)
+	v, err := listValue("join", list)
+	if err != nil {
+		return "", err
 	}
 	parts := make([]string, v.Len())
 	for i := range v.Len() {

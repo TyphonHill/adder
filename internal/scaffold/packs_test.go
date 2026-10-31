@@ -6,25 +6,22 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
-	"text/template"
 
 	"typhonhill.dev/adder/internal/config"
 	"typhonhill.dev/adder/internal/derive"
 	"typhonhill.dev/adder/internal/diag"
+	"typhonhill.dev/adder/internal/pack"
 )
 
-type testPacks map[string]fstest.MapFS
-
-func (p testPacks) FS(name string) (fs.FS, bool) {
-	fsys, ok := p[name]
-	return fsys, ok
+// storePacks returns the packs of a build with one pack, store, whose files are fsys.
+func storePacks(t *testing.T, fsys fs.FS) *pack.Registry {
+	t.Helper()
+	packs, err := pack.New([]pack.Pack{{Name: "store", FS: fsys}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return packs
 }
-
-func (testPacks) Funcs() template.FuncMap { return nil }
-
-func (testPacks) HasScanner(string) bool             { return false }
-func (testPacks) ScannerDeprecation(string) string   { return "" }
-func (testPacks) DeprecatedFuncs() map[string]string { return nil }
 
 func TestPlanPackGenerator(t *testing.T) {
 	pack := func(file string) fstest.MapFS {
@@ -64,7 +61,7 @@ generators:
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := config.Parse("adder.yaml", []byte("version: 1\npacks:\n  drivers: {pack: store, with: {dir: drivers, dirs: [\"drivers/*\"]}}\n"), testPacks{"store": pack(tt.file)})
+			cfg, err := config.Parse("adder.yaml", []byte("version: 1\npacks:\n  drivers: {pack: store, with: {dir: drivers, dirs: [\"drivers/*\"]}}\n"), storePacks(t, pack(tt.file)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -97,7 +94,7 @@ func TestPlanPackTemplateFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := config.Parse("adder.yaml", []byte("version: 1\nvars: {Team: storage}\ngenerators:\n  doc:\n    inputs: {name: {}}\n    files: [{template: "+tt.template+", pack: store, path: \"{{ .Inputs.name }}/doc.go\"}]\n"), testPacks{"store": pack})
+			cfg, err := config.Parse("adder.yaml", []byte("version: 1\nvars: {Team: storage}\ngenerators:\n  doc:\n    inputs: {name: {}}\n    files: [{template: "+tt.template+", pack: store, path: \"{{ .Inputs.name }}/doc.go\"}]\n"), storePacks(t, pack))
 			if err != nil {
 				t.Fatal(err)
 			}

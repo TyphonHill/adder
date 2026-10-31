@@ -692,6 +692,16 @@ func checkGlob(pos diag.Pos, field, pattern string) *diag.Diagnostic {
 	return nil
 }
 
+// CheckFile reports a path rendered from a template that is not a file name, or not relative, slash-separated,
+// and confined to its root, describing it as field. It returns the path cleaned.
+func CheckFile(pos diag.Pos, field, rendered string) (string, *diag.Diagnostic) {
+	target := path.Clean(rendered)
+	if strings.TrimSpace(rendered) == "" || strings.HasSuffix(rendered, "/") || target == "." {
+		return "", diag.Errorf(diag.InvalidValue, pos, "%s is not a file name", field)
+	}
+	return target, CheckPath(pos, field, target)
+}
+
 // CheckPath reports a path that is not relative, slash-separated, and confined to its root, describing it as field.
 func CheckPath(pos diag.Pos, field, p string) *diag.Diagnostic {
 	switch {

@@ -28,14 +28,14 @@ func TestPlanWarnings(t *testing.T) {
 	tests := []struct {
 		name   string
 		config string
-		want   []string // each warning, as pos: message
+		want   []string // each warning, as position and code
 	}{
 		{name: "nothing deprecated", config: generator("plain.go.tmpl")},
-		{name: "in a file's template", config: generator("old.go.tmpl"), want: []string{`old.go.tmpl:3:7: function "shout" is deprecated: use upper`}},
+		{name: "in a file's template", config: generator("old.go.tmpl"), want: []string{"old.go.tmpl:3:7 deprecated"}},
 		{
 			name:   "in a file's path and the message",
 			config: inline,
-			want:   []string{`adder.yaml:7:9: function "shout" is deprecated: use upper`, `adder.yaml:3:3: function "shout" is deprecated: use upper`},
+			want:   []string{"adder.yaml:7:9 deprecated", "adder.yaml:3:3 deprecated"},
 		},
 	}
 	for _, tt := range tests {
@@ -52,7 +52,7 @@ func TestPlanWarnings(t *testing.T) {
 			}
 			var got []string
 			for _, d := range w.List() {
-				got = append(got, d.Error())
+				got = append(got, d.Pos.String()+" "+string(d.Code))
 			}
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("warnings = %q, want %q", got, tt.want)

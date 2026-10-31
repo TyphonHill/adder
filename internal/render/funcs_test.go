@@ -9,7 +9,7 @@ import (
 func TestCaseFuncs(t *testing.T) {
 	const in = "HTTPServer_id"
 	funcs := Funcs()
-	tests := []struct{ fn, want string }{
+	tests := []struct{ name, want string }{
 		{"toLower", "httpserver_id"},
 		{"toUpper", "HTTPSERVER_ID"},
 		{"toSnakeCase", "http_server_id"},
@@ -21,9 +21,11 @@ func TestCaseFuncs(t *testing.T) {
 		{"toGoCamelCase", "httpServerID"},
 	}
 	for _, tt := range tests {
-		if got := funcs[tt.fn].(func(string) string)(in); got != tt.want {
-			t.Errorf("%s(%q) = %q, want %q", tt.fn, in, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if got := funcs[tt.name].(func(string) string)(in); got != tt.want {
+				t.Errorf("%s(%q) = %q, want %q", tt.name, in, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -119,6 +121,8 @@ func TestFuncs(t *testing.T) {
 	}
 }
 
+// TestGroupByEmpty checks that groupBy returns an empty list rather than nil, which a template cannot tell apart,
+// so it is not a TestFuncs case.
 func TestGroupByEmpty(t *testing.T) {
 	groups, err := groupBy("Name", []struct{ Name string }{})
 	if err != nil || groups == nil || len(groups) != 0 {
