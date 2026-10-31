@@ -13,7 +13,7 @@ exec go mod edit -require=example.com/storepack@v1.0.0
 exec go mod download example.com/storepack
 exec go tool adder derive
 cmp registry/registry.gen.go ../want/a-1.0.gen.go
-exec go tool adder new store --name mem
+exec go tool adder new store name=mem
 stdout '^created    stores/mem/mem.go$'
 stdout '^updated    registry/registry.gen.go$'
 grep '^// New returns the Mem store.$' stores/mem/mem.go
@@ -26,7 +26,7 @@ cp $ADDER_ROOT/go.sum go.sum
 exec go mod edit -module=example.com/repo-b -toolchain=none -require=typhonhill.dev/adder@v0.0.0 -replace=typhonhill.dev/adder=$ADDER_ROOT -tool=example.com/repo-b/tools/adder
 exec go mod edit -require=example.com/storepack@v1.0.0
 exec go mod download example.com/storepack
-exec go tool adder new backend --name gcs
+exec go tool adder new backend name=gcs
 stdout '^created    internal/backends/gcs/gcs.go$'
 stdout '^created    internal/registry/registry.gen.go$'
 cmp internal/registry/registry.gen.go ../want/b-1.0.gen.go

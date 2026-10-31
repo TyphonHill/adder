@@ -23,7 +23,7 @@ flowchart LR
 | `internal/plan` | Describe file changes before they happen, and apply them. |
 | `internal/derive` | Connect the steps above for `adder derive` and `adder check`. |
 | `internal/scaffold` | Resolve a generator's inputs, plan its new files, and derive outputs over them for `adder new`. |
-| `internal/textcase` | Case conversion, shared by template functions and input flag names. |
+| `internal/textcase` | Case conversion, for the template functions. |
 | `internal/imports` | Package names for import paths, and removing unused imports from rendered Go. |
 | `internal/diag` | Structured problems shared by every package. |
 | `internal/pack` | Check and register the packs adder was built with: their files and template functions. |
@@ -286,7 +286,7 @@ generators:
 ```
 
 ```console
-$ adder new driver --name gcs --cache
+$ adder new driver name=gcs cache
 created    drivers/gcs/gcs.go
 created    drivers/gcs/gcs_test.go
 created    drivers/gcs/cache.go
@@ -299,12 +299,12 @@ Next, implement New in drivers/gcs/gcs.go.
 
 **Inputs.**
 
-- Input names are Go identifiers in lowerCamelCase. Each one becomes a flag in kebab-case (`packageName` becomes `--package-name`) and the template field `.Inputs.packageName`.
+- Input names are Go identifiers in lowerCamelCase. Each one is an argument with the same name, `packageName=x`, and the template field `.Inputs.packageName`. A bool input's bare name, `cache`, means `cache=true`.
 - `type` is `string`, the default, or `bool`. Numbers and lists are left out until a real generator needs them; a string with a `pattern` covers most cases.
 - A string input without a `default` is required. Bool inputs default to `false` and are never required, so there is no `required` setting.
 - `pattern` must match the whole value. `values` lists the allowed values, and `valuesFrom: Drivers.Package` takes them from a scan. `unique: Drivers.Package` rejects values a scan already has, so two drivers cannot share a name.
 - Values are validated, never transformed. A `transform` setting would hide what was typed; templates have case functions for that.
-- Values come from flags, from a JSON object with `--inputs file.json`, or from standard input with `--inputs -`. Flags override the file. Unknown keys are errors.
+- Values come from arguments, from a JSON object with `--inputs file.json`, or from standard input with `--inputs -`. Arguments override the file. Unknown names are errors, and so is an input given twice.
 
 **Files.**
 
@@ -319,7 +319,12 @@ Next, implement New in drivers/gcs/gcs.go.
 
 **Previewing.** `--dry-run` prints the plan without writing. `--diff` also prints a unified diff of every change, with new files shown as additions, and implies `--dry-run`, like `gofmt -d`. Paths use `a/` and `b/` prefixes and new files come from `/dev/null`, so the output is a patch that `git apply` and `patch -p1` accept. Diffs come from `github.com/rogpeppe/go-internal/diff`, which exports the Go toolchain's own `internal/diff`, so previews match `gofmt -d`. It is an anchored diff: it matches regions around lines that appear once in both texts, so it never pairs unrelated blank lines or closing braces, and it always runs in O(n log n) time.
 
-**Command line.** Generators define their own flags, so `adder new` loads `adder.yaml` before parsing the rest of the command line, and builds a subcommand for each generator. Each one gets its own `--help`, flag parsing, and suggestions for mistyped names from the same library as every other command. Inputs cannot use a flag `adder new` defines itself (`--config`, `--diff`, `--dry-run`, `--help`, `--inputs`, `--root`), and two inputs cannot map to the same flag. In a JSON inputs file, keys are input names, not flags, so `{"packageName": "x"}`.
+**Command line.** `adder new` loads `adder.yaml` before parsing the rest of the command line, and builds a subcommand for each generator, with its own `--help` listing its inputs and suggestions for mistyped names from the same library as every other command. Inputs are arguments, `name=value`, and flags belong to adder alone, so an input can have any name, even one adder uses for a flag, such as `json`, and adder can add flags in any release without breaking a generator. Arguments, `--inputs` JSON, and templates all name an input the same way.
+
+| Considered | Why not |
+| --- | --- |
+| Inputs as flags in kebab-case, `--package-name` | Inputs and adder's own flags share one namespace, so an input named `json` took over `--json`, and every flag adder added later could break a generator that has an input of that name. Reserving names only covers the flags that exist. |
+| Freezing adder's flags for v1 | It would avoid clashes only by never adding a global flag or a flag to `adder new` until v2. |
 
 **Writing.** New files are created exclusively: a file that appears between planning and writing makes the run fail rather than be overwritten. `valuesFrom` and `unique` refer to a string field of scan items, checked when the generator runs.
 
@@ -554,17 +559,17 @@ name: Driver name, used as the package name
 > gcs
 ```
 
-- Only required inputs are asked for. Optional inputs and bools keep their defaults, so the result is the same as running with flags.
+- Only required inputs are asked for. Optional inputs and bools keep their defaults, so the result is the same as giving them as arguments.
 - Inputs with `values` or `valuesFrom` list the choices, numbered, and accept a number or a value.
 - A value that fails validation is explained and asked for again. Nothing is written until every input is valid, and Ctrl-C cancels.
 - Prompts are plain lines, with no arrow-key menus.
 
-**Why:** a person running a generator by hand should not have to look up its flags first, while scripts, CI, and agents, which have no terminal, keep getting a `missing-input` problem.
+**Why:** a person running a generator by hand should not have to look up its inputs first, while scripts, CI, and agents, which have no terminal, keep getting a `missing-input` problem.
 
 | Considered | Why not |
 | --- | --- |
 | A prompt library such as huh or survey | Several dependencies, raw terminal handling, and Windows differences, for menus that line prompts cover. |
-| Asking for every input | Tedious for generators with many optional inputs, and gives a different result than the same command with flags. |
+| Asking for every input | Tedious for generators with many optional inputs, and gives a different result than the same command with arguments. |
 
 ### 30. Generator tests
 
@@ -610,7 +615,7 @@ The schemas are a convenience for editors: adder's own validation stays the auth
 
 - `--quiet` prints only problems. `--verbose` also lists unchanged files and how many items each scan found. They cannot be combined.
 - Status words and problem codes are colored when the stream is a terminal, `NO_COLOR` is unset or empty, `TERM` is not `dumb`, and `--json` is not given. On Windows, adder enables the console's color support through `golang.org/x/sys`, and prints without color if that fails.
-- `adder completion bash|zsh|fish|powershell` prints a completion script. It completes generator names with their descriptions, the flags of each generator, input values from `values` and `valuesFrom`, and generated files for `adder explain`. Completion reads `adder.yaml` and runs scans, but never writes. It completes nothing when the configuration does not load, rather than printing errors into the shell.
+- `adder completion bash|zsh|fish|powershell` prints a completion script. It completes generator names with their descriptions, the inputs of each generator as `name=`, input values from `values` and `valuesFrom`, and generated files for `adder explain`. Completion reads `adder.yaml` and runs scans, but never writes. It completes nothing when the configuration does not load, rather than printing errors into the shell.
 
 **Why:** these follow what people expect from a modern command line, and none of them changes what adder writes.
 
@@ -819,7 +824,7 @@ packs:
 ```console
 $ go mod edit -droptool typhonhill.dev/adder/cmd/adder
 $ go get -tool ./tools/adder
-$ go tool adder new driver --name gcs
+$ go tool adder new driver name=gcs
 created    drivers/gcs/driver.go
 updated    drivers/registry.gen.go
 ```
@@ -985,7 +990,6 @@ Everyone else gets adder's files by pulling. Where the old files were ignored by
 | --- | --- |
 | `adder derive --adopt`, replacing files without adder's header at outputs' paths | Moving happens once per repository, not per checkout, and a flag whose purpose is to bypass the ownership check weakens the guarantee that adder never replaces a file it did not write. |
 | Recognizing another tool's generated-code comment as adder's own | Any tool's generated file at an output's path would be replaced silently. |
-| Short flags for generator inputs, such as `-N` for `--name` | Long flags read better in scripts and documentation, agents pass inputs as JSON, and short ones would add a setting and reserved letters. They can be added later if people ask. |
 
 ### 45. Deprecation warnings
 

@@ -99,7 +99,7 @@ Status: ✅ available · 🔜 planned for the milestone shown: v1.0, or the laun
 | `--diff` for a unified diff of each change | ✅ |
 | New files and the derived outputs they change computed as one plan, so registries update in the same run | ✅ |
 | A message after generating, with next steps for the person who ran it | ✅ |
-| Inputs from flags, from a JSON file, or from standard input | ✅ |
+| Inputs as `name=value` arguments, from a JSON file, or from standard input, never clashing with adder's flags | ✅ |
 | Interactive prompts for missing inputs when running in a terminal ([design 29](docs/design.md#29-prompts-for-missing-inputs)) | ✅ |
 | Generator tests: render a generator with sample inputs and compare to golden files ([design 30](docs/design.md#30-generator-tests)) | ✅ |
 | Composing generators, where one generator runs another | 🔜 launch |
@@ -230,7 +230,6 @@ None at the moment. Settled decisions, including those for planned features, are
 ### Decided against
 
 - **`adder validate`.** `adder derive --dry-run` already runs every scan and renders every output without writing anything, and exits 0 or 1, which is what a repository that does not commit its outputs needs from CI.
-- **Short flags for generator inputs.** Long flags read better in scripts and documentation, and agents pass inputs as JSON ([design 44](docs/design.md#44-moving-from-a-hand-rolled-generator-planned-v10)).
 - **Inserting code into files people edit.** Generated or owned, never both: adder never rewrites a file people own. Deriving a file from the code covers the same cases safely.
 - **Adding missing imports.** A built-in table of the standard library would make output change between adder releases, and searching the module cache would make it depend on the machine ([design 21](docs/design.md#21-unused-imports-are-removed-missing-ones-are-not-added)).
 

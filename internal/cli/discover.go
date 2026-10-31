@@ -154,16 +154,16 @@ func printDescription(w io.Writer, d *scaffold.Description) {
 		fmt.Fprintln(tw, "  none")
 	}
 	for _, in := range d.Inputs {
-		fmt.Fprintf(tw, "  %s\t%s\t%s\n", in.Flag, in.Type, inputNotes(in))
+		fmt.Fprintf(tw, "  %s\t%s\t%s\n", in.Name, in.Type, inputNotes(in))
 	}
 	fmt.Fprintln(tw, "files")
 	for _, f := range d.Files {
 		from := "from " + f.Template
 		switch {
 		case f.When != "":
-			from += ", with --" + config.Flag(f.When)
+			from += ", when " + f.When
 		case f.Unless != "":
-			from += ", without --" + config.Flag(f.Unless)
+			from += ", unless " + f.Unless
 		}
 		if f.IfExists == config.IfExistsSkip {
 			from += ", skipped if it exists"

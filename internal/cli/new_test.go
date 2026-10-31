@@ -25,14 +25,14 @@ func TestNew(t *testing.T) {
 	}{
 		{
 			name:       "creates files and derived outputs",
-			args:       func(root string) []string { return []string{"--root", root, "new", "driver", "--name", "gcs"} },
+			args:       func(root string) []string { return []string{"--root", root, "new", "driver", "name=gcs"} },
 			wantCode:   ExitOK,
 			wantStdout: created,
 			wantFile:   gcs,
 		},
 		{
 			name:       "global flags after new",
-			args:       func(root string) []string { return []string{"new", "--root", root, "driver", "--name=gcs"} },
+			args:       func(root string) []string { return []string{"new", "--root", root, "driver", "name=gcs"} },
 			wantCode:   ExitOK,
 			wantStdout: created,
 			wantFile:   gcs,
@@ -40,7 +40,7 @@ func TestNew(t *testing.T) {
 		{
 			name: "dry run",
 			args: func(root string) []string {
-				return []string{"--root", root, "new", "driver", "--name", "gcs", "--cache", "-n"}
+				return []string{"--root", root, "new", "driver", "name=gcs", "cache", "-n"}
 			},
 			wantCode: ExitOK,
 			wantStdout: "would be created    drivers/gcs/gcs.go\nwould be created    drivers/gcs/cache.go\n" +
@@ -50,7 +50,7 @@ func TestNew(t *testing.T) {
 		{
 			name: "json reports the generator, changes, and message",
 			args: func(root string) []string {
-				return []string{"--root", root, "new", "driver", "--name", "gcs", "--json"}
+				return []string{"--root", root, "new", "driver", "name=gcs", "--json"}
 			},
 			wantCode: ExitOK,
 			stdoutContains: []string{
@@ -64,7 +64,7 @@ func TestNew(t *testing.T) {
 		{
 			name: "diff previews every change as a patch",
 			args: func(root string) []string {
-				return []string{"--root", root, "new", "driver", "--name", "gcs", "--diff"}
+				return []string{"--root", root, "new", "driver", "name=gcs", "--diff"}
 			},
 			wantCode: ExitOK,
 			stdoutContains: []string{
@@ -82,7 +82,7 @@ func TestNew(t *testing.T) {
 				writeFile(t, filepath.Join(root, "drivers", "README.md"), "mine\n")
 			},
 			args: func(root string) []string {
-				return []string{"--root", root, "new", "driver", "--name", "gcs", "--diff"}
+				return []string{"--root", root, "new", "driver", "name=gcs", "--diff"}
 			},
 			wantCode:       ExitOK,
 			stdoutContains: []string{"skipped    drivers/README.md\n"},
@@ -93,14 +93,14 @@ func TestNew(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "drivers", "README.md"), "mine\n")
 			},
-			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "--name", "gcs"} },
+			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name=gcs"} },
 			wantCode:       ExitOK,
 			stdoutContains: []string{"skipped    drivers/README.md\n"},
 		},
 		{
-			name: "inputs from standard input, overridden by flags",
+			name: "inputs from standard input, overridden by arguments",
 			args: func(root string) []string {
-				return []string{"--root", root, "new", "driver", "--inputs", "-", "--name", "gcs"}
+				return []string{"--root", root, "new", "driver", "--inputs", "-", "name=gcs"}
 			},
 			stdin:    `{"name": "ignored", "cache": true}`,
 			wantCode: ExitOK,
@@ -143,9 +143,11 @@ func TestNew(t *testing.T) {
 			args:     func(root string) []string { return []string{"--root", root, "new", "driver", "--help"} },
 			wantCode: ExitOK,
 			stdoutContains: []string{
-				"adder new driver [flags]",
-				"--name string      Driver name, used as the package name (required; not already in Drivers.Package)",
-				`(default "stores objects")`,
+				"adder new driver [input=value...] [flags]",
+				"Inputs, given as arguments or with --inputs:",
+				"  cache        Add an in-memory cache in front of the driver",
+				"  name=...     Driver name, used as the package name (required; not already in Drivers.Package)",
+				`  summary=...  One-line description for the package documentation (default "stores objects")`,
 			},
 		},
 		{
@@ -168,7 +170,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name:           "unknown generator",
-			args:           func(root string) []string { return []string{"--root", root, "new", "drivr", "--name", "gcs"} },
+			args:           func(root string) []string { return []string{"--root", root, "new", "drivr", "name=gcs"} },
 			wantCode:       ExitUsage,
 			stderrContains: []string{`adder: unknown generator "drivr" [unknown-generator]`, "hint: did you mean driver?"},
 		},
@@ -176,13 +178,13 @@ func TestNew(t *testing.T) {
 			name:           "missing input",
 			args:           func(root string) []string { return []string{"--root", root, "new", "driver"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{"adder: --name is required [missing-input]"},
+			stderrContains: []string{"adder: input name is required [missing-input]"},
 		},
 		{
 			name:           "invalid input",
-			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "--name", "s3"} },
+			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name=s3"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{`--name "s3" already exists in Drivers.Package [invalid-input]`},
+			stderrContains: []string{`input name "s3" already exists in Drivers.Package [invalid-input]`},
 		},
 		{
 			name:           "unknown flag",
@@ -191,17 +193,67 @@ func TestNew(t *testing.T) {
 			stderrContains: []string{"unknown flag: --nam", "Run 'adder new driver --help' for usage."},
 		},
 		{
-			name:           "unexpected argument",
+			name:           "an argument that is not an input",
 			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "gcs"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{"Run 'adder new driver --help' for usage."},
+			stderrContains: []string{`adder: unknown input "gcs" [invalid-input]`, "hint: inputs: cache name=... summary=..."},
+		},
+		{
+			name: "a bool input written with its value",
+			args: func(root string) []string {
+				return []string{"--root", root, "new", "driver", "name=gcs", "cache=false"}
+			},
+			wantCode:   ExitOK,
+			wantFile:   gcs,
+			wantNoFile: filepath.Join("drivers", "gcs", "cache.go"),
+		},
+		{
+			name: "a bool input with a value that is not a bool",
+			args: func(root string) []string {
+				return []string{"--root", root, "new", "driver", "name=gcs", "cache=maybe"}
+			},
+			wantCode:       ExitUsage,
+			stderrContains: []string{`adder: input cache must be true or false, not "maybe" [invalid-input]`},
+		},
+		{
+			name:           "a string input without a value",
+			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name"} },
+			wantCode:       ExitUsage,
+			stderrContains: []string{"adder: input name needs a value, written name=... [invalid-input]"},
+		},
+		{
+			name:           "an input given twice",
+			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name=gcs", "name=r2"} },
+			wantCode:       ExitUsage,
+			stderrContains: []string{"adder: input name is given twice [invalid-input]"},
+		},
+		{
+			name: "a value with an equals sign",
+			args: func(root string) []string {
+				return []string{"--root", root, "new", "driver", "name=gcs", "summary=a=b"}
+			},
+			wantCode: ExitOK,
+			wantFile: gcs,
+		},
+		{
+			name: "inputs named like adder's own flags",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "adder.yaml"), "version: 1\ngenerators:\n  g:\n    inputs: {json: {type: bool}, quiet: {}, dryRun: {type: bool}}\n    files: [{template: t.tmpl, path: \"out-{{ .Inputs.quiet }}-{{ .Inputs.json }}.txt\"}]\n")
+				writeFile(t, filepath.Join(root, "t.tmpl"), "x\n")
+			},
+			args: func(root string) []string {
+				return []string{"--root", root, "new", "g", "json", "quiet=loud", "--json"}
+			},
+			wantCode:       ExitOK,
+			stdoutContains: []string{`"generator": "g"`, `"path": "out-loud-true.txt"`},
+			wantFile:       "out-loud-true.txt",
 		},
 		{
 			name: "existing file",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "drivers", "gcs", "gcs.go"), "package gcs\n")
 			},
-			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "--name", "gcs"} },
+			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name=gcs"} },
 			wantCode:       ExitError,
 			stderrContains: []string{"gcs.go: file already exists [file-exists]"},
 			wantNoFile:     filepath.Join("drivers", "README.md"),

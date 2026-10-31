@@ -7,7 +7,9 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -19,9 +21,9 @@ import (
 
 const newLong = `new creates files from a generator declared under generators in adder.yaml.
 
-Each generator is a subcommand with a flag for each of its inputs. Run 'adder new' to list the
-generators and 'adder new <generator> --help' to see its inputs. Existing files are never overwritten,
-and derived outputs are updated in the same run.`
+Each generator is a subcommand that takes its inputs as arguments, such as name=gcs, or a bool input's
+bare name for true. Run 'adder new' to list the generators and 'adder new <generator> --help' to see
+its inputs. Existing files are never overwritten, and derived outputs are updated in the same run.`
 
 func newNewCommand(opts *globalOptions) *cobra.Command {
 	return &cobra.Command{
@@ -112,10 +114,10 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 		short = strings.TrimSpace(short + " (deprecated: " + gen.Deprecated + ")")
 	}
 	cmd := &cobra.Command{
-		Use:   name,
+		Use:   name + " [input=value...]",
 		Short: short,
-		Args:  usageArgs(cobra.NoArgs),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Long:  generatorHelp(gen),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			dryRun = dryRun || showDiff
 			rep := &newReport{Generator: name, DryRun: dryRun, Changes: []changeReport{}}
 			opts.report = rep
@@ -123,16 +125,11 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 			if err != nil {
 				return err
 			}
-			for input, in := range gen.Inputs {
-				flag := cmd.Flags().Lookup(config.Flag(input))
-				switch {
-				case !flag.Changed:
-				case in.Type == config.InputBool:
-					inputs[input] = flag.Value.String() == "true"
-				default:
-					inputs[input] = flag.Value.String()
-				}
+			given, err := argInputs(gen, args)
+			if err != nil {
+				return err
 			}
+			maps.Copy(inputs, given)
 			diag.Warn(cmd.Context(), generatorWarnings(name, gen, inputs)...)
 			if !opts.json && inputsFile != "-" && isTerminal(cmd.InOrStdin()) && isTerminal(cmd.ErrOrStderr()) {
 				if err := promptMissing(cmd, opts, cfg, root, name, inputs); err != nil {
@@ -163,21 +160,9 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 		},
 	}
 
-	for _, input := range slices.Sorted(maps.Keys(gen.Inputs)) {
-		in := gen.Inputs[input]
-		flag := config.Flag(input)
-		switch {
-		case in.Type == config.InputBool:
-			cmd.Flags().Bool(flag, false, flagHelp(in))
-		case in.Default != nil:
-			cmd.Flags().String(flag, *in.Default, flagHelp(in))
-		default:
-			cmd.Flags().String(flag, "", flagHelp(in))
-		}
-	}
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "show what would change without writing anything")
 	cmd.Flags().BoolVar(&showDiff, "diff", false, "also show each change as a unified diff; implies --dry-run")
-	cmd.Flags().StringVar(&inputsFile, "inputs", "", "read inputs from a JSON object in this file, or - for standard input; flags override it")
+	cmd.Flags().StringVar(&inputsFile, "inputs", "", "read inputs from a JSON object in this file, or - for standard input; arguments override it")
 	_ = cmd.MarkFlagFilename("inputs", "json")
 	return cmd
 }
@@ -197,14 +182,89 @@ func generatorWarnings(name string, gen config.Generator, inputs map[string]any)
 	return warnings
 }
 
-// flagHelp describes an input for its flag's help.
+// argInputs reads the inputs given as arguments: name=value, or for a bool input its bare name, meaning true.
+func argInputs(gen config.Generator, args []string) (map[string]any, error) {
+	inputs := make(map[string]any, len(args))
+	var problems diag.List
+	invalid := func(format string, a ...any) {
+		problems = append(problems, &diag.Diagnostic{Code: diag.InvalidInput, Message: fmt.Sprintf(format, a...), Hint: inputsHint(gen)})
+	}
+	for _, arg := range args {
+		name, value, hasValue := strings.Cut(arg, "=")
+		in, ok := gen.Inputs[name]
+		switch {
+		case !ok:
+			invalid("unknown input %q", name)
+		case inputs[name] != nil:
+			invalid("input %s is given twice", name)
+		case in.Type == config.InputBool && !hasValue:
+			inputs[name] = true
+		case in.Type == config.InputBool:
+			b, err := strconv.ParseBool(value)
+			if err != nil {
+				invalid("input %s must be true or false, not %q", name, value)
+				continue
+			}
+			inputs[name] = b
+		case !hasValue:
+			invalid("input %s needs a value, written %s=...", name, name)
+		default:
+			inputs[name] = value
+		}
+	}
+	return inputs, problems.Err()
+}
+
+// inputsHint lists the inputs of a generator, as arguments.
+func inputsHint(gen config.Generator) string {
+	if len(gen.Inputs) == 0 {
+		return "the generator takes no inputs"
+	}
+	var args []string
+	for _, name := range slices.Sorted(maps.Keys(gen.Inputs)) {
+		args = append(args, inputArg(name, gen.Inputs[name]))
+	}
+	return "inputs: " + strings.Join(args, " ")
+}
+
+// inputArg shows how the input called name is written as an argument.
+func inputArg(name string, in config.Input) string {
+	if in.Type == config.InputBool {
+		return name
+	}
+	return name + "=..."
+}
+
+// generatorHelp is the long help of a generator's command: its description and its inputs.
+func generatorHelp(gen config.Generator) string {
+	var b strings.Builder
+	b.WriteString(gen.Description)
+	if gen.Deprecated != "" {
+		fmt.Fprintf(&b, "\n\nDeprecated: %s", gen.Deprecated)
+	}
+	if len(gen.Inputs) == 0 {
+		return b.String()
+	}
+	b.WriteString("\n\nInputs, given as arguments or with --inputs:\n")
+	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	for _, name := range slices.Sorted(maps.Keys(gen.Inputs)) {
+		fmt.Fprintf(tw, "  %s\t%s\n", inputArg(name, gen.Inputs[name]), flagHelp(gen.Inputs[name]))
+	}
+	_ = tw.Flush() // writing to a strings.Builder cannot fail
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// flagHelp describes an input for the help of its generator.
 func flagHelp(in config.Input) string {
 	var notes []string
 	if in.Deprecated != "" {
 		notes = append(notes, "deprecated: "+in.Deprecated)
 	}
-	if in.Required() {
+	switch {
+	case in.Required():
 		notes = append(notes, "required")
+	case in.Default != nil:
+		notes = append(notes, fmt.Sprintf("default %q", *in.Default))
 	}
 	switch {
 	case in.Values != nil:

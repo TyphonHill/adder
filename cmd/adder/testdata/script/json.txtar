@@ -15,7 +15,7 @@ cmp stdout stale.json
 ! stderr .
 
 # new reports the generator, its changes, and its message, even on a dry run.
-exec adder new driver --name blob --dry-run --json
+exec adder new driver name=blob --dry-run --json
 cmp stdout new.json
 ! exists drivers/blob
 
@@ -119,7 +119,7 @@ stdout '"code": "file-exists"'
   "problems": [
     {
       "code": "missing-input",
-      "message": "--name is required",
+      "message": "input name is required",
       "hint": "Driver name, used as the package name"
     }
   ]

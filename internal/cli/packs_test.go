@@ -20,7 +20,7 @@ func TestPackFuncs(t *testing.T) {
 		{name: "derive renders paths and content", args: []string{"derive"}, stdoutContains: "created    OUT.txt\ncreated    notes/A.MD.yaml\n"},
 		{name: "check", args: []string{"check"}},
 		{name: "explain", args: []string{"explain", "notes/A.MD.yaml"}, stdoutContains: "up to date"},
-		{name: "new renders paths and messages", args: []string{"new", "greet", "--name", "gcs"}, stdoutContains: "created    greet/GCS.txt\n\nSay GCS.\n"},
+		{name: "new renders paths and messages", args: []string{"new", "greet", "name=gcs"}, stdoutContains: "created    greet/GCS.txt\n\nSay GCS.\n"},
 		{name: "test", args: []string{"test"}, stdoutContains: "ok    greet/plain\n"},
 		{name: "describe", args: []string{"describe", "greet"}, stdoutContains: "greet"},
 	}

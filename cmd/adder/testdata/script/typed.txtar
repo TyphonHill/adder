@@ -3,7 +3,7 @@ exec adder derive
 cmp registry/registry.gen.go want/registry.gen.go
 
 # A new driver is type checked before it is written, so the registry gains it in the same run.
-exec adder new driver --name cache
+exec adder new driver name=cache
 stdout '^updated    registry/registry.gen.go$'
 grep '&cache.Driver\{\},' registry/registry.gen.go
 exec adder check

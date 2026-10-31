@@ -10,10 +10,10 @@ The repository is a set of commands, one package each under `commands/`, and the
 
 - `name` is required, must match `[a-z][a-z0-9]*`, and must be `unique` among the packages the `Commands` scan finds, so a command that exists already is refused.
 - `summary` is optional, with a default.
-- `withTest` is a `bool` input, so it is the flag `--with-test`. The test file is created only `when: withTest`.
+- `withTest` is a `bool` input, given as `withTest` alone, or `withTest=false`. The test file is created only `when: withTest`.
 - `message` is printed after the files are created, to say what to do next.
 
-The templates are in [`templates/`](templates), and each input is available as `.Inputs.<name>`.
+Inputs are given as arguments, `name=report`, and templates read them as `.Inputs.name`. The templates are in [`templates/`](templates).
 
 ## Try it
 
@@ -24,37 +24,37 @@ $ adder describe command
 command: Add a command
 
 inputs
-  --name       string  Command name, used as the package name (required; must match [a-z][a-z0-9]*; not one of: hello)
-  --summary    string  What the command does, for its documentation (default "does nothing yet")
-  --with-test  bool    Add a test file
+  name      string  Command name, used as the package name (required; must match [a-z][a-z0-9]*; not one of: hello)
+  summary   string  What the command does, for its documentation (default "does nothing yet")
+  withTest  bool    Add a test file
 ...
 ```
 
 Invalid inputs are refused before any file is written:
 
 ```console
-$ adder new command --name hello
-adder: --name "hello" already exists in Commands.Package [invalid-input]
+$ adder new command name=hello
+adder: input name "hello" already exists in Commands.Package [invalid-input]
 	hint: Command name, used as the package name
-$ adder new command --name Report
-adder: --name "Report" does not match [a-z][a-z0-9]* [invalid-input]
+$ adder new command name=Report
+adder: input name "Report" does not match [a-z][a-z0-9]* [invalid-input]
 	hint: Command name, used as the package name
 ```
 
 `--dry-run` shows what a run would create, and the run itself creates it:
 
 ```console
-$ adder new command --name report --summary "prints a weekly report" --with-test --dry-run
+$ adder new command name=report summary="prints a weekly report" withTest --dry-run
 would be created    commands/report/report.go
 would be created    commands/report/report_test.go
-$ adder new command --name report --summary "prints a weekly report" --with-test
+$ adder new command name=report summary="prints a weekly report" withTest
 created    commands/report/report.go
 created    commands/report/report_test.go
 
 Write the command in commands/report/report.go.
 ```
 
-In a terminal, `adder new command` asks for any input missing from its flags.
+In a terminal, `adder new command` asks for required inputs that were not given.
 
 ## Testing the generator
 

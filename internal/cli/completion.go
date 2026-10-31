@@ -46,8 +46,8 @@ func generatorNames(cfg *config.Config, exclude []string, prefix string) []cobra
 	return names
 }
 
-// completeNew completes adder new, which parses its own flags: the generator, then its flags, then the values
-// of an input with values or valuesFrom.
+// completeNew completes adder new, which parses its own flags: the generator, then its inputs as name=, then
+// the values of an input with values or valuesFrom, and adder's own flags.
 func completeNew(opts *globalOptions) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		pre := pflag.NewFlagSet("new", pflag.ContinueOnError)
@@ -73,25 +73,39 @@ func completeNew(opts *globalOptions) cobra.CompletionFunc {
 			return nil, noFiles
 		}
 
-		flag, value, hasValue := strings.Cut(strings.TrimPrefix(toComplete, "--"), "=")
-		if !hasValue && len(args) > 0 && strings.HasPrefix(args[len(args)-1], "--") && !strings.Contains(args[len(args)-1], "=") {
-			flag, value, hasValue = strings.TrimPrefix(args[len(args)-1], "--"), toComplete, true
-			if flag == "inputs" {
-				return []cobra.Completion{"json"}, cobra.ShellCompDirectiveFilterFileExt
-			}
+		switch input, value, hasValue := strings.Cut(toComplete, "="); {
+		case len(args) > 0 && args[len(args)-1] == "--inputs":
+			return []cobra.Completion{"json"}, cobra.ShellCompDirectiveFilterFileExt
+		case strings.HasPrefix(toComplete, "-"):
+			return generatorFlags(toComplete), noFiles
+		case hasValue:
+			return inputValues(cmd, opts, cfg, root, name, gen, input, value), noFiles
+		default:
+			return inputNames(gen, args, toComplete), noFiles | cobra.ShellCompDirectiveNoSpace
 		}
-		if hasValue {
-			prefix := ""
-			if strings.Contains(toComplete, "=") {
-				prefix = "--" + flag + "="
-			}
-			return inputValues(cmd, opts, cfg, root, name, gen, flag, value, prefix), noFiles
-		}
-		if strings.HasPrefix(toComplete, "-") {
-			return generatorFlags(gen, toComplete), noFiles
-		}
-		return nil, noFiles
 	}
+}
+
+// inputNames completes the inputs of gen that args does not give yet, as name= for a string input and the bare
+// name for a bool one.
+func inputNames(gen config.Generator, args []string, prefix string) []cobra.Completion {
+	given := make(map[string]bool)
+	for _, arg := range args {
+		name, _, _ := strings.Cut(arg, "=")
+		given[name] = true
+	}
+	var names []cobra.Completion
+	for _, name := range slices.Sorted(maps.Keys(gen.Inputs)) {
+		in := gen.Inputs[name]
+		arg := name + "="
+		if in.Type == config.InputBool {
+			arg = name
+		}
+		if !given[name] && strings.HasPrefix(arg, prefix) {
+			names = append(names, cobra.CompletionWithDesc(arg, in.Help))
+		}
+	}
+	return names
 }
 
 // generatorArg returns the generator named in the words of adder new, skipping flags and their values.
@@ -107,27 +121,19 @@ func generatorArg(args []string) string {
 	return ""
 }
 
-func generatorFlags(gen config.Generator, prefix string) []cobra.Completion {
+func generatorFlags(prefix string) []cobra.Completion {
 	flags := []cobra.Completion{
 		cobra.CompletionWithDesc("--dry-run", "show what would change without writing anything"),
 		cobra.CompletionWithDesc("--diff", "also show each change as a unified diff"),
 		cobra.CompletionWithDesc("--inputs", "read inputs from a JSON file, or - for standard input"),
 	}
-	for _, input := range slices.Sorted(maps.Keys(gen.Inputs)) {
-		flags = append(flags, cobra.CompletionWithDesc("--"+config.Flag(input), gen.Inputs[input].Help))
-	}
 	return slices.DeleteFunc(flags, func(c cobra.Completion) bool { return !strings.HasPrefix(c, prefix) })
 }
 
-// inputValues completes the values the input behind flag allows, each written after prefix.
-func inputValues(cmd *cobra.Command, opts *globalOptions, cfg *config.Config, root, name string, gen config.Generator, flag, value, prefix string) []cobra.Completion {
-	input := ""
-	for key, in := range gen.Inputs {
-		if config.Flag(key) == flag && in.Type == config.InputString {
-			input = key
-		}
-	}
-	if input == "" || (gen.Inputs[input].Values == nil && gen.Inputs[input].ValuesFrom == "") {
+// inputValues completes the values the string input called input allows, as input=value.
+func inputValues(cmd *cobra.Command, opts *globalOptions, cfg *config.Config, root, name string, gen config.Generator, input, value string) []cobra.Completion {
+	in, ok := gen.Inputs[input]
+	if !ok || in.Type != config.InputString || (in.Values == nil && in.ValuesFrom == "") {
 		return nil
 	}
 	src, closeSources, err := opts.open(cfg, root)
@@ -146,7 +152,7 @@ func inputValues(cmd *cobra.Command, opts *globalOptions, cfg *config.Config, ro
 		}
 		for _, v := range in.Values {
 			if strings.HasPrefix(v, value) {
-				values = append(values, prefix+v)
+				values = append(values, input+"="+v)
 			}
 		}
 	}

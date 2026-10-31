@@ -245,20 +245,6 @@ func TestParseGenerators(t *testing.T) {
 	}
 }
 
-func TestFlag(t *testing.T) {
-	tests := []struct{ input, want string }{
-		{"name", "name"},
-		{"packageName", "package-name"},
-		{"userID", "user-id"},
-		{"http2Server", "http2-server"},
-	}
-	for _, tt := range tests {
-		if got := Flag(tt.input); got != tt.want {
-			t.Errorf("Flag(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
 // want is the code and position expected for one diagnostic.
 type want struct {
 	code   diag.Code
@@ -370,9 +356,7 @@ func TestParseErrors(t *testing.T) {
 		{name: "partial not a string", input: "version: 1\npartials: [{a: b}]", want: []want{{diag.InvalidValue, 2, 0}}},
 		{name: "generator name not kebab-case", input: "version: 1\ngenerators:\n  addDriver: {files: [{template: t, path: p}]}", want: []want{{diag.InvalidName, 3, 3}}, wantHint: "generator names are commands, such as adder new http-handler"},
 		{name: "generator without files", input: "version: 1\ngenerators:\n  g: {description: x}", want: []want{{diag.MissingField, 3, 3}}},
-		{name: "input name not lowerCamel", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {PackageName: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 14}}, wantHint: "input names become template fields and flags: packageName is .Inputs.packageName and --package-name"},
-		{name: "input uses a reserved flag", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {dryRun: {type: bool}}\n    files: [{template: t, path: p}]", want: []want{{diag.ReservedName, 5, 14}}},
-		{name: "inputs share a flag", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {userID: {}, userId: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 26}}},
+		{name: "input name not lowerCamel", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {PackageName: {}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidName, 5, 14}}, wantHint: "input names are template fields and arguments: packageName is .Inputs.packageName and packageName=..."},
 		{name: "unknown input type", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {type: int}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 18}}, wantHint: "type is string or bool"},
 		{name: "bool input with string settings", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {c: {type: bool, default: \"true\", pattern: x}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 30}, {diag.InvalidValue, 5, 47}}, wantHint: "bool inputs are false unless their flag is given"},
 		{name: "values and valuesFrom", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {n: {values: [a], valuesFrom: S.Dir}}\n    files: [{template: t, path: p}]", want: []want{{diag.InvalidValue, 5, 31}}},

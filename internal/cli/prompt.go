@@ -111,7 +111,7 @@ func promptInput(ctx context.Context, w io.Writer, answers *lines, in scaffold.D
 		answer, err := answers.next(ctx)
 		if errors.Is(err, io.EOF) {
 			fmt.Fprintln(w)
-			return "", &diag.Diagnostic{Code: diag.MissingInput, Message: in.Flag + " is required", Hint: in.Help}
+			return "", &diag.Diagnostic{Code: diag.MissingInput, Message: "input " + in.Name + " is required", Hint: in.Help}
 		}
 		if err != nil {
 			return "", err

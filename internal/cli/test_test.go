@@ -91,7 +91,7 @@ func TestTestCommand(t *testing.T) {
 			},
 			args:           []string{"test"},
 			wantCode:       ExitUsage,
-			stderrContains: []string{`--name "s3" already exists in Drivers.Package [invalid-input]`},
+			stderrContains: []string{`input name "s3" already exists in Drivers.Package [invalid-input]`},
 		},
 		{
 			name: "without a configuration",

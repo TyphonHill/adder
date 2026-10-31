@@ -8,13 +8,13 @@ Many repositories have a generator of their own: a `go run ./gen` program, or a 
 | --- | --- |
 | Walks directories and parses Go files to build a list | A [scan](configuration.md#scans): `funcs`, `types`, `values`, or `files`, with filters for names, signatures, and directives |
 | Renders a list into a file | An [output](configuration.md#outputs), or one with `each` for a file per item |
-| A subcommand that creates new files from flags | A [generator](configuration.md#generators), with validated inputs, as `adder new <name>` |
+| A subcommand that creates new files from its flags | A [generator](configuration.md#generators), with validated inputs, as `adder new <name>` |
 | A case conversion library | [Case functions](templates.md#case), such as `toGoPascalCase` |
 | A hard-coded module path | `{{ .Module }}` |
 | A `// Code generated ... DO NOT EDIT.` line in each template | Nothing: adder writes the header itself |
 | Logic no scan expresses | A [custom scanner](extending.md#scanners) |
 
-Templates usually move as they are, renamed to what the data is called in adder: `.Inputs.name` for a generator's flags, and the scan's name for a list. Run `adder describe <generator>` to compare a generator's inputs with the old flags.
+Templates usually move as they are, renamed to what the data is called in adder: `.Inputs.name` for what was a flag, and the scan's name for a list. Inputs are given as arguments, `name=gcs`, rather than flags. Run `adder describe <generator>` to compare a generator's inputs with the old flags.
 
 ## Make the change
 

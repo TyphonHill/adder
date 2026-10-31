@@ -16,6 +16,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ### Changed
 
+- Generator inputs are arguments, `adder new driver name=gcs cache`, instead of flags: a string input is `name=value`, and a bool input's bare name means true. Flags belong to adder alone, so an input can have any name, even one adder uses for a flag such as `json`, and later flags never clash with a generator's inputs. Arguments, `--inputs` JSON, and templates name an input the same way. Messages name an input as `input name`, and `adder describe --json` no longer has a `flag` field.
 - The README is a short introduction: what adder does, one example, its features, and links to `docs/` and `examples/`.
 - When `file-exists` blocks a file that another tool generated, its hint says so, and that deleting the file once lets adder generate it.
 - The `adder.yaml` that `adder init` writes links to `docs/configuration.md`.

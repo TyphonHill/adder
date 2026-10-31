@@ -399,7 +399,7 @@
                   }
                 ]
               },
-              "description": "Values given on the command line, each a flag in kebab-case and .Inputs.\u003cname\u003e in templates.",
+              "description": "Values given to the generator, as name=value arguments or with --inputs, and read as .Inputs.\u003cname\u003e in templates.",
               "propertyNames": {
                 "$ref": "#/definitions/inputName"
               },

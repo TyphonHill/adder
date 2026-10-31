@@ -46,22 +46,21 @@ func TestDescribe(t *testing.T) {
 	}
 	tests := []struct {
 		input        string
-		wantFlag     string
 		wantRequired bool
 		wantValues   []string
 		wantExisting []string
 	}{
-		{input: "base", wantFlag: "--base", wantValues: []string{"local", "s3"}},
-		{input: "cache", wantFlag: "--cache"},
-		{input: "name", wantFlag: "--name", wantRequired: true, wantExisting: []string{"local", "s3"}},
-		{input: "summary", wantFlag: "--summary"},
-		{input: "tier", wantFlag: "--tier", wantValues: []string{"fast", "slow"}},
+		{input: "base", wantValues: []string{"local", "s3"}},
+		{input: "cache"},
+		{input: "name", wantRequired: true, wantExisting: []string{"local", "s3"}},
+		{input: "summary"},
+		{input: "tier", wantValues: []string{"fast", "slow"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			got := byName[tt.input]
-			if got.Flag != tt.wantFlag || got.Required != tt.wantRequired || !slices.Equal(got.Values, tt.wantValues) || !slices.Equal(got.Existing, tt.wantExisting) {
-				t.Errorf("input = %+v, want flag %s, required %v, values %v, existing %v", got, tt.wantFlag, tt.wantRequired, tt.wantValues, tt.wantExisting)
+			if got.Required != tt.wantRequired || !slices.Equal(got.Values, tt.wantValues) || !slices.Equal(got.Existing, tt.wantExisting) {
+				t.Errorf("input = %+v, want required %v, values %v, existing %v", got, tt.wantRequired, tt.wantValues, tt.wantExisting)
 			}
 		})
 	}

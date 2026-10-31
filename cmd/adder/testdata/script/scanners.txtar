@@ -11,9 +11,9 @@ exec go tool adder check -v
 stdout '^scanned    scan Routes found 3 items$'
 
 # unique reads the scanner's items, and a new file is scanned in the same run.
-exits 2 go tool adder new service --name users --path /x
+exits 2 go tool adder new service name=users path=/x
 stderr 'already exists in Routes.service \[invalid-input\]'
-exec go tool adder new service --name orders --path /orders
+exec go tool adder new service name=orders path=/orders
 stdout '^created    api/orders/routes.txt$'
 stdout '^updated    api/routes.gen.go$'
 stdout '^created    api/orders/get_orders.gen.go$'

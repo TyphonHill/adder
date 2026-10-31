@@ -116,11 +116,11 @@ generators:
     message: Write the command in commands/{{ .Inputs.name }}/{{ .Inputs.name }}.go.
 ```
 
-Input names are lowerCamelCase. Each is a flag in kebab-case, `withTest` is `--with-test`, and a template field, `.Inputs.withTest`. Every problem with the inputs is reported at once, and nothing is written unless the whole run succeeds. In a terminal, `adder new` asks for required inputs that were not given. Scripts, CI, and `--json` get a `missing-input` problem instead.
+Input names are lowerCamelCase. Each is given as an argument with the same name, `name=report`, or for a bool input its bare name, `withTest`, which means `withTest=true`, and templates read it as `.Inputs.withTest`. Arguments never clash with adder's own flags, whatever either is called. The same inputs can come as a JSON object with `--inputs`, which arguments override. Every problem with the inputs is reported at once, and nothing is written unless the whole run succeeds. In a terminal, `adder new` asks for required inputs that were not given. Scripts, CI, and `--json` get a `missing-input` problem instead.
 
 | Input | Description |
 | --- | --- |
-| `type` | `string`, the default, or `bool`, which is `false` unless its flag is given. |
+| `type` | `string`, the default, or `bool`, which is `false` unless it is given. |
 | `help` | Shown in `--help` and with problems. |
 | `default` | Makes a string input optional. Without one, it is required. |
 | `pattern` | A regular expression the whole value must match. |

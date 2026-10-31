@@ -3,12 +3,12 @@ exec adder new
 cmp stdout list.out
 
 # --dry-run plans the new files and the registry update without writing.
-exec adder new driver --name gcs --dry-run
+exec adder new driver name=gcs --dry-run
 cmp stdout dryrun.out
 ! exists drivers/gcs
 
 # A generator creates its files, updates the registry, and prints its message.
-exec adder new driver --name gcs --cache
+exec adder new driver name=gcs cache
 cmp stdout new.out
 cmp drivers/gcs/gcs.go want/gcs.go
 exists drivers/gcs/cache.go
@@ -21,35 +21,35 @@ cmp stdout stdin.out
 grep 'driver that keeps objects in memory' drivers/mem/mem.go
 
 # --diff shows new files as additions from /dev/null.
-exec adder new driver --name blob --diff
+exec adder new driver name=blob --diff
 cmp stdout diff.out
 ! exists drivers/blob
 
 # Invocation mistakes exit with status 2.
 exits 2 adder new driver
 cmp stderr missing.err
-exits 2 adder new driver --name Bad
+exits 2 adder new driver name=Bad
 cmp stderr invalid.err
-exits 2 adder new driver --name s3
+exits 2 adder new driver name=s3
 cmp stderr unique.err
 exits 2 adder new drivr
 cmp stderr unknown.err
-exits 2 adder new driver --name x --nope
+exits 2 adder new driver name=x --nope
 cmp stderr flag.err
 
 # A file that already exists exits with status 1 and nothing is written.
 mkdir drivers/taken
 cp want/gcs.go drivers/taken/taken.go
-exits 1 adder new driver --name taken
+exits 1 adder new driver name=taken
 stderr '^drivers[/\\]taken[/\\]taken\.go: file already exists \[file-exists\]$'
 ! exists drivers/taken/cache.go
 
 -- list.out --
 new creates files from a generator declared under generators in adder.yaml.
 
-Each generator is a subcommand with a flag for each of its inputs. Run 'adder new' to list the
-generators and 'adder new <generator> --help' to see its inputs. Existing files are never overwritten,
-and derived outputs are updated in the same run.
+Each generator is a subcommand that takes its inputs as arguments, such as name=gcs, or a bool input's
+bare name for true. Run 'adder new' to list the generators and 'adder new <generator> --help' to see
+its inputs. Existing files are never overwritten, and derived outputs are updated in the same run.
 
 Usage:
   adder new <generator> [flags]
@@ -123,13 +123,13 @@ diff a/drivers/drivers.gen.go b/drivers/drivers.gen.go
  	"local": local.New,
  	"mem":   mem.New,
 -- missing.err --
-adder: --name is required [missing-input]
+adder: input name is required [missing-input]
 	hint: Driver name, used as the package name
 -- invalid.err --
-adder: --name "Bad" does not match [a-z][a-z0-9]* [invalid-input]
+adder: input name "Bad" does not match [a-z][a-z0-9]* [invalid-input]
 	hint: Driver name, used as the package name
 -- unique.err --
-adder: --name "s3" already exists in Drivers.Package [invalid-input]
+adder: input name "s3" already exists in Drivers.Package [invalid-input]
 	hint: Driver name, used as the package name
 -- unknown.err --
 adder: unknown generator "drivr" [unknown-generator]

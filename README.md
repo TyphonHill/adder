@@ -75,7 +75,7 @@ func All() map[string]storage.Driver {
 A [generator](docs/configuration.md#generators) creates new drivers that are registered as soon as they exist, and `adder check` catches one added by hand without `adder derive`:
 
 ```console
-$ adder new driver --name s3
+$ adder new driver name=s3
 created    drivers/s3/s3.go
 updated    drivers/drivers.gen.go
 $ adder check

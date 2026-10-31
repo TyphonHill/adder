@@ -28,7 +28,6 @@ type Description struct {
 // DescribedInput is one input of a generator, with the values its scans allow now.
 type DescribedInput struct {
 	Name       string  `json:"name"`
-	Flag       string  `json:"flag"`
 	Type       string  `json:"type"`
 	Help       string  `json:"help"`
 	Required   bool    `json:"required"`
@@ -125,13 +124,12 @@ func Describe(ctx context.Context, cfg *config.Config, src derive.Sources, name 
 
 // Check reports whether value is valid for the string input called input, as adder new checks it.
 func (d *Description) Check(input, value string) error {
-	return check("--"+config.Flag(input), value, d.gen.Inputs[input], d.data)
+	return check("input "+input, value, d.gen.Inputs[input], d.data)
 }
 
 func describeInput(name string, in config.Input, data map[string]any) (DescribedInput, error) {
 	d := DescribedInput{
 		Name:       name,
-		Flag:       "--" + config.Flag(name),
 		Type:       in.Type,
 		Help:       in.Help,
 		Required:   in.Required(),

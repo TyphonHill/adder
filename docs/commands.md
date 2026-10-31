@@ -5,7 +5,7 @@
 | `adder init` | Write a starter `adder.yaml`, never overwriting one. |
 | `adder derive` | Run every scan and rewrite the derived files that changed. |
 | `adder check` | Report derived files that are out of date, writing nothing. Exits 3 when any are. |
-| `adder new <generator>` | Create files with a generator, then update the derived files. Without a generator, lists them. |
+| `adder new <generator> [input=value...]` | Create files with a generator, then update the derived files. Without a generator, lists them. |
 | `adder test [generator...]` | Run generator tests against their golden files. `--update` rewrites them. |
 | `adder list` | List the generators and derived outputs. |
 | `adder describe <generator>` | Show a generator's inputs, with the values its scans allow now, and the files it creates. |
@@ -26,12 +26,12 @@ adder finds `adder.yaml` in the current directory or the nearest parent with one
 | `-n`, `--dry-run` | `derive`, `new` | Show what would change without writing anything. |
 | `--diff` | `derive`, `check`, `new` | Also show each change as a unified diff. Writes nothing. |
 | `--out <dir>` | `derive` | Write outputs under another directory instead of the root. |
-| `--inputs <file>` | `new` | Read inputs from a JSON object, or `-` for standard input. Flags override it. |
+| `--inputs <file>` | `new` | Read inputs from a JSON object, or `-` for standard input. Arguments override it. |
 | `--update` | `test` | Rewrite the golden files with what the generators create now. |
 
-`adder new <generator>` also takes one flag per input, in kebab-case: `--name`, `--with-test`. `adder new <generator> --help` lists them.
+`adder new <generator>` takes its inputs as arguments, `name=report`, or a bool input's bare name, `withTest`, for true. Arguments override `--inputs`. `adder new <generator> --help` lists the inputs.
 
-Completion covers generator names, their flags, input values from `values` and `valuesFrom`, and generated files for `adder explain`. In a terminal, statuses and problem codes are in color, unless `NO_COLOR` is set or `TERM` is `dumb`.
+Completion covers generator names, their inputs, input values from `values` and `valuesFrom`, and generated files for `adder explain`. In a terminal, statuses and problem codes are in color, unless `NO_COLOR` is set or `TERM` is `dumb`.
 
 ## Monorepos
 
@@ -76,7 +76,7 @@ The codes are listed in [design 4](design.md#4-structured-diagnostics).
 With `--json`, every command prints exactly one JSON object on standard output and nothing on standard error, whether it succeeds or fails, with the same exit codes. Scripts and coding agents can drive adder without parsing text:
 
 ```console
-$ adder new command --name report --with-test --dry-run --json
+$ adder new command name=report withTest --dry-run --json
 {
   "generator": "command",
   "dryRun": true,

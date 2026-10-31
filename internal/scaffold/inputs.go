@@ -30,7 +30,7 @@ func resolve(gen config.Generator, given map[string]any, data map[string]any) (m
 	values := make(map[string]any, len(gen.Inputs))
 	for _, name := range slices.Sorted(maps.Keys(gen.Inputs)) {
 		in := gen.Inputs[name]
-		flag := "--" + config.Flag(name)
+		flag := "input " + name
 		value, ok := given[name]
 
 		if in.Type == config.InputBool {

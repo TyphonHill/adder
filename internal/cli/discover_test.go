@@ -65,9 +65,9 @@ func TestDiscover(t *testing.T) {
 			wantCode: ExitOK,
 			stdoutContains: []string{
 				"driver: Add a storage driver\n\ninputs\n",
-				"  --name     string  Driver name, used as the package name (required; must match [a-z][a-z0-9]*; not one of: local, s3)\n",
-				`  --summary  string  One-line description for the package documentation (default "stores objects")` + "\n",
-				"  drivers/{{ .Inputs.name }}/cache.go               from templates/new/cache.go.tmpl, with --cache\n",
+				"  name     string  Driver name, used as the package name (required; must match [a-z][a-z0-9]*; not one of: local, s3)\n",
+				`  summary  string  One-line description for the package documentation (default "stores objects")` + "\n",
+				"  drivers/{{ .Inputs.name }}/cache.go               from templates/new/cache.go.tmpl, when cache\n",
 				"  drivers/README.md                                 from templates/new/README.md.tmpl, skipped if it exists\n",
 				"\nDerived outputs are updated in the same run.\n",
 			},
@@ -93,8 +93,8 @@ generators:
 			args:     func(root string) []string { return []string{"--root", root, "describe", "copy"} },
 			wantCode: ExitOK,
 			stdoutContains: []string{
-				"  --from  string  Driver to copy (required; one of: local, s3)\n",
-				"  --into  string  (required; no value is allowed: None.Package has none)\n",
+				"  from  string  Driver to copy (required; one of: local, s3)\n",
+				"  into  string  (required; no value is allowed: None.Package has none)\n",
 			},
 		},
 		{
@@ -113,7 +113,7 @@ generators:
 			},
 			args:           func(root string) []string { return []string{"--root", root, "describe", "bare"} },
 			wantCode:       ExitOK,
-			stdoutContains: []string{"  --plain  bool  \n", "  x  from t.tmpl, without --plain\n"},
+			stdoutContains: []string{"  plain  bool  \n", "  x  from t.tmpl, unless plain\n"},
 		},
 		{
 			name:     "describe as JSON includes the input schema",

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"typhonhill.dev/adder/internal/diag"
-	"typhonhill.dev/adder/internal/textcase"
 )
 
 // Generator creates new files from templates. It runs as adder new <name>.
@@ -51,7 +50,7 @@ const (
 	InputBool   = "bool"
 )
 
-// Input is a value given to a generator on the command line, as a flag named after it in kebab-case.
+// Input is a value given to a generator, on the command line as name=value or in a JSON object of inputs.
 type Input struct {
 	Type string `yaml:"type"`
 	Help string `yaml:"help"`
@@ -73,11 +72,6 @@ type Input struct {
 	Pos diag.Pos `yaml:"-"`
 
 	whole *regexp.Regexp
-}
-
-// Flag returns the command-line flag for the input called name, without its leading dashes.
-func Flag(name string) string {
-	return textcase.Kebab(name)
 }
 
 // Required reports whether the input must be given.
@@ -127,9 +121,6 @@ var (
 	inputName     = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 	scanField     = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$`)
 )
-
-// reservedFlags are the flags adder new defines itself, which inputs cannot use.
-var reservedFlags = []string{"config", "diff", "dry-run", "help", "inputs", "root"}
 
 func (c *Config) normalizeGenerators() {
 	for name, gen := range c.Generators {
@@ -191,18 +182,8 @@ func (c *Config) validateGenerators(pos positions) diag.List {
 			errs = append(errs, diag.Errorf(diag.MissingField, pos.at(at), "generator %q: files is required", name))
 		}
 
-		flags := make(map[string]string)
 		for _, key := range slices.Sorted(maps.Keys(gen.Inputs)) {
 			errs = append(errs, c.validateInput(name, key, gen.Inputs[key], at+".inputs."+key, pos)...)
-			flag := Flag(key)
-			switch {
-			case slices.Contains(reservedFlags, flag):
-				errs = append(errs, diag.Errorf(diag.ReservedName, pos.at(at+".inputs."+key), "generator %q: input %q would use the flag --%s, which adder new defines", name, key, flag))
-			case flags[flag] != "":
-				errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".inputs."+key), "generator %q: inputs %q and %q would both use the flag --%s", name, flags[flag], key, flag))
-			default:
-				flags[flag] = key
-			}
 		}
 
 		for i, f := range gen.Files {
@@ -224,7 +205,7 @@ func (c *Config) validateInput(gen, name string, in Input, at string, pos positi
 			Code:    diag.InvalidName,
 			Pos:     pos.at(at),
 			Message: field + ": name must be lowerCamelCase",
-			Hint:    "input names become template fields and flags: packageName is .Inputs.packageName and --package-name",
+			Hint:    "input names are template fields and arguments: packageName is .Inputs.packageName and packageName=...",
 		})
 	}
 

@@ -41,8 +41,8 @@ func TestPrompt(t *testing.T) {
 			answers:  "\nBad\ns3\n  gcs  \n",
 			terminal: true,
 			wantCode: ExitOK,
-			wantStderr: askName + "  a value is required\n> " + `  --name "Bad" does not match [a-z][a-z0-9]*` + "\n> " +
-				`  --name "s3" already exists in Drivers.Package` + "\n> ",
+			wantStderr: askName + "  a value is required\n> " + `  input name "Bad" does not match [a-z][a-z0-9]*` + "\n> " +
+				`  input name "s3" already exists in Drivers.Package` + "\n> ",
 			wantFile: gcs,
 		},
 		{
@@ -52,7 +52,7 @@ func TestPrompt(t *testing.T) {
 			answers:  "3\n2\nfast\n",
 			terminal: true,
 			wantCode: ExitOK,
-			wantStderr: "from: Driver to copy\n  1) local\n  2) s3\n> " + `  --from "3" is not one of the Drivers.Package values: local, s3` + "\n> " +
+			wantStderr: "from: Driver to copy\n  1) local\n  2) s3\n> " + `  input from "3" is not one of the Drivers.Package values: local, s3` + "\n> " +
 				"tier: \n  1) fast\n  2) slow\n> ",
 			wantFile: "s3-fast.md",
 		},
@@ -63,14 +63,14 @@ func TestPrompt(t *testing.T) {
 			answers:        "x\n",
 			terminal:       true,
 			wantCode:       ExitUsage,
-			stderrContains: []string{"from: \n  no value is allowed: None.Package has none\n> ", "--from is required [missing-input]"},
+			stderrContains: []string{"from: \n  no value is allowed: None.Package has none\n> ", "input from is required [missing-input]"},
 		},
 		{
 			name:           "ends without an answer",
 			args:           []string{"new", "driver"},
 			terminal:       true,
 			wantCode:       ExitUsage,
-			stderrContains: []string{askName + "\n", "--name is required [missing-input]"},
+			stderrContains: []string{askName + "\n", "input name is required [missing-input]"},
 		},
 		{
 			name:           "interrupted",
@@ -81,8 +81,8 @@ func TestPrompt(t *testing.T) {
 			stderrContains: []string{"adder: interrupted"},
 		},
 		{
-			name:     "does not ask for inputs given as flags",
-			args:     []string{"new", "driver", "--name", "gcs"},
+			name:     "does not ask for inputs given as arguments",
+			args:     []string{"new", "driver", "name=gcs"},
 			terminal: true,
 			wantCode: ExitOK,
 			wantFile: gcs,
@@ -92,7 +92,7 @@ func TestPrompt(t *testing.T) {
 			args:           []string{"new", "driver"},
 			answers:        "gcs\n",
 			wantCode:       ExitUsage,
-			stderrContains: []string{"--name is required [missing-input]"},
+			stderrContains: []string{"input name is required [missing-input]"},
 		},
 		{
 			name:     "does not ask with --json",
