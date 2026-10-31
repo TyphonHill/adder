@@ -1,11 +1,16 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+	"go.yaml.in/yaml/v3"
 
 	"typhonhill.dev/adder/internal/config"
 )
@@ -14,6 +19,10 @@ import (
 var commentedYAML = regexp.MustCompile(`(?m)^(\s*)# (\s*(?:[A-Za-z]+:|- ).*)$`)
 
 func TestStarterConfig(t *testing.T) {
+	schema, err := jsonschema.NewCompiler().Compile(filepath.Join("..", "..", "schema", "adder-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
 		name     string
 		data     string
@@ -30,6 +39,18 @@ func TestStarterConfig(t *testing.T) {
 			}
 			if tt.complete && (cfg.Vars == nil || len(cfg.Derive.Scans) == 0 || len(cfg.Derive.Outputs) == 0 || len(cfg.Generators) == 0) {
 				t.Errorf("uncommenting left a section empty:\n%s", tt.data)
+			}
+			var v any
+			if err := yaml.Unmarshal([]byte(tt.data), &v); err != nil {
+				t.Fatal(err)
+			}
+			encoded, _ := json.Marshal(v)
+			instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(encoded))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := schema.Validate(instance); err != nil {
+				t.Errorf("the schema rejects it: %v\n%s", err, tt.data)
 			}
 		})
 	}

@@ -15,7 +15,8 @@ import (
 )
 
 // starterConfig is what adder init writes: a valid configuration whose commented examples are valid too.
-const starterConfig = `# adder configuration: https://github.com/typhonhilldev/adder/blob/main/docs/configuration.md
+const starterConfig = `# yaml-language-server: $schema=https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/adder-v1.json
+# adder configuration: https://github.com/typhonhilldev/adder/blob/main/docs/configuration.md
 version: 1
 
 # vars are strings every template can read as .Vars.<name>.
