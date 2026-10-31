@@ -49,7 +49,7 @@ func TestSchemaMatchesTypes(t *testing.T) {
 		skip   []string // field paths the schema leaves out, as pack.yaml leaves out generator tests
 	}{
 		{schema: adderSchema, typ: reflect.TypeFor[Config]()},
-		{schema: packSchema, typ: reflect.TypeFor[packFile](), skip: []string{"generators.*.tests"}},
+		{schema: packSchema, typ: reflect.TypeFor[packFile](), skip: []string{"generators.*.tests", "derive.outputs.*.pack", "generators.*.files.*.pack"}},
 	}
 	for _, tt := range tests {
 		t.Run(filepath.Base(tt.schema), func(t *testing.T) {
@@ -155,6 +155,9 @@ func makePackSchema(adder map[string]any) map[string]any {
 	defs := clone(adder["definitions"]).(map[string]any)
 	delete(defs, "use")
 	delete(defs["generator"].(map[string]any)["properties"].(map[string]any), "tests")
+	// A pack renders only its own templates.
+	delete(defs["output"].(map[string]any)["properties"].(map[string]any), "pack")
+	delete(defs["file"].(map[string]any)["properties"].(map[string]any), "pack")
 	for name, def := range defs {
 		if name != "partials" {
 			defs[name] = optionable(def)
@@ -382,6 +385,9 @@ func TestSchemaRejects(t *testing.T) {
 		{name: "tests in a pack's generator", pack: true, config: "version: 1\ngenerators: {g: {files: [{template: t, path: p}], tests: []}}"},
 		{name: "an option placeholder with another key", pack: true, config: "version: 1\nderive: {scans: {A: {dirs: {option: dirs, x: y}}}}"},
 		{name: "an unknown option type", pack: true, config: "version: 1\noptions: {dirs: {type: map}}"},
+		{name: "a test name in capitals", config: "version: 1\ngenerators: {g: {files: [{template: t, path: p}], tests: [{name: Plain, want: w}]}}"},
+		{name: "pack on a pack's output", pack: true, config: "version: 1\nderive: {outputs: [{template: t, path: p, pack: other}]}"},
+		{name: "pack on a pack generator's file", pack: true, config: "version: 1\ngenerators: {g: {files: [{template: t, path: p, pack: other}]}}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -391,6 +397,31 @@ func TestSchemaRejects(t *testing.T) {
 			}
 			if err := s.Validate(instance(t, []byte(tt.config))); err == nil {
 				t.Errorf("the schema accepts:\n%s", tt.config)
+			}
+		})
+	}
+}
+
+// TestSchemaAcceptsEmpty checks that the schemas accept the empty settings adder accepts, which YAML reads as null.
+func TestSchemaAcceptsEmpty(t *testing.T) {
+	adder := compile(t, adderSchema)
+	tests := []struct {
+		name   string
+		config string
+	}{
+		{name: "an empty with", config: "version: 1\npacks:\n  a:\n    pack: store\n    with:\n"},
+		{name: "an empty rename and tests", config: "version: 1\npacks:\n  a:\n    pack: store\n    rename:\n    tests:\n"},
+		{name: "an empty exclude and buildTags", config: "version: 1\nderive:\n  scans:\n    A:\n      dirs: [a]\n      exclude:\n      buildTags:\n"},
+		{name: "an input with empty values", config: "version: 1\ngenerators:\n  g:\n    inputs:\n      n:\n        values:\n    files: [{template: t, path: p}]\n"},
+		{name: "a test with empty inputs", config: "version: 1\ngenerators:\n  g:\n    files: [{template: t, path: p}]\n    tests:\n      - name: plain\n        want: w\n        inputs:\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !loads([]byte(tt.config)) {
+				t.Fatalf("adder does not load it:\n%s", tt.config)
+			}
+			if err := adder.Validate(instance(t, []byte(tt.config))); err != nil {
+				t.Errorf("the schema rejects it: %v", err)
 			}
 		})
 	}

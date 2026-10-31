@@ -127,21 +127,6 @@
             }
           ]
         },
-        "pack": {
-          "anyOf": [
-            {
-              "allOf": [
-                {
-                  "$ref": "#/definitions/command"
-                }
-              ],
-              "description": "The pack holding the template."
-            },
-            {
-              "$ref": "#/definitions/option"
-            }
-          ]
-        },
         "path": {
           "anyOf": [
             {
@@ -545,7 +530,10 @@
                   }
                 ]
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -601,21 +589,6 @@
                 }
               ],
               "description": "A scan whose items each get a file of their own, as .Item."
-            },
-            {
-              "$ref": "#/definitions/option"
-            }
-          ]
-        },
-        "pack": {
-          "anyOf": [
-            {
-              "allOf": [
-                {
-                  "$ref": "#/definitions/command"
-                }
-              ],
-              "description": "The pack holding the template."
             },
             {
               "$ref": "#/definitions/option"
@@ -729,7 +702,10 @@
                   }
                 ]
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -760,7 +736,10 @@
                   }
                 ]
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -894,7 +873,10 @@
           "anyOf": [
             {
               "description": "The inputs, by name.",
-              "type": "object"
+              "type": [
+                "object",
+                "null"
+              ]
             },
             {
               "$ref": "#/definitions/option"
@@ -904,8 +886,12 @@
         "name": {
           "anyOf": [
             {
-              "description": "The test's name, unique among the generator's tests.",
-              "type": "string"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/command"
+                }
+              ],
+              "description": "The test's name, unique among the generator's tests."
             },
             {
               "$ref": "#/definitions/option"
