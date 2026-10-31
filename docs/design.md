@@ -589,13 +589,15 @@ generators:
 
 **Why:** a generator is code that a team relies on, and templates break silently when a scan field or function changes. Golden files make a generator's output reviewable in pull requests.
 
-### 31. Checking the configuration (planned, after v1.0)
+### 31. Checking the configuration (planned, v1.0)
 
-**A JSON Schema for `adder.yaml`.** The schema lives at `schema/v1.json` for `version: 1`, written in draft-07, which editors support best. `adder init` writes a `# yaml-language-server: $schema=` line pointing at the file on `main`, `https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/v1.json`, so the path must never move. A SchemaStore listing for files named `adder.yaml` waits until after v1.0, when the schema is stable. The schema is written by hand, so it can carry descriptions and examples, and a test checks that its properties match the configuration types exactly. It is a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings.
+**A JSON Schema for `adder.yaml`.** The schema lives at `schema/v1.json` for `version: 1`, written in draft-07, which editors support best. `adder init` writes a `# yaml-language-server: $schema=` line pointing at the file on `main`, `https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/v1.json`, so the path must never move. A SchemaStore listing for files named `adder.yaml` waits for the launch, once v1.0 has made the schema stable. The schema is written by hand, so it can carry descriptions and examples, and a test checks that its properties match the configuration types exactly. It is a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings.
 
-**`adder validate`** checks everything except whether outputs are up to date: the configuration, every template and partial, generator paths and tests, the scans, and rendering every derived output. It writes nothing and exits with status 0 or 1.
+| Considered | Why not |
+| --- | --- |
+| `adder validate`, checking everything but whether outputs are up to date | `adder derive --dry-run` already runs every scan, renders every output, and writes nothing, exiting 0 or 1, which is what a repository that does not commit its outputs needs from CI. |
 
-**Why:** `adder check` needs outputs to be committed to say anything. Repositories that generate outputs at build time still want CI to catch a broken template, and people editing `adder.yaml` want a quick answer.
+**Why:** a schema gives editors completion and validation for `adder.yaml`, and catches mistakes before adder runs. Writing it is also a last review of what v1.0 freezes.
 
 ### 32. Terminal output
 
@@ -605,7 +607,7 @@ generators:
 
 **Why:** these follow what people expect from a modern command line, and none of them changes what adder writes.
 
-### 33. Releases (planned, after v1.0)
+### 33. Releases (planned, launch)
 
 Pushing a `v*` tag runs GoReleaser in GitHub Actions:
 
@@ -623,15 +625,15 @@ Pushing a `v*` tag runs GoReleaser in GitHub Actions:
 | A Homebrew formula | GoReleaser now publishes prebuilt binaries to Homebrew as casks and has deprecated formulas for them. |
 | Version set with `-ldflags -X` | Duplicates what Go's build information already records. |
 
-### 34. Integrations and coding agents (planned, after v1.0)
+### 34. Integrations and coding agents (planned, v1.0 and launch)
 
 - **`go generate`:** one `//go:generate go tool adder derive` directive anywhere in the module is enough, since adder finds `adder.yaml` from any directory ([decision 12](#12-one-configuration-file-at-the-root)) and `derive` regenerates every output.
 - **pre-commit:** `.pre-commit-hooks.yaml` defines `adder-check` and `adder-derive`, built from source with `language: golang`. They run on every commit and ignore the changed file names, because a change anywhere can affect a scan.
-- **GitHub Action:** `action.yml` at the repository root runs `adder check` by default, or another command. It uses `go tool adder` when `go.mod` declares the tool, and otherwise runs the action's own version with `go run`. Downloading a signed binary instead waits for published releases ([decision 33](#33-releases-planned-after-v10)). Problems become annotations on the pull request, read from `--json`.
-- **GitLab CI:** a documented job that runs `adder check` and turns `--json` problems into a Code Quality report.
+- **GitHub Action**, at the launch: `action.yml` at the repository root runs `adder check` by default, or another command. It uses `go tool adder` when `go.mod` declares the tool, and otherwise runs the action's own version with `go run`. Downloading a signed binary instead waits for published releases ([decision 33](#33-releases-planned-launch)). Problems become annotations on the pull request, read from `--json`.
+- **CI jobs:** documented jobs for GitLab CI and GitHub Actions that run `adder check`. The GitLab job turns `--json` problems into a Code Quality report.
 - **Coding agents:** a guide in `docs/agents.md`, and an `AGENTS.md` section to copy into a repository. It tells agents to discover generators with `adder list --json` and `adder describe`, preview with `--dry-run --json`, run `adder derive` after adding code, never edit files marked `DO NOT EDIT`, and use `adder explain` to find the template to change instead.
 
-### 35. Documentation and examples (planned, after v1.0)
+### 35. Documentation and examples (planned, launch)
 
 - **Site:** built with Hugo and the Hextra theme from `site/` and deployed to GitHub Pages from `main`. Hugo is a single Go binary and Hextra installs as a Hugo module, so the documentation needs no Node toolchain. The site holds guides, references, recipes, a comparison with other tools, and a guide to migrating from a hand-rolled generator.
 - **References are generated:** the configuration reference comes from the JSON Schema and the function reference from the function table, by a program in `internal/tools/docgen`. Function examples run as tests, and a test fails when the generated pages are out of date, the same way `adder check` does.
@@ -943,7 +945,7 @@ The trial replaced a generator of about 430 lines of Go with 68 lines of `adder.
 | `docs/migrating.md` | Moving from a hand-rolled generator ([decision 44](#44-moving-from-a-hand-rolled-generator-planned-v10)). |
 | `docs/compatibility.md` | What v1.0 promises, and the support and deprecation policy. |
 
-GitHub renders these today, and the documentation site after v1.0 ([decision 35](#35-documentation-and-examples-planned-after-v10)) renders the same files instead of duplicating them.
+GitHub renders these today, and the documentation site at the launch ([decision 35](#35-documentation-and-examples-planned-launch)) renders the same files instead of duplicating them.
 
 `examples/` holds ten small repositories, each its own module with `adder.yaml`, templates, Go code, and committed outputs, which the documentation links to. Each shows one capability and is named after it, from `registry-from-functions` to `monorepo`, and its README says what it shows, how, and what to try. A test runs `adder check` and `adder test` on every `adder.yaml` in them and `go build` and `go vet` on every module, with adder built from the same commit, so an example that drifts from adder fails the build.
 
@@ -958,7 +960,7 @@ GitHub renders these today, and the documentation site after v1.0 ([decision 35]
 | `adder migrate` in v1.0 | Version 1 is the only schema, so there is nothing to migrate yet. |
 | Freezing without a production trial | Freezing is a one-way door, and the tests are written by the people who wrote the schema. |
 | Keeping the reference in the README | Seven hundred lines that mix a pitch, a tutorial, and a reference serve none of them well. |
-| A code of conduct in v1.0 | It matters once others join, which the launch after v1.0 invites. It arrives then, with a way to report problems that publishes no one's address. |
+| A code of conduct in v1.0 | It matters once others join, which the launch invites. It arrives then, with a way to report problems that publishes no one's address. |
 
 ### 44. Moving from a hand-rolled generator (planned, v1.0)
 
