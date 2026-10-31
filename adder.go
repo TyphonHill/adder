@@ -90,8 +90,12 @@ type ScanInput struct {
 }
 
 // Decode decodes the scan's with settings into v, a pointer, rejecting fields v does not have. Its problems
-// point at the settings in adder.yaml.
+// point at the settings in adder.yaml. Without settings, as for a ScanInput a scanner's own tests build, v is
+// left as it is.
 func (in *ScanInput) Decode(v any) error {
+	if in.decode == nil {
+		return nil
+	}
 	return in.decode(v)
 }
 

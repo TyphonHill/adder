@@ -432,15 +432,14 @@ func templates(u unit, src Sources) (*render.Set, error) {
 // the configuration's own unit or the options of a use.
 func templateData(ctx context.Context, u unit, src Sources) (map[string]any, error) {
 	cfg := u.cfg
-	data := make(map[string]any, len(cfg.Derive.Scans)+2)
-	if u.pack != "" {
+	// .Vars and .Options are always present, empty where they do not apply, so a template can test them.
+	data := make(map[string]any, len(cfg.Derive.Scans)+3)
+	data["Vars"], data["Options"] = map[string]string{}, map[string]any{}
+	switch {
+	case u.pack != "" && u.options != nil:
 		data["Options"] = u.options
-	} else {
-		vars := cfg.Vars
-		if vars == nil {
-			vars = map[string]string{}
-		}
-		data["Vars"] = vars
+	case u.pack == "" && cfg.Vars != nil:
+		data["Vars"] = cfg.Vars
 	}
 
 	gomod, err := fs.ReadFile(src.Repo, "go.mod")

@@ -151,6 +151,13 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
+			name:           "generator help with --json",
+			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "--help", "--json"} },
+			wantCode:       ExitOK,
+			stdoutContains: []string{"Inputs, given as arguments"},
+			stdoutExcludes: []string{"(default true)"},
+		},
+		{
 			name: "help when the configuration does not load",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "adder.yaml"), "version: 2\n")

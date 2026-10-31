@@ -406,7 +406,7 @@ func TestCLI(t *testing.T) {
 			args:           func(root string) []string { return []string{"--root", root, "derive", "--json"} },
 			canceled:       true,
 			wantCode:       ExitError,
-			stdoutContains: `"code": "error",` + "\n" + `      "message": "interrupted"`,
+			stdoutContains: `"code": "interrupted",` + "\n" + `      "message": "interrupted"`,
 			wantStderr:     func(string) string { return "" },
 		},
 		{

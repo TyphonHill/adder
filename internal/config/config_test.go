@@ -284,7 +284,7 @@ func TestParseErrors(t *testing.T) {
 		},
 		{name: "test without a name or want", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - inputs: {name: a}\n", want: []want{{diag.MissingField, 7, 9}, {diag.MissingField, 7, 9}}},
 		{name: "test name not kebab case", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: With_Cache, want: w}\n", want: []want{{diag.InvalidName, 7, 10}}},
-		{name: "two tests with one name", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w}\n      - {name: a, want: v}\n", want: []want{{diag.InvalidName, 8, 10}}},
+		{name: "two tests with one name", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: w}\n      - {name: a, want: v}\n", want: []want{{diag.DuplicateName, 8, 10}}},
 		{name: "test want escapes the root", input: "version: 1\ngenerators:\n  g:\n    inputs: {name: {}}\n    files: [{template: t.tmpl, path: x}]\n    tests:\n      - {name: a, want: ../w}\n", want: []want{{diag.UnsafePath, 7, 19}}},
 		{
 			name:     "test with an unknown input",

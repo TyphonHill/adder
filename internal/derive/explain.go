@@ -20,14 +20,14 @@ type Explanation struct {
 	// Generated reports whether the file has adder's header.
 	Generated bool `json:"generated"`
 	// Source is what the header says the file was generated from: a template, with its pack and use for a
-	// pack's template.
-	Source string `json:"source,omitempty"`
+	// pack's template. It is empty when the file has no header.
+	Source string `json:"source"`
 	// Output is the output that writes or removes the file, nil when none does.
 	Output *config.Output `json:"output"`
-	// Scans are the scans the output's template refers to by name.
+	// Scans are the scans the output's template refers to by name, empty when no output writes the file.
 	Scans []string `json:"scans"`
-	// Status is what derive would do to the file: unchanged, updated, or removed. It is set when Output is.
-	Status *plan.Status `json:"status,omitempty"`
+	// Status is what derive would do to the file: unchanged, updated, or removed. It is nil when Output is.
+	Status *plan.Status `json:"status"`
 }
 
 // Explain reports where the file name, a slash-separated path relative to the repository root, comes from: the
@@ -37,7 +37,7 @@ func Explain(ctx context.Context, cfg *config.Config, src Sources, name string) 
 	if err != nil {
 		return nil, diag.Locate(diag.Wrap(diag.IO, diag.Pos{File: name}, err), src.RepoDir, diag.Pos{})
 	}
-	e := &Explanation{Path: name}
+	e := &Explanation{Path: name, Scans: []string{}}
 	e.Source, e.Generated = header.Parse(name, content)
 	if !e.Generated {
 		return e, nil

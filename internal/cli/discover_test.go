@@ -210,6 +210,14 @@ generators:
 			stdoutContains: []string{"  status    stale: no item produces it any more, and adder derive removes it\n"},
 		},
 		{
+			name: "explain --json has every field for a file adder did not generate",
+			args: func(root string) []string {
+				return []string{"--root", root, "explain", filepath.Join(root, "drivers", "s3", "s3.go"), "--json"}
+			},
+			wantCode:       ExitOK,
+			stdoutContains: []string{`"generated": false,` + "\n" + `  "source": "",` + "\n" + `  "output": null,` + "\n" + `  "scans": [],` + "\n" + `  "status": null,`},
+		},
+		{
 			name: "explain a file adder did not generate",
 			args: func(root string) []string {
 				return []string{"--root", root, "explain", filepath.Join(root, "drivers", "s3", "s3.go")}

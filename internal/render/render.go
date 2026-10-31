@@ -54,7 +54,7 @@ func NewSet(fsys fs.FS, partials []string, extra template.FuncMap) (*Set, error)
 				continue // the text around the definitions is never rendered
 			}
 			if first, dup := definedIn[t.Name()]; dup {
-				problems = append(problems, diag.Errorf(diag.TemplateSyntax, diag.Pos{File: name}, "template %q is already defined in %s", t.Name(), first))
+				problems = append(problems, diag.Errorf(diag.DuplicateName, diag.Pos{File: name}, "template %q is already defined in %s", t.Name(), first))
 				continue
 			}
 			definedIn[t.Name()] = name

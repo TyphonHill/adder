@@ -339,7 +339,7 @@ func validateTest(gen string, i int, test GeneratorTest, inputs map[string]Input
 	case !generatorName.MatchString(test.Name):
 		errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".name"), "%s: name %q must be lowercase words joined by hyphens", field, test.Name))
 	case names[test.Name]:
-		errs = append(errs, diag.Errorf(diag.InvalidName, pos.at(at+".name"), "%s: another test is also called %q", field, test.Name))
+		errs = append(errs, diag.Errorf(diag.DuplicateName, pos.at(at+".name"), "%s: another test is also called %q", field, test.Name))
 	}
 	names[test.Name] = true
 	switch test.Want {

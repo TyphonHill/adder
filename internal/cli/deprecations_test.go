@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"typhonhill.dev/adder/internal/pack"
 )
@@ -107,6 +108,41 @@ func TestConfigWarnings(t *testing.T) {
 			}
 			if !slices.Equal(got, tt.wantWarnings) {
 				t.Errorf("warnings at the top and in each configuration = %v, want %v\n%s", got, tt.wantWarnings, stdout.String())
+			}
+		})
+	}
+}
+
+func TestPackWarningsPrintedOnce(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"a", "b"} {
+		writeFile(t, filepath.Join(root, dir, "adder.yaml"), "version: 1\npacks:\n  lists: {pack: store}\n")
+	}
+	t.Chdir(root)
+	store := fstest.MapFS{
+		"pack.yaml":    {Data: []byte("version: 1\nderive:\n  outputs:\n    - {template: list.go.tmpl, path: list.gen.go}\n")},
+		"list.go.tmpl": {Data: []byte("package x\n\n// {{ shout \"x\" }}\n")},
+	}
+	packs := []pack.Pack{
+		{Name: "store", FS: store},
+		{Name: "local", Funcs: map[string]any{"shout": strings.ToUpper}, DeprecatedFuncs: map[string]string{"shout": "use upper"}},
+	}
+	tests := []struct {
+		name string
+		args []string
+		want int // how many times the warning is printed
+	}{
+		{name: "one configuration", args: []string{"derive", "./a", "--dry-run"}, want: 1},
+		{name: "two configurations using the pack", args: []string{"derive", "./...", "--dry-run"}, want: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := Main(t.Context(), "v0.0.0-test", packs, tt.args, strings.NewReader(""), &stdout, &stderr); code != ExitOK {
+				t.Fatalf("exit code = %d\n%s%s", code, stdout.String(), stderr.String())
+			}
+			if got := strings.Count(stderr.String(), `function "shout" is deprecated`); got != tt.want {
+				t.Errorf("printed %d times, want %d:\n%s", got, tt.want, stderr.String())
 			}
 		})
 	}

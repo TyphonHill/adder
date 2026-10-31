@@ -295,12 +295,12 @@ func TestPackGenerators(t *testing.T) {
 		{
 			name:     "a name the configuration's own generator has",
 			config:   "version: 1\ngenerators:\n  driver: {files: [{template: t.tmpl, path: x.go}]}\npacks:\n  drivers: {pack: store, with: {dir: drivers}}\n",
-			wantErrs: []string{"adder.yaml:5:3 invalid-name"},
+			wantErrs: []string{"adder.yaml:5:3 duplicate-name"},
 		},
 		{
 			name:     "two uses with one generator name",
 			config:   "version: 1\npacks:\n  a: {pack: store, with: {dir: a}}\n  b: {pack: store, with: {dir: b}}\n",
-			wantErrs: []string{"adder.yaml:4:3 invalid-name"},
+			wantErrs: []string{"adder.yaml:4:3 duplicate-name"},
 		},
 		{
 			name:     "renaming a generator the pack does not have",

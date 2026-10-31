@@ -275,7 +275,7 @@ func TestSetPartialErrors(t *testing.T) {
 	}{
 		{name: "missing partial", partials: []string{"missing.tmpl"}, wantCodes: []diag.Code{diag.IO}, wantPos: diag.Pos{File: "missing.tmpl"}},
 		{name: "partial syntax", partials: []string{"broken.tmpl"}, wantCodes: []diag.Code{diag.TemplateSyntax}, wantPos: diag.Pos{File: "broken.tmpl", Line: 2}},
-		{name: "defined twice", partials: []string{"a.tmpl", "b.tmpl"}, wantCodes: []diag.Code{diag.TemplateSyntax}, wantPos: diag.Pos{File: "b.tmpl"}},
+		{name: "defined twice", partials: []string{"a.tmpl", "b.tmpl"}, wantCodes: []diag.Code{diag.DuplicateName}, wantPos: diag.Pos{File: "b.tmpl"}},
 		{
 			name:      "reports every problem",
 			partials:  []string{"missing.tmpl", "broken.tmpl"},

@@ -271,7 +271,7 @@ func (c *Config) addUseGenerators(pos positions) diag.List {
 			commands[command] = true
 			if first, taken := from[command]; taken {
 				errs = append(errs, &diag.Diagnostic{
-					Code:    diag.InvalidName,
+					Code:    diag.DuplicateName,
 					Pos:     use.Pos,
 					Message: fmt.Sprintf("pack use %q: generator %q is already defined in %s", useName, command, first),
 					Hint:    fmt.Sprintf("rename it under the use, such as rename: {%s: %s-%s}", name, useName, name),

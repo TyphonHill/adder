@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"runtime/debug"
 	"slices"
@@ -54,7 +55,13 @@ func TestInternal(t *testing.T) {
 		packs []Pack
 	}{
 		{name: "none"},
-		{name: "every field", packs: []Pack{{Name: "local", Funcs: map[string]any{"same": same}, Scanners: map[string]Scanner{"routes": func(context.Context, *ScanInput) ([]any, error) { return nil, nil }}}, {Name: "store", FS: fstest.MapFS{}}}},
+		{name: "every field", packs: []Pack{{
+			Name:               "local",
+			Funcs:              map[string]any{"same": same},
+			Scanners:           map[string]Scanner{"routes": func(context.Context, *ScanInput) ([]any, error) { return nil, nil }},
+			DeprecatedFuncs:    map[string]string{"same": "use other"},
+			DeprecatedScanners: map[string]string{"routes": "use paths"},
+		}, {Name: "store", FS: fstest.MapFS{}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -63,7 +70,8 @@ func TestInternal(t *testing.T) {
 				t.Fatalf("internal() = %d packs, want %d", len(got), len(tt.packs))
 			}
 			for i, p := range tt.packs {
-				if got[i].Name != p.Name || len(got[i].Funcs) != len(p.Funcs) || (got[i].FS == nil) != (p.FS == nil) || len(got[i].Scanners) != len(p.Scanners) {
+				if got[i].Name != p.Name || len(got[i].Funcs) != len(p.Funcs) || (got[i].FS == nil) != (p.FS == nil) || len(got[i].Scanners) != len(p.Scanners) ||
+					!maps.Equal(got[i].DeprecatedFuncs, p.DeprecatedFuncs) || !maps.Equal(got[i].DeprecatedScanners, p.DeprecatedScanners) {
 					t.Errorf("internal()[%d] = %+v, want %+v", i, got[i], p)
 				}
 			}
@@ -114,6 +122,26 @@ func TestProblemError(t *testing.T) {
 		t.Run(tt.want, func(t *testing.T) {
 			if got := tt.p.Error(); got != tt.want {
 				t.Errorf("Error() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScanInputDecode(t *testing.T) {
+	type settings struct{ Prefix string }
+	tests := []struct {
+		name string
+		in   *ScanInput
+		want settings
+	}{
+		{name: "built by hand, without settings", in: &ScanInput{}, want: settings{Prefix: "unchanged"}},
+		{name: "with settings", in: &ScanInput{decode: func(v any) error { v.(*settings).Prefix = "/v1"; return nil }}, want: settings{Prefix: "/v1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := settings{Prefix: "unchanged"}
+			if err := tt.in.Decode(&got); err != nil || got != tt.want {
+				t.Errorf("Decode() = %+v, %v, want %+v", got, err, tt.want)
 			}
 		})
 	}

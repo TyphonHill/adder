@@ -306,7 +306,7 @@ func TestPlanShared(t *testing.T) {
 			name:      "partials defining the same template",
 			partials:  []string{"partials/header.tmpl", "partials/also/*.tmpl"},
 			template:  "list.tmpl",
-			wantCodes: []diag.Code{diag.TemplateSyntax},
+			wantCodes: []diag.Code{diag.DuplicateName},
 			wantFiles: []string{filepath.Join("tmpl", "partials", "header.tmpl")},
 		},
 		{

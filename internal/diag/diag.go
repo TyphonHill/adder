@@ -27,6 +27,7 @@ const (
 	ReservedName       Code = "reserved-name"
 	UnsafePath         Code = "unsafe-path"
 	DuplicatePath      Code = "duplicate-path"
+	DuplicateName      Code = "duplicate-name"
 	NoMatch            Code = "no-match"
 	GoSyntax           Code = "go-syntax"
 	TemplateSyntax     Code = "template-syntax"
@@ -44,6 +45,7 @@ const (
 	UnknownPack        Code = "unknown-pack"
 	UnknownScanner     Code = "unknown-scanner"
 	Scanner            Code = "scanner"
+	Interrupted        Code = "interrupted"
 
 	// Deprecated is a warning: something deprecated was used, and still works.
 	Deprecated Code = "deprecated"
