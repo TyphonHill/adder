@@ -912,7 +912,7 @@ type Problem struct {
 
 ### 43. Reaching v1.0 (planned, v1.0)
 
-v1.0 makes the promises in [Compatibility](#compatibility) binding, so it is about getting them right rather than adding features. Four steps come before the release, in this order, because each can change what the next one describes.
+v1.0 makes the promises in [Compatibility](#compatibility), detailed in [`compatibility.md`](compatibility.md), binding, so it is about getting them right rather than adding features. Four steps come before the release, in this order, because each can change what the next one describes.
 
 **1. Review everything v1.0 freezes.** Every name and behavior the compatibility promise covers is read once more, asking whether it should change while change is still free:
 
@@ -980,14 +980,6 @@ Everyone else gets adder's files by pulling. Where the old files were ignored by
 
 ## Compatibility
 
-From v1.0, semantic versioning covers:
-
-- The `adder.yaml` schema for a given `version`.
-- Template data: scan item fields, `.Module`, and template function names and behavior.
-- The generated-code header format.
-- Diagnostic codes, exit codes, and JSON output.
-- The `pack.yaml` schema, and the root package's Go API.
-
-It does not cover the wording of messages or the human-readable output of commands, which may improve in any release.
+From v1.0, semantic versioning covers the `adder.yaml` and `pack.yaml` schemas, template data and functions, the generated-code header, commands and flags, diagnostic codes, exit codes, JSON output, and the root package's Go API. It does not cover the wording of messages or gofmt's formatting. [`compatibility.md`](compatibility.md) states each promise, its exceptions, and the deprecation and Go version policies, and tests named `TestFrozen...` pin the lists it freezes.
 
 Before v1.0, any of these may change, and the changelog will say so.

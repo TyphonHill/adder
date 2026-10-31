@@ -1,6 +1,10 @@
 package render
 
-import "testing"
+import (
+	"maps"
+	"slices"
+	"testing"
+)
 
 func TestCaseFuncs(t *testing.T) {
 	const in = "HTTPServer_id"
@@ -119,5 +123,18 @@ func TestGroupByEmpty(t *testing.T) {
 	groups, err := groupBy("Name", []struct{ Name string }{})
 	if err != nil || groups == nil || len(groups) != 0 {
 		t.Errorf("groupBy() = %#v, %v, want an empty list", groups, err)
+	}
+}
+
+// TestFrozenFuncs pins the template functions. v1 promises never to remove or rename one (docs/compatibility.md);
+// adding one is allowed, and belongs in this list and the changelog.
+func TestFrozenFuncs(t *testing.T) {
+	want := []string{
+		"fieldValues", "groupBy", "indent", "join", "nindent", "plural", "quote", "replace", "sortAlpha", "sortBy",
+		"toCamelCase", "toConstantCase", "toGoCamelCase", "toGoPascalCase", "toKebabCase", "toLower", "toPascalCase",
+		"toSnakeCase", "toUpper", "trimPrefix", "trimSuffix", "uniq",
+	}
+	if got := slices.Sorted(maps.Keys(Funcs())); !slices.Equal(got, want) {
+		t.Errorf("functions = %q, want %q", got, want)
 	}
 }

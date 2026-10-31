@@ -5,6 +5,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -254,5 +255,27 @@ func TestLanguages(t *testing.T) {
 	}
 	if len(byExt) != len(seen) {
 		t.Errorf("byExt has %d extensions, want %d", len(byExt), len(seen))
+	}
+}
+
+// TestFrozenFileTypes pins the file types that get a header, which v1 promises never to change
+// (docs/compatibility.md): adding one would change what adder writes for files of that type.
+func TestFrozenFileTypes(t *testing.T) {
+	want := []string{
+		".c .cc .cjs .cpp .cs .cts .cxx .dart .h .hh .hpp .java .js .jsx .kt .kts .mjs .mts .proto .rs .scala .swift .ts .tsx",
+		".bash .dockerfile .hcl .mk .nix .pl .pm .ps1 .psm1 .py .pyi .r .rb .sh .tf .tfvars .toml .yaml .yml .zsh",
+		".hs .lua .sql",
+		".css .sass .scss",
+		".htm .html .markdown .md .svg .vue .xml",
+	}
+	var got []string
+	for _, lang := range languages {
+		got = append(got, lang.exts)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("extensions = %q, want %q", got, want)
+	}
+	if names := slices.Sorted(maps.Keys(byName)); !slices.Equal(names, []string{"Dockerfile", "GNUmakefile", "Makefile", "makefile"}) {
+		t.Errorf("file names = %q", names)
 	}
 }

@@ -47,7 +47,7 @@ func TestToSnakeCase(t *testing.T) {
 
 ### Assert on what is stable
 
-- Check diagnostic codes and positions, not message wording. Messages may improve in any release; codes are part of the [compatibility promise](docs/design.md#compatibility).
+- Check diagnostic codes and positions, not message wording. Messages may improve in any release; codes are part of the [compatibility promise](docs/compatibility.md).
 - Compare whole values, such as the complete list of scan items, rather than counts or single fields.
 
 ### Choose the right fixture

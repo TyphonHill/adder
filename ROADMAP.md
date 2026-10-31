@@ -201,7 +201,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | Recipes: driver and plugin registries, HTTP routes, CLI commands, gRPC wiring, workflow engines | 🔜 after v1.0 |
 | Comparison page: adder versus `go generate`, stencil, plop, hygen, and hand-rolled generators | 🔜 after v1.0 |
 | Migration guide from a hand-rolled generator, in `docs/migrating.md` ([design 44](docs/design.md#44-moving-from-a-hand-rolled-generator-planned-v10)) | ✅ |
-| Support and deprecation policy for configuration fields and Go versions, in `docs/compatibility.md` ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
+| Support and deprecation policy for configuration fields and Go versions, in `docs/compatibility.md` ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | ✅ |
 | Launch: announcement post, Gophers Slack, r/golang | 🔜 after v1.0 |
 
 ## Milestones
