@@ -21,9 +21,10 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
+# Go workspace file, except the examples', which build them with adder from this checkout
 go.work
 go.work.sum
+!examples/*/go.work
 
 # env file
 .env
