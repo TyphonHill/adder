@@ -19,18 +19,22 @@ import (
 	"typhonhill.dev/adder/internal/scaffold"
 )
 
-const newLong = `new creates files from a generator declared under generators in adder.yaml.
+const (
+	newUse   = "new <generator> [input=value...] [flags]"
+	newShort = "Create files with a generator from adder.yaml"
+	newLong  = `new creates files from a generator declared under generators in adder.yaml.
 
 Each generator is a subcommand that takes its inputs as arguments, such as name=gcs, or a bool input's
 bare name for true. Run 'adder new' to list the generators and 'adder new <generator> --help' to see
 its inputs. Existing files are never overwritten, and derived outputs are updated in the same run.`
+)
 
 func newNewCommand(opts *globalOptions) *cobra.Command {
 	return &cobra.Command{
-		Use:   "new <generator> [flags]",
-		Short: "Create files with a generator from adder.yaml",
+		Use:   newUse,
+		Short: newShort,
 		Long:  newLong,
-		// Generators define their own flags, so the command line is parsed once adder.yaml is loaded.
+		// Each generator's command takes its own inputs, so the command line is parsed once adder.yaml is loaded.
 		DisableFlagParsing: true,
 		ValidArgsFunction:  completeNew(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -40,17 +44,10 @@ func newNewCommand(opts *globalOptions) *cobra.Command {
 }
 
 func runNew(cmd *cobra.Command, opts *globalOptions, args []string) error {
-	pre := pflag.NewFlagSet("new", pflag.ContinueOnError)
-	pre.ParseErrorsAllowlist.UnknownFlags = true
-	pre.SetOutput(io.Discard)
-	pre.StringVar(&opts.root, "root", opts.root, "")
-	pre.StringVarP(&opts.config, "config", "c", opts.config, "")
-	help := pre.BoolP("help", "h", false, "")
-	_ = pre.Parse(args) // mistakes are reported when the generator's command parses the same arguments
-
+	help := preParse(opts, args)
 	cfg, root, err := opts.load()
 	if err != nil {
-		if *help {
+		if help {
 			return cmd.Help()
 		}
 		return err
@@ -68,10 +65,23 @@ func runNew(cmd *cobra.Command, opts *globalOptions, args []string) error {
 }
 
 // generatorsCommand returns the new command with a subcommand for each generator in cfg, working in root.
+// preParse reads --root and --config from the words of adder new, before adder.yaml is loaded, and reports
+// whether they ask for help. Mistakes are reported when the generator's command parses the same words.
+func preParse(opts *globalOptions, args []string) (help bool) {
+	pre := pflag.NewFlagSet("new", pflag.ContinueOnError)
+	pre.ParseErrorsAllowlist.UnknownFlags = true
+	pre.SetOutput(io.Discard)
+	pre.StringVar(&opts.root, "root", opts.root, "")
+	pre.StringVarP(&opts.config, "config", "c", opts.config, "")
+	pre.BoolVarP(&help, "help", "h", false, "")
+	_ = pre.Parse(args)
+	return help
+}
+
 func generatorsCommand(opts *globalOptions, cfg *config.Config, root string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "new <generator> [flags]",
-		Short: "Create files with a generator from adder.yaml",
+		Use:   newUse,
+		Short: newShort,
 		Long:  newLong,
 		// Flags of a mistyped generator should not hide that the generator is unknown.
 		FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: true},
@@ -248,37 +258,10 @@ func generatorHelp(gen config.Generator) string {
 	b.WriteString("\n\nInputs, given as arguments or with --inputs:\n")
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	for _, name := range slices.Sorted(maps.Keys(gen.Inputs)) {
-		fmt.Fprintf(tw, "  %s\t%s\n", inputArg(name, gen.Inputs[name]), flagHelp(gen.Inputs[name]))
+		fmt.Fprintf(tw, "  %s\t%s\n", inputArg(name, gen.Inputs[name]), inputNotes(scaffold.DescribeInput(name, gen.Inputs[name])))
 	}
 	_ = tw.Flush() // writing to a strings.Builder cannot fail
 	return strings.TrimRight(b.String(), "\n")
-}
-
-// flagHelp describes an input for the help of its generator.
-func flagHelp(in config.Input) string {
-	var notes []string
-	if in.Deprecated != "" {
-		notes = append(notes, "deprecated: "+in.Deprecated)
-	}
-	switch {
-	case in.Required():
-		notes = append(notes, "required")
-	case in.Default != nil:
-		notes = append(notes, fmt.Sprintf("default %q", *in.Default))
-	}
-	switch {
-	case in.Values != nil:
-		notes = append(notes, "one of: "+strings.Join(in.Values, ", "))
-	case in.ValuesFrom != "":
-		notes = append(notes, "one of the "+in.ValuesFrom+" values")
-	}
-	if in.Unique != "" {
-		notes = append(notes, "not already in "+in.Unique)
-	}
-	if len(notes) == 0 {
-		return in.Help
-	}
-	return strings.TrimSpace(fmt.Sprintf("%s (%s)", in.Help, strings.Join(notes, "; ")))
 }
 
 // readInputs reads the JSON object of inputs in file, which is - for standard input. No file means no inputs.
@@ -289,14 +272,12 @@ func readInputs(cmd *cobra.Command, file string) (map[string]any, error) {
 	}
 	var data []byte
 	var err error
-	if file == "-" {
-		data, err = io.ReadAll(cmd.InOrStdin())
-	} else {
-		data, err = os.ReadFile(file)
-	}
 	pos := diag.Pos{File: file}
 	if file == "-" {
+		data, err = io.ReadAll(cmd.InOrStdin())
 		pos = diag.Pos{} // standard input has no name to report
+	} else {
+		data, err = os.ReadFile(file)
 	}
 	if err != nil {
 		return nil, diag.Wrap(diag.IO, pos, err)

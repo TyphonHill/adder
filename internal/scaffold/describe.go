@@ -127,7 +127,8 @@ func (d *Description) Check(input, value string) error {
 	return check("input "+input, value, d.gen.Inputs[input], d.data)
 }
 
-func describeInput(name string, in config.Input, data map[string]any) (DescribedInput, error) {
+// DescribeInput returns the input called name as written, without the values its scans allow.
+func DescribeInput(name string, in config.Input) DescribedInput {
 	d := DescribedInput{
 		Name:       name,
 		Type:       in.Type,
@@ -142,6 +143,11 @@ func describeInput(name string, in config.Input, data map[string]any) (Described
 	if in.Pattern.Regexp != nil {
 		d.Pattern = in.Pattern.String()
 	}
+	return d
+}
+
+func describeInput(name string, in config.Input, data map[string]any) (DescribedInput, error) {
+	d := DescribeInput(name, in)
 	var err error
 	if in.ValuesFrom != "" {
 		if d.Values, err = scanValues(in.ValuesFrom, in, data); err != nil {

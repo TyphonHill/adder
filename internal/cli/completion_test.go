@@ -41,7 +41,7 @@ generators:
 		{name: "inputs by prefix", words: []string{"new", "driver", "na"}, want: "name=\tDriver name, used as the package name\n:6\n"},
 		{name: "inputs not given yet", words: []string{"new", "driver", "name=gcs", "cache", ""}, want: "summary=\tOne-line description for the package documentation\n:6\n"},
 		{name: "free text", words: []string{"new", "driver", "summary="}, want: ":4\n"},
-		{name: "generator flags", words: []string{"new", "driver", "--d"}, want: "--dry-run\tshow what would change without writing anything\n--diff\talso show each change as a unified diff\n:4\n"},
+		{name: "generator flags", words: []string{"new", "driver", "--d"}, want: "--diff\talso show each change as a unified diff; implies --dry-run\n--dry-run\tshow what would change without writing anything\n:4\n"},
 		{name: "an unknown generator", words: []string{"new", "nope", "na"}, want: ":4\n"},
 		{name: "values", config: withValues, words: []string{"new", "copy", "tier="}, want: "tier=fast\ntier=slow\n:4\n"},
 		{name: "values from a scan", config: withValues, words: []string{"new", "copy", "from=s"}, want: "from=s3\n:4\n"},

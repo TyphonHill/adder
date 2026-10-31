@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"path/filepath"
@@ -80,34 +79,34 @@ func TestConfigWarnings(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			if code := Main(t.Context(), "v0.0.0-test", packs, tt.args, strings.NewReader(""), &stdout, &stderr); code != ExitOK {
-				t.Fatalf("exit code = %d, want %d\n%s%s", code, ExitOK, stdout.String(), stderr.String())
+			code, stdout, stderr := runMain(t.Context(), packs, "", tt.args...)
+			if code != ExitOK {
+				t.Fatalf("exit code = %d, want %d\n%s%s", code, ExitOK, stdout, stderr)
 			}
 			switch {
-			case tt.wantStderr == "" && strings.Contains(stderr.String(), "warning"):
-				t.Errorf("stderr has a warning:\n%s", stderr.String())
-			case tt.wantStderr != "" && strings.Count(stderr.String(), tt.wantStderr) != 1:
-				t.Errorf("stderr has %q %d times, want once:\n%s", tt.wantStderr, strings.Count(stderr.String(), tt.wantStderr), stderr.String())
+			case tt.wantStderr == "" && strings.Contains(stderr, "warning"):
+				t.Errorf("stderr has a warning:\n%s", stderr)
+			case tt.wantStderr != "" && strings.Count(stderr, tt.wantStderr) != 1:
+				t.Errorf("stderr has %q %d times, want once:\n%s", tt.wantStderr, strings.Count(stderr, tt.wantStderr), stderr)
 			}
 			if tt.wantWarnings == nil {
 				return
 			}
 			var rep struct {
-				Warnings []struct{ Message string } `json:"warnings"`
+				Warnings []json.RawMessage `json:"warnings"`
 				Configs  []struct {
-					Warnings []struct{ Message string } `json:"warnings"`
+					Warnings []json.RawMessage `json:"warnings"`
 				} `json:"configs"`
 			}
-			if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
-				t.Fatalf("%v\n%s", err, stdout.String())
+			if err := json.Unmarshal([]byte(stdout), &rep); err != nil {
+				t.Fatalf("%v\n%s", err, stdout)
 			}
 			got := []int{len(rep.Warnings)}
 			for _, c := range rep.Configs {
 				got = append(got, len(c.Warnings))
 			}
 			if !slices.Equal(got, tt.wantWarnings) {
-				t.Errorf("warnings at the top and in each configuration = %v, want %v\n%s", got, tt.wantWarnings, stdout.String())
+				t.Errorf("warnings at the top and in each configuration = %v, want %v\n%s", got, tt.wantWarnings, stdout)
 			}
 		})
 	}
@@ -137,12 +136,12 @@ func TestPackWarningsPrintedOnce(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			if code := Main(t.Context(), "v0.0.0-test", packs, tt.args, strings.NewReader(""), &stdout, &stderr); code != ExitOK {
-				t.Fatalf("exit code = %d\n%s%s", code, stdout.String(), stderr.String())
+			code, stdout, stderr := runMain(t.Context(), packs, "", tt.args...)
+			if code != ExitOK {
+				t.Fatalf("exit code = %d\n%s%s", code, stdout, stderr)
 			}
-			if got := strings.Count(stderr.String(), `function "shout" is deprecated`); got != tt.want {
-				t.Errorf("printed %d times, want %d:\n%s", got, tt.want, stderr.String())
+			if got := strings.Count(stderr, "[deprecated]"); got != tt.want {
+				t.Errorf("printed %d times, want %d:\n%s", got, tt.want, stderr)
 			}
 		})
 	}

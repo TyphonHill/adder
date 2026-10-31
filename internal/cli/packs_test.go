@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -56,11 +55,11 @@ generators:
 			}
 			t.Chdir(root)
 			if tt.args[0] != "derive" {
-				if code, _, stderr := runPacks(t, packs, "derive"); code != ExitOK {
+				if code, _, stderr := runMain(t.Context(), packs, "", "derive"); code != ExitOK {
 					t.Fatalf("derive: exit code %d\n%s", code, stderr)
 				}
 			}
-			code, stdout, stderr := runPacks(t, packs, tt.args...)
+			code, stdout, stderr := runMain(t.Context(), packs, "", tt.args...)
 			if code != tt.wantCode {
 				t.Fatalf("exit code = %d, want %d\nstdout: %s\nstderr: %s", code, tt.wantCode, stdout, stderr)
 			}
@@ -84,7 +83,7 @@ func TestInvalidPack(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			code, stdout, stderr := runPacks(t, packs, tt.args...)
+			code, stdout, stderr := runMain(t.Context(), packs, "", tt.args...)
 			if code != ExitError {
 				t.Errorf("exit code = %d, want %d", code, ExitError)
 			}
@@ -93,11 +92,4 @@ func TestInvalidPack(t *testing.T) {
 			}
 		})
 	}
-}
-
-func runPacks(t *testing.T, packs []pack.Pack, args ...string) (code int, stdout, stderr string) {
-	t.Helper()
-	var out, errOut bytes.Buffer
-	code = Main(t.Context(), "v0.0.0-test", packs, args, strings.NewReader(""), &out, &errOut)
-	return code, out.String(), errOut.String()
 }

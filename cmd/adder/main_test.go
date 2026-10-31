@@ -22,6 +22,7 @@ func TestMain(m *testing.M) {
 	testscript.Main(m, map[string]func(){"adder": main})
 }
 
+// TestScripts runs the testscript scripts in testdata/script; each script is a case.
 func TestScripts(t *testing.T) {
 	goEnv := goEnvironment(t)
 	root, err := filepath.Abs(filepath.Join("..", ".."))

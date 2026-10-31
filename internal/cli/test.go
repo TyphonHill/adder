@@ -51,7 +51,7 @@ With directory patterns, such as ./... or ./services/api, it runs over every add
 			found := make(map[string]bool)
 			newReport := func() report { return &testReport{Tests: []testResultReport{}} }
 			err := runConfigs(cmd, opts, patterns, newReport, func(run configRun, r report) error {
-				return runTests(cmd, opts, run, r.(*testReport), names, len(patterns) > 0, found, update)
+				return runTests(cmd, opts, run, r.(*testReport), names, found, update)
 			})
 			if len(patterns) > 0 && err == nil {
 				for _, name := range names {
@@ -69,7 +69,7 @@ With directory patterns, such as ./... or ./services/api, it runs over every add
 
 // runTests runs the tests of the named generators, or of every generator, in one configuration. With several
 // configurations, a named generator a configuration lacks is skipped there, and found records the ones seen.
-func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testReport, names []string, several bool, found map[string]bool, update bool) error {
+func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testReport, names []string, found map[string]bool, update bool) error {
 	cfg := run.cfg
 	var selected []string
 	for _, name := range names {
@@ -77,7 +77,7 @@ func runTests(cmd *cobra.Command, opts *globalOptions, run configRun, rep *testR
 		case ok:
 			selected = append(selected, name)
 			found[name] = true
-		case !several:
+		case !run.several:
 			return unknownGenerator(generatorsCommand(opts, cfg, run.root), cfg, name)
 		}
 	}

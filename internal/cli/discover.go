@@ -176,7 +176,7 @@ func printDescription(w io.Writer, d *scaffold.Description) {
 	}
 }
 
-// inputNotes is an input's help followed by its restrictions, with the values its scans allow now.
+// inputNotes is an input's help followed by its restrictions, with the values its scans allow when they are known.
 func inputNotes(in scaffold.DescribedInput) string {
 	var notes []string
 	if in.Deprecated != "" {
@@ -196,9 +196,14 @@ func inputNotes(in scaffold.DescribedInput) string {
 		notes = append(notes, "no value is allowed: "+in.ValuesFrom+" has none")
 	case in.Values != nil:
 		notes = append(notes, "one of: "+strings.Join(in.Values, ", "))
+	case in.ValuesFrom != "":
+		notes = append(notes, "one of the "+in.ValuesFrom+" values")
 	}
-	if len(in.Existing) > 0 {
+	switch {
+	case len(in.Existing) > 0:
 		notes = append(notes, "not one of: "+strings.Join(in.Existing, ", "))
+	case in.Existing == nil && in.Unique != "":
+		notes = append(notes, "not already in "+in.Unique)
 	}
 	if len(notes) == 0 {
 		return in.Help

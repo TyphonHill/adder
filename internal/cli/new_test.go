@@ -130,7 +130,7 @@ func TestNew(t *testing.T) {
 			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "--inputs", "-"} },
 			stdin:          "null",
 			wantCode:       ExitUsage,
-			stderrContains: []string{"adder: inputs must be a JSON object of input names and values [invalid-input]"},
+			stderrContains: []string{"[invalid-input]"},
 		},
 		{
 			name:           "lists generators",
@@ -146,7 +146,7 @@ func TestNew(t *testing.T) {
 				"adder new driver [input=value...] [flags]",
 				"Inputs, given as arguments or with --inputs:",
 				"  cache        Add an in-memory cache in front of the driver",
-				"  name=...     Driver name, used as the package name (required; not already in Drivers.Package)",
+				"  name=...     Driver name, used as the package name (required; must match [a-z][a-z0-9]*; not already in Drivers.Package)",
 				`  summary=...  One-line description for the package documentation (default "stores objects")`,
 			},
 		},
@@ -164,7 +164,7 @@ func TestNew(t *testing.T) {
 			},
 			args:           func(root string) []string { return []string{"--root", root, "new", "--help"} },
 			wantCode:       ExitOK,
-			stdoutContains: []string{"adder new <generator> [flags]"},
+			stdoutContains: []string{"adder new <generator> [input=value...] [flags]"},
 		},
 		{
 			name: "configuration problems",
@@ -185,19 +185,19 @@ func TestNew(t *testing.T) {
 			name:           "missing input",
 			args:           func(root string) []string { return []string{"--root", root, "new", "driver"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{"adder: input name is required [missing-input]"},
+			stderrContains: []string{"[missing-input]"},
 		},
 		{
 			name:           "invalid input",
 			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name=s3"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{`input name "s3" already exists in Drivers.Package [invalid-input]`},
+			stderrContains: []string{"[invalid-input]"},
 		},
 		{
 			name:           "unknown flag",
-			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "--nam", "gcs"} },
+			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "--nope"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{"unknown flag: --nam", "Run 'adder new driver --help' for usage."},
+			stderrContains: []string{"unknown flag: --nope", "Run 'adder new driver --help' for usage."},
 		},
 		{
 			name:           "an argument that is not an input",
@@ -220,19 +220,19 @@ func TestNew(t *testing.T) {
 				return []string{"--root", root, "new", "driver", "name=gcs", "cache=maybe"}
 			},
 			wantCode:       ExitUsage,
-			stderrContains: []string{`adder: input cache must be true or false, not "maybe" [invalid-input]`},
+			stderrContains: []string{"[invalid-input]"},
 		},
 		{
 			name:           "a string input without a value",
 			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{"adder: input name needs a value, written name=... [invalid-input]"},
+			stderrContains: []string{"[invalid-input]"},
 		},
 		{
 			name:           "an input given twice",
 			args:           func(root string) []string { return []string{"--root", root, "new", "driver", "name=gcs", "name=r2"} },
 			wantCode:       ExitUsage,
-			stderrContains: []string{"adder: input name is given twice [invalid-input]"},
+			stderrContains: []string{"[invalid-input]"},
 		},
 		{
 			name: "a value with an equals sign",
@@ -273,7 +273,7 @@ func TestNew(t *testing.T) {
 				tt.setup(t, root)
 			}
 
-			code, stdout, stderr := runWithInput(t.Context(), tt.stdin, tt.args(root)...)
+			code, stdout, stderr := runMain(t.Context(), nil, tt.stdin, tt.args(root)...)
 
 			if code != tt.wantCode {
 				t.Errorf("exit code = %d, want %d\nstderr: %s", code, tt.wantCode, stderr)

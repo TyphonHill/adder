@@ -52,7 +52,7 @@ bare name for true. Run 'adder new' to list the generators and 'adder new <gener
 its inputs. Existing files are never overwritten, and derived outputs are updated in the same run.
 
 Usage:
-  adder new <generator> [flags]
+  adder new <generator> [input=value...] [flags]
   adder new [command]
 
 Available Commands:

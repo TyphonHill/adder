@@ -14,7 +14,7 @@ import (
 
 // TestExamples checks, for every adder.yaml in each example, that its derived files are current and that its
 // generator tests pass, and that every module in the example builds, with adder from this checkout, so the
-// examples always match the adder they document.
+// examples always match the adder they document. Each example directory is a case.
 func TestExamples(t *testing.T) {
 	entries, err := os.ReadDir("examples")
 	if err != nil {

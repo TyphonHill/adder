@@ -49,6 +49,10 @@ func TestVersionIn(t *testing.T) {
 }
 
 func TestInternal(t *testing.T) {
+	// Every field of Pack must reach the internal packages.
+	if n := reflect.TypeFor[Pack]().NumField(); n != reflect.TypeFor[pack.Pack]().NumField() {
+		t.Errorf("Pack has %d fields, but pack.Pack has %d", n, reflect.TypeFor[pack.Pack]().NumField())
+	}
 	same := func(s string) string { return s }
 	tests := []struct {
 		name  string
@@ -74,10 +78,6 @@ func TestInternal(t *testing.T) {
 					!maps.Equal(got[i].DeprecatedFuncs, p.DeprecatedFuncs) || !maps.Equal(got[i].DeprecatedScanners, p.DeprecatedScanners) {
 					t.Errorf("internal()[%d] = %+v, want %+v", i, got[i], p)
 				}
-			}
-			// Every field of Pack must reach the internal packages.
-			if n := reflect.TypeFor[Pack]().NumField(); n != reflect.TypeFor[pack.Pack]().NumField() {
-				t.Errorf("Pack has %d fields, but pack.Pack has %d", n, reflect.TypeFor[pack.Pack]().NumField())
 			}
 		})
 	}
@@ -112,14 +112,15 @@ func TestProblems(t *testing.T) {
 
 func TestProblemError(t *testing.T) {
 	tests := []struct {
+		name string
 		p    Problem
 		want string
 	}{
-		{p: Problem{File: "a.go", Line: 3, Column: 2, Message: "bad"}, want: "a.go:3:2: bad"},
-		{p: Problem{Message: "bad"}, want: "bad"},
+		{name: "with a position", p: Problem{File: "a.go", Line: 3, Column: 2, Message: "bad"}, want: "a.go:3:2: bad"},
+		{name: "without one", p: Problem{Message: "bad"}, want: "bad"},
 	}
 	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.p.Error(); got != tt.want {
 				t.Errorf("Error() = %q, want %q", got, tt.want)
 			}

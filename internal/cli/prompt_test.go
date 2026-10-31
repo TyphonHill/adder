@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -134,7 +135,7 @@ func TestPrompt(t *testing.T) {
 				cancel()
 			}
 
-			code, _, stderr := runWithInput(ctx, tt.answers, append([]string{"--root", root}, tt.args...)...)
+			code, _, stderr := runMain(ctx, nil, tt.answers, append([]string{"--root", root}, tt.args...)...)
 
 			if code != tt.wantCode {
 				t.Errorf("exit code = %d, want %d\nstderr: %s", code, tt.wantCode, stderr)
@@ -176,30 +177,50 @@ func TestIsTerminal(t *testing.T) {
 	}
 }
 
-// TestLinesCanceled checks that a prompt waiting for an answer returns when the context is canceled, as with
-// Ctrl-C, even though reading never finishes.
-func TestLinesCanceled(t *testing.T) {
-	blocked, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+func TestLines(t *testing.T) {
+	errBroken := errors.New("broken")
+	tests := []struct {
+		name   string
+		reader func(t *testing.T) io.Reader
+		cancel bool // cancel the context while waiting for an answer
+		want   error
+	}{
+		{
+			// As with Ctrl-C: the prompt returns even though reading never finishes.
+			name: "canceled while waiting",
+			reader: func(t *testing.T) io.Reader {
+				blocked, writer, err := os.Pipe()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { writer.Close(); blocked.Close() })
+				return blocked
+			},
+			cancel: true,
+			want:   context.Canceled,
+		},
+		{
+			name:   "a read error",
+			reader: func(*testing.T) io.Reader { return iotest.ErrReader(errBroken) },
+			want:   errBroken,
+		},
 	}
-	t.Cleanup(func() { writer.Close(); blocked.Close() })
-	ctx, cancel := context.WithCancel(t.Context())
-	answers := readLines(blocked)
-	done := make(chan error)
-	go func() {
-		_, err := answers.next(ctx)
-		done <- err
-	}()
-	cancel()
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Errorf("next() error = %v, want context.Canceled", err)
-	}
-}
-
-func TestLinesReadError(t *testing.T) {
-	answers := readLines(iotest.ErrReader(errors.New("broken")))
-	if _, err := answers.next(t.Context()); err == nil || err.Error() != "broken" {
-		t.Errorf("next() error = %v, want the read error", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			answers := readLines(tt.reader(t))
+			done := make(chan error)
+			go func() {
+				_, err := answers.next(ctx)
+				done <- err
+			}()
+			if tt.cancel {
+				cancel()
+			}
+			if err := <-done; !errors.Is(err, tt.want) {
+				t.Errorf("next() error = %v, want %v", err, tt.want)
+			}
+		})
 	}
 }

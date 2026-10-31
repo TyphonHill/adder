@@ -51,7 +51,7 @@ type Pack struct {
 	// the pack it uses.
 	Name string
 	// FS holds the pack's pack.yaml at its root, and the templates it names. It is usually an embed.FS, and nil for
-	// a pack of only functions.
+	// a pack of only functions and scanners.
 	FS fs.FS
 	// Funcs are template functions, available to every template, by name. Each follows the rules of
 	// text/template and must be deterministic. A name may not be built in or used by another pack.

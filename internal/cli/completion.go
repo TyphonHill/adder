@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -47,15 +46,10 @@ func generatorNames(cfg *config.Config, exclude []string, prefix string) []cobra
 }
 
 // completeNew completes adder new, which parses its own flags: the generator, then its inputs as name=, then
-// the values of an input with values or valuesFrom, and adder's own flags.
+// the values of an input with values or valuesFrom, and the generator command's flags.
 func completeNew(opts *globalOptions) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
-		pre := pflag.NewFlagSet("new", pflag.ContinueOnError)
-		pre.ParseErrorsAllowlist.UnknownFlags = true
-		pre.SetOutput(io.Discard)
-		pre.StringVar(&opts.root, "root", opts.root, "")
-		pre.StringVarP(&opts.config, "config", "c", opts.config, "")
-		_ = pre.Parse(args)
+		preParse(opts, args)
 		cfg, root, err := opts.load()
 		if err != nil {
 			return nil, noFiles
@@ -77,7 +71,7 @@ func completeNew(opts *globalOptions) cobra.CompletionFunc {
 		case len(args) > 0 && args[len(args)-1] == "--inputs":
 			return []cobra.Completion{"json"}, cobra.ShellCompDirectiveFilterFileExt
 		case strings.HasPrefix(toComplete, "-"):
-			return generatorFlags(toComplete), noFiles
+			return generatorFlags(generatorCommand(opts, cfg, root, name), toComplete), noFiles
 		case hasValue:
 			return inputValues(cmd, opts, cfg, root, name, gen, input, value), noFiles
 		default:
@@ -121,13 +115,15 @@ func generatorArg(args []string) string {
 	return ""
 }
 
-func generatorFlags(prefix string) []cobra.Completion {
-	flags := []cobra.Completion{
-		cobra.CompletionWithDesc("--dry-run", "show what would change without writing anything"),
-		cobra.CompletionWithDesc("--diff", "also show each change as a unified diff"),
-		cobra.CompletionWithDesc("--inputs", "read inputs from a JSON file, or - for standard input"),
-	}
-	return slices.DeleteFunc(flags, func(c cobra.Completion) bool { return !strings.HasPrefix(c, prefix) })
+// generatorFlags completes the flags of a generator's command, leaving adder's global flags to cobra.
+func generatorFlags(cmd *cobra.Command, prefix string) []cobra.Completion {
+	var flags []cobra.Completion
+	cmd.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if name := "--" + f.Name; strings.HasPrefix(name, prefix) {
+			flags = append(flags, cobra.CompletionWithDesc(name, f.Usage))
+		}
+	})
+	return flags
 }
 
 // inputValues completes the values the string input called input allows, as input=value.
