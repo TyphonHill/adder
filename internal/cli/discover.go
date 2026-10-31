@@ -53,7 +53,10 @@ func newListCommand(opts *globalOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list [directories]",
 		Short: "List the generators and derived outputs in adder.yaml",
-		Args:  patternArgs,
+		Long: `list shows every generator in adder.yaml, with its description, and every derived output, with the
+template it renders. With directory patterns, such as ./... or ./services/api, it runs over every
+adder.yaml they match.`,
+		Args: patternArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			newReport := func() report { return &listReport{Generators: []generatorReport{}, Outputs: []config.Output{}} }
 			return runConfigs(cmd, opts, args, newReport, func(run configRun, r report) error {

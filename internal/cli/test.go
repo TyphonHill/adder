@@ -32,11 +32,12 @@ type testResultReport struct {
 func newTestCommand(opts *globalOptions) *cobra.Command {
 	var update bool
 	cmd := &cobra.Command{
-		Use:   "test [generator...]",
+		Use:   "test [directories] [generator...]",
 		Short: "Check generators against their golden files",
 		Long: `test runs the tests declared under each generator's tests in adder.yaml, or only those of the generators
 named, and compares the files each generator creates with the files under its want directory. It runs
-against the repository like --dry-run and writes nothing, unless --update rewrites the want directories.`,
+against the repository like --dry-run and writes nothing, unless --update rewrites the want directories.
+With directory patterns, such as ./... or ./services/api, it runs over every adder.yaml they match.`,
 		ValidArgsFunction: completeGenerators(opts, 0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var names, patterns []string
