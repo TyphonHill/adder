@@ -1,6 +1,6 @@
 {
   "$comment": "Generated from adder-v1.json by TestPackSchema in internal/config. Do not edit.",
-  "$id": "https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/pack-v1.json",
+  "$id": "https://typhonhill.dev/adder/schema/pack-v1.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "definitions": {

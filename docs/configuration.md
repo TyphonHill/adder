@@ -18,7 +18,7 @@ Unknown keys are errors, reported at their line, so a typo never passes silently
 Editors that use the YAML language server, such as VS Code with the YAML extension, complete and check `adder.yaml` against adder's [JSON Schema](../schema/adder-v1.json), from the first line `adder init` writes:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/adder-v1.json
+# yaml-language-server: $schema=https://typhonhill.dev/adder/schema/adder-v1.json
 ```
 
 ## Scans

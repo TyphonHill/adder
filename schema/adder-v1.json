@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/typhonhilldev/adder/main/schema/adder-v1.json",
+  "$id": "https://typhonhill.dev/adder/schema/adder-v1.json",
   "title": "adder.yaml",
   "description": "adder configuration, version 1: https://github.com/typhonhilldev/adder/blob/main/docs/configuration.md",
   "type": "object",
