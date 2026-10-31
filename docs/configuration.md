@@ -40,7 +40,7 @@ Each entry under `derive.scans` selects items from the code. Its name is the tem
 
 Unset filters match everything. `firstParamType` is written with full import paths, such as `context.Context` or `go.temporal.io/sdk/workflow.Context`. In a `const` group, a name without its own type repeats the one before it, as Go does, so every member of an `iota` enum matches `values.type`.
 
-Scans read the source without compiling it. Files adder generated are never scanned, and neither are files no platform can build, such as those marked `//go:build ignore`. Platform tags and file name suffixes such as `_windows.go` never exclude a file, so results are the same on every machine. Items are sorted by name. Their fields are listed in [templates](templates.md#scan-items).
+Scans read the source without compiling it. Files adder generated are never scanned, and neither are files no platform can build, such as those marked `//go:build ignore`. Platform tags and file name suffixes such as `_windows.go` never exclude a file, so results are the same on every machine. A [type-aware scan](#type-aware-scans) checks one platform instead, so it leaves out files built only for others. Items are sorted by name. Their fields are listed in [templates](templates.md#scan-items).
 
 ### Type-aware scans
 
@@ -77,9 +77,9 @@ Directives follow Go's convention for tool directives, like `//go:generate`: no 
 
 Each entry under `derive.outputs` renders a `template`, relative to the directory holding `adder.yaml`, to a `path`, relative to the root. Nothing is written unless every output renders.
 
-- **Go outputs** are formatted with gofmt and lose the imports they never use, so templates can import everything a file might need. adder recognizes a package by its explicit name or the last element of its path, so name an import whose package name differs. Missing imports are not added.
+- **Go outputs** are formatted with gofmt and lose the imports they never use, so templates can import everything a file might need. adder recognizes a package by its explicit name, or by the name its path suggests, as goimports does: the last element, without a major version such as `v2` or a `go-` prefix, up to its first character that cannot be in a name, so `gopkg.in/yaml.v3` is `yaml`. Give an import an explicit name when its package is called something else. Missing imports are not added.
 - **Every output** is marked with a generated-code header, Go's [standard one](https://go.dev/s/generatedcode) in Go files and the same text in each language's comment syntax elsewhere: `#` for YAML or shell, `--` for SQL, `<!-- -->` for Markdown or HTML, and [so on](design.md#25-generated-file-headers-for-other-languages). JSON and other files without comments get none.
-- **adder never replaces a file it did not generate.** When a file without adder's header is at an output's path, `derive` stops with a `file-exists` problem and writes nothing. If another tool generated the file, delete it once; [moving to adder](migrating.md) explains how.
+- **adder never replaces a file it did not generate.** When a file without adder's header is at an output's path, `derive` stops with a `file-exists` problem and writes nothing. If another tool generated the file, delete it once; [moving to adder](migrating.md) explains how. The exception is a file type that gets no header, such as JSON: adder cannot tell its own such files from others, so an output of that type replaces whatever is at its path.
 - adder never writes or removes a file through a symbolic link.
 
 ### One file per item

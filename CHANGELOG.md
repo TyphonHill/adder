@@ -22,6 +22,10 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - The `adder.yaml` that `adder init` writes links to `docs/configuration.md`.
 - Every JSON report has a `warnings` list beside `problems`, empty when there are none.
 
+- Two new diagnostic codes: `duplicate-name`, for a repeated generator test name, a generator name a pack use takes, and two partials defining one template, which were `invalid-name` or `template-syntax`; and `interrupted`, which was `error`.
+- `adder explain --json` always has `source`, `scans`, and `status`, empty or null when they do not apply.
+- `.Vars` and `.Options` are present in every template, empty where they do not apply.
+
 These changes settle names before v1.0 freezes them. Configurations that use an old name fail to load with `unknown-field` or `invalid-value`, naming the new one.
 
 - `funcs.firstParam` is now `funcs.firstParamName`, to tell it apart from `firstParamType`.
@@ -33,6 +37,8 @@ These changes settle names before v1.0 freezes them. Configurations that use an 
 
 ### Fixed
 
+- `ScanInput.Decode` panicked on a `ScanInput` built by hand, as a scanner's tests build one. It now leaves the value as it is.
+- The help of a generator's command showed `--json`, `--quiet`, and `--verbose` with a default of `true` when they were given.
 - Positions in templates were one column to the left of the problem, since text/template counts columns from 0. They now count from 1, as every other position does.
 
 ## [0.6.0] - 2026-10-30

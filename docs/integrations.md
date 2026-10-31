@@ -41,7 +41,7 @@ repos:
       - id: adder-check   # or adder-derive
 ```
 
-The hooks run on every commit, whatever changed, since a change anywhere can affect a scan.
+The hooks run on every commit, whatever changed, since a change anywhere can affect a scan. In a [monorepo](commands.md#monorepos) without an `adder.yaml` at its root, give them `args: [./...]`.
 
 ## GitHub Actions
 

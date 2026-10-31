@@ -11,7 +11,7 @@ go get -tool typhonhill.dev/adder/cmd/adder
 go tool adder init
 ```
 
-`adder init` writes a starter `adder.yaml` with every section commented out. It never overwrites an existing one. The rest of this guide writes `adder` for `go tool adder`.
+`adder init` writes a starter `adder.yaml` whose sections hold commented examples. It never overwrites an existing one. The rest of this guide writes `adder` for `go tool adder`.
 
 ## Derive a registry
 

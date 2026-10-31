@@ -1,6 +1,6 @@
 # Coding agents
 
-Coding agents use adder the way scripts do: every command prints one JSON object with `--json`, problems have stable codes, and each generator describes its inputs with a JSON Schema. An agent that follows the steps below adds code the way the repository's people do, and never edits a generated file by hand.
+Coding agents use adder the way scripts do: every command that runs prints one JSON object with `--json`, problems have stable codes, and each generator describes its inputs with a JSON Schema. An agent that follows the steps below adds code the way the repository's people do, and never edits a generated file by hand.
 
 ## The loop
 

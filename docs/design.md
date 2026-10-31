@@ -75,10 +75,11 @@ Positions follow two rules:
 | `invalid-value` | A value has the wrong type or is malformed, such as an invalid pattern. |
 | `missing-field` | A required setting is absent. |
 | `unsupported-version` | The configuration declares a schema version this release does not understand. |
-| `invalid-name` | A scan or var name is not a valid Go identifier. |
+| `invalid-name` | A scan, var, generator, input, or pack use name does not have the required form. |
 | `reserved-name` | A scan name collides with data adder provides: `Module`, `Vars`, `Inputs`, `Item`, or `Options`. |
 | `unsafe-path` | A path is absolute, escapes its root, uses backslashes, or goes through a symbolic link. |
 | `duplicate-path` | Two outputs write the same file. |
+| `duplicate-name` | A name is taken twice, such as two generator tests with one name, a generator a pack use adds under a name already taken, or two partials defining one template. |
 | `no-match` | A scan's directory pattern matched no directories, or a partial pattern matched no files. |
 | `go-syntax` | A scanned Go file does not parse. |
 | `template-syntax` | A template does not parse. |
@@ -88,7 +89,7 @@ Positions follow two rules:
 | `unknown-generator` | `adder new` was given a generator that `adder.yaml` does not declare. |
 | `missing-input` | A required generator input was not given. |
 | `invalid-input` | A generator input has the wrong type, fails a restriction, or is not declared. |
-| `file-exists` | A generator would create a file that already exists. |
+| `file-exists` | A file already exists where adder would write: a generator's new file, an output's path holding a file adder did not generate, or the `adder.yaml` that `adder init` writes. |
 | `usage` | With `--json`, adder was invoked incorrectly, such as with an unknown flag. |
 | `golden-mismatch` | A generator test's files differ from its golden files. |
 | `type-check` | A type-aware scan could not load its packages: code that does not type check, a missing dependency, or no `go` command. |
@@ -96,6 +97,8 @@ Positions follow two rules:
 | `invalid-pack` | A pack cannot be registered, such as a duplicate pack, function, or scanner name. |
 | `unknown-scanner` | A scan names a scanner that no pack provides. |
 | `scanner` | A custom scanner failed. |
+| `interrupted` | The command was interrupted, such as by Ctrl-C. |
+| `deprecated` | A warning, not a problem: something deprecated was used, and still works ([decision 45](#45-deprecation-warnings)). |
 
 **Why:** error text is for people and changes freely, but codes and positions are for tools. Keeping both from the start means JSON output, editor squiggles, and documentation links need no rework later.
 
@@ -603,7 +606,7 @@ generators:
 - Where adder accepts a null, such as `scans:` with only comments below it, so does the schema, since `adder init` writes such files. Keywords beside a `$ref` are ignored in draft-07, so a `$ref` that needs a description or another rule is wrapped in `allOf`.
 - A test validates every `adder.yaml` and `pack.yaml` in the examples, fixtures, and test scripts that adder loads, and checks that the schemas reject common mistakes.
 
-The schemas are a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings, such as a generator's `unique` naming a scan that exists.
+The schema files are draft-07 for editors, while the `inputSchema` that `adder describe --json` returns is draft 2020-12, the dialect MCP uses for tool inputs. The schemas are a convenience for editors: adder's own validation stays the authority, since it reports positions and checks references between settings, such as a generator's `unique` naming a scan that exists.
 
 | Considered | Why not |
 | --- | --- |
@@ -843,7 +846,7 @@ updated    drivers/registry.gen.go
 
 **Paths.** Template paths and `partials` patterns in `pack.yaml` are relative to the root of the pack's `FS`. Scan directories and output paths are relative to the repository root and confined to it, like those in `adder.yaml` ([decision 5](#5-paths-in-the-configuration)).
 
-**Generators.** A use's generators become `adder new` commands under their own names. A name already taken, by the repository or another use, is an `invalid-name` problem; the use renames its generators with `rename: {driver: cache-driver}`.
+**Generators.** A use's generators become `adder new` commands under their own names. A name already taken, by the repository or another use, is a `duplicate-name` problem; the use renames its generators with `rename: {driver: cache-driver}`.
 
 **Tests.** `pack.yaml` does not declare generator tests, because golden files belong to a repository and `adder test --update` cannot write into a pack. A repository tests a used pack's generators under the use, as `tests: {driver: [...]}` in the form of [decision 30](#30-generator-tests). A pack's module can keep an example repository that does so in its own CI.
 
@@ -1018,6 +1021,8 @@ adder's own deprecations are tables in the code, empty until something is deprec
 | Failing on warnings, as `adder check --strict` | Nothing is deprecated yet, and CI can already read `warnings` from `--json`. It can be added if people ask. |
 | Warning about generator tests that use a deprecated generator or input | A generator is still tested until it is removed, and its tests would warn on every run. |
 | Hiding deprecated flags from completion | Cobra hides only flags marked with its own `Deprecated`, which prints to the output. |
+
+**Known limits.** adder's own tables are empty, so three cases cannot occur yet, and are left for when the first deprecation needs them: a deprecated value that reaches a pack through an option is not reported, since `pack.yaml` is checked before options fill it in; YAML anchors, aliases, and merge keys are matched as written rather than as resolved; and a global flag such as `--verbose` can be deprecated only under each command's path, without a note in its help.
 
 ## Compatibility
 

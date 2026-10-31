@@ -23,7 +23,7 @@ Templates usually move as they are, renamed to what the data is called in adder:
 3. Run `adder derive`, and compare its output with the old files: apart from the header, they should match.
 4. Commit the outputs with the rest of the change, and add `adder check` to CI.
 
-Step 2 is needed because adder never replaces a file it did not generate, even one another tool generated. Without it, `adder derive` stops and says so:
+Step 2 is needed because adder never replaces a file it did not generate, even one another tool generated, in any file type that gets a header. Without it, `adder derive` stops and says so:
 
 ```text
 drivers/drivers.gen.go: file already exists and adder did not generate it, so it is not replaced by templates/registry.go.tmpl [file-exists]
