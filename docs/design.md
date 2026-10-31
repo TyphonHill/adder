@@ -4,11 +4,14 @@ This document explains how adder is built and why. It records the decisions that
 
 ## Architecture
 
-```
-adder.yaml ──► config ──► scan ──► render ──► plan ──► apply
-                │           │         │         │        │
-            validated    items per  file      changes  files
-            settings     scan       content   (no I/O) written
+```mermaid
+flowchart LR
+    yaml[adder.yaml] --> config
+    config -- validated settings --> scan
+    scan -- items per scan --> render
+    render -- file content --> plan["plan (no I/O)"]
+    plan -- changes --> apply
+    apply --> files[files written]
 ```
 
 | Package | Responsibility |
