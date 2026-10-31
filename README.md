@@ -93,7 +93,7 @@ The [registry-from-functions](examples/registry-from-functions) and [scaffold-wi
 - **Packs** share scans, outputs, and generators [between repositories](examples/shared-pack), versioned as Go modules.
 - **Extensible** with your own template functions and [scanners](examples/custom-scanner) written in Go.
 - **Monorepos**: [`adder check ./...`](examples/monorepo) checks every `adder.yaml` at once.
-- **Built for CI and agents**: `--json` on every command, stable problem codes, and a JSON Schema for each generator's inputs.
+- **Built for [CI](docs/integrations.md) and [agents](docs/agents.md)**: `--json` on every command, stable problem codes, and a JSON Schema for each generator's inputs.
 - **Safe**: adder never overwrites a file it did not generate, writes nothing unless everything succeeds, and gives the same output on every machine.
 
 ## Install
@@ -113,6 +113,8 @@ go tool adder init
 - [Templates](docs/templates.md): template data and functions.
 - [Extending adder](docs/extending.md): packs, your own functions, and scanners.
 - [Commands](docs/commands.md): commands, flags, exit codes, and JSON output.
+- [Integrations](docs/integrations.md): `go generate`, pre-commit, GitHub Actions, and GitLab CI.
+- [Coding agents](docs/agents.md): how agents run generators, and an `AGENTS.md` section to copy.
 - [Moving to adder](docs/migrating.md) from a generator of your own.
 - [Compatibility](docs/compatibility.md): what v1.0 promises, and the deprecation policy.
 - [Design](docs/design.md): how adder is built, and why.

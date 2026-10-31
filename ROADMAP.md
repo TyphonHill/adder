@@ -113,7 +113,7 @@ Status: ✅ available · 🔜 planned for the milestone shown: v1.0, or the laun
 | Structured diagnostics with stable codes, positions, and hints | ✅ |
 | JSON output for every command ([design 22](docs/design.md#22-json-output)) | ✅ |
 | `adder explain <file>`: which configuration and template produced a generated file ([design 23](docs/design.md#23-discovering-generators-and-outputs)) | ✅ |
-| A guide and a ready-made `AGENTS.md` section for repositories that use coding agents ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | 🔜 v1.0 |
+| A guide and a ready-made `AGENTS.md` section for repositories that use coding agents ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | ✅ |
 | `adder mcp`: an MCP server exposing generators as tools, read-only unless asked to write | 🔜 launch |
 
 ### Command line
@@ -136,10 +136,10 @@ Status: ✅ available · 🔜 planned for the milestone shown: v1.0, or the laun
 | Feature | Status |
 | --- | --- |
 | `go get -tool` and `go tool adder` | ✅ |
-| Documented `//go:generate go tool adder derive` usage ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | 🔜 v1.0 |
-| A pre-commit hook definition (`.pre-commit-hooks.yaml`) ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | 🔜 v1.0 |
+| Documented `//go:generate go tool adder derive` usage ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | ✅ |
+| A pre-commit hook definition (`.pre-commit-hooks.yaml`) ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | ✅ |
 | A GitHub Action that runs `adder check` on pull requests ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | 🔜 launch |
-| Documented CI jobs for GitLab CI and GitHub Actions, running `adder check` ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | 🔜 v1.0 |
+| Documented CI jobs for GitLab CI and GitHub Actions, running `adder check` ([design 34](docs/design.md#34-integrations-and-coding-agents-planned-v10-and-launch)) | ✅ |
 | Generator packs: generators, derive outputs, and templates shared across repositories as versioned Go packages ([design 41](docs/design.md#41-generator-packs)) | ✅ |
 
 ### Library API
