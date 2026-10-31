@@ -1006,7 +1006,7 @@ adder reports every use of something deprecated as a warning, the way a web fram
 | A command or flag | The run that uses it |
 | A generator or an input, with `deprecated` | `adder new` running it, or given it |
 | A pack option, with `deprecated` | The `with` line of each use that gives it |
-| A pack's function or scanner, in `adder.Pack.Deprecated` | Each call, and each scan naming the scanner |
+| A pack's function or scanner, in `DeprecatedFuncs` or `DeprecatedScanners` on `adder.Pack` | Each call, and each scan naming the scanner |
 
 adder's own deprecations are tables in the code, empty until something is deprecated. A deprecated input or option must have a default, so that leaving it out keeps working, and `--help`, `adder list`, and `adder describe` mark what is deprecated, with `"deprecated": true` in the input schema.
 

@@ -148,13 +148,13 @@ See [`examples/custom-scanner`](../examples/custom-scanner).
 
 ## Deprecating what a pack defines
 
-A pack replaces a function or scanner without breaking the repositories that use it by deprecating the old one with `Deprecated`, which says what to use instead:
+A pack replaces a function or scanner without breaking the repositories that use it by deprecating the old one with `DeprecatedFuncs` or `DeprecatedScanners`, each of which says what to use instead:
 
 ```go
 adder.Pack{
-	Name:       "local",
-	Funcs:      map[string]any{"pluginTitle": title, "title": title},
-	Deprecated: map[string]string{"pluginTitle": "use title"},
+	Name:            "local",
+	Funcs:           map[string]any{"pluginTitle": title, "title": title},
+	DeprecatedFuncs: map[string]string{"pluginTitle": "use title"},
 }
 ```
 

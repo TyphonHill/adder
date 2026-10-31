@@ -24,8 +24,9 @@ type Pack struct {
 	FS       fs.FS
 	Funcs    map[string]any
 	Scanners map[string]Scanner
-	// Deprecated says what to use instead of the deprecated functions and scanners, by name.
-	Deprecated map[string]string
+	// DeprecatedFuncs and DeprecatedScanners say what to use instead of the deprecated functions and scanners,
+	// by name.
+	DeprecatedFuncs, DeprecatedScanners map[string]string
 }
 
 // Scanner returns the items of a scan that uses it, as the root package's adder.Scanner does.
@@ -109,23 +110,20 @@ func New(packs []Pack) (*Registry, error) {
 				r.scanners[s] = p.Scanners[s]
 			}
 		}
-		for _, n := range slices.Sorted(maps.Keys(p.Deprecated)) {
-			_, isFunc := p.Funcs[n]
-			_, isScanner := p.Scanners[n]
-			switch instead := p.Deprecated[n]; {
-			case !isFunc && !isScanner:
-				invalid("pack %q: Deprecated names %q, which is not one of its functions or scanners", p.Name, n)
-			case instead == "":
-				invalid("pack %q: Deprecated must say what to use instead of %q", p.Name, n)
-			default:
-				if isFunc {
-					r.deprecatedFuncs[n] = instead
-				}
-				if isScanner {
-					r.deprecatedScanners[n] = instead
+		deprecate := func(field, kind string, deprecated map[string]string, defined func(string) bool, into map[string]string) {
+			for _, n := range slices.Sorted(maps.Keys(deprecated)) {
+				switch instead := deprecated[n]; {
+				case !defined(n):
+					invalid("pack %q: %s names %q, which is not one of its %s", p.Name, field, n, kind)
+				case instead == "":
+					invalid("pack %q: %s must say what to use instead of %q", p.Name, field, n)
+				default:
+					into[n] = instead
 				}
 			}
 		}
+		deprecate("DeprecatedFuncs", "functions", p.DeprecatedFuncs, func(n string) bool { _, ok := p.Funcs[n]; return ok }, r.deprecatedFuncs)
+		deprecate("DeprecatedScanners", "scanners", p.DeprecatedScanners, func(n string) bool { _, ok := p.Scanners[n]; return ok }, r.deprecatedScanners)
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err

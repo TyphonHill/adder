@@ -131,18 +131,19 @@ func TestDeprecated(t *testing.T) {
 		{name: "nothing deprecated", packs: []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}}}, wantFuncs: map[string]string{}, wantScanners: map[string]string{}},
 		{
 			name:         "a function and a scanner",
-			packs:        []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}, Scanners: map[string]Scanner{"env": scanner}, Deprecated: map[string]string{"shout": "use upper", "env": "use dotenv"}}},
+			packs:        []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}, Scanners: map[string]Scanner{"env": scanner}, DeprecatedFuncs: map[string]string{"shout": "use upper"}, DeprecatedScanners: map[string]string{"env": "use dotenv"}}},
 			wantFuncs:    map[string]string{"shout": "use upper"},
 			wantScanners: map[string]string{"env": "use dotenv"},
 		},
 		{
-			name:         "a function and a scanner of one name",
-			packs:        []Pack{{Name: "a", Funcs: map[string]any{"env": strings.ToUpper}, Scanners: map[string]Scanner{"env": scanner}, Deprecated: map[string]string{"env": "use dotenv"}}},
-			wantFuncs:    map[string]string{"env": "use dotenv"},
+			name:         "a function and a scanner of one name, only one deprecated",
+			packs:        []Pack{{Name: "a", Funcs: map[string]any{"env": strings.ToUpper}, Scanners: map[string]Scanner{"env": scanner}, DeprecatedScanners: map[string]string{"env": "use dotenv"}}},
+			wantFuncs:    map[string]string{},
 			wantScanners: map[string]string{"env": "use dotenv"},
 		},
-		{name: "a name the pack does not define", packs: []Pack{{Name: "a", Deprecated: map[string]string{"shout": "use upper"}}}, wantErrs: []string{`pack "a": Deprecated names "shout", which is not one of its functions or scanners`}},
-		{name: "without saying what to use instead", packs: []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}, Deprecated: map[string]string{"shout": ""}}}, wantErrs: []string{`pack "a": Deprecated must say what to use instead of "shout"`}},
+		{name: "a function the pack does not define", packs: []Pack{{Name: "a", DeprecatedFuncs: map[string]string{"shout": "use upper"}}}, wantErrs: []string{`pack "a": DeprecatedFuncs names "shout", which is not one of its functions`}},
+		{name: "a scanner named as a function", packs: []Pack{{Name: "a", Funcs: map[string]any{"env": strings.ToUpper}, DeprecatedScanners: map[string]string{"env": "use dotenv"}}}, wantErrs: []string{`pack "a": DeprecatedScanners names "env", which is not one of its scanners`}},
+		{name: "without saying what to use instead", packs: []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}, DeprecatedFuncs: map[string]string{"shout": ""}}}, wantErrs: []string{`pack "a": DeprecatedFuncs must say what to use instead of "shout"`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

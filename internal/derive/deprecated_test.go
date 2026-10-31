@@ -18,7 +18,7 @@ func TestPlanWarnings(t *testing.T) {
 	}
 	packs, err := pack.New([]pack.Pack{
 		{Name: "store", FS: store},
-		{Name: "local", Funcs: map[string]any{"shout": strings.ToUpper, "upper": strings.ToUpper}, Deprecated: map[string]string{"shout": "use upper"}},
+		{Name: "local", Funcs: map[string]any{"shout": strings.ToUpper, "upper": strings.ToUpper}, DeprecatedFuncs: map[string]string{"shout": "use upper"}},
 	})
 	if err != nil {
 		t.Fatal(err)

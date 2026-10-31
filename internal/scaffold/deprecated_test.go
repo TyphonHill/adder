@@ -13,7 +13,7 @@ import (
 )
 
 func TestPlanWarnings(t *testing.T) {
-	packs, err := pack.New([]pack.Pack{{Name: "local", Funcs: map[string]any{"shout": strings.ToUpper, "upper": strings.ToUpper}, Deprecated: map[string]string{"shout": "use upper"}}})
+	packs, err := pack.New([]pack.Pack{{Name: "local", Funcs: map[string]any{"shout": strings.ToUpper, "upper": strings.ToUpper}, DeprecatedFuncs: map[string]string{"shout": "use upper"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

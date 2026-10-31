@@ -61,7 +61,7 @@ func TestConfigWarnings(t *testing.T) {
 	writeFile(t, filepath.Join(root, "b", "adder.yaml"), "version: 1\n")
 	t.Chdir(root)
 	scanner := func(context.Context, pack.ScanInput) ([]any, error) { return nil, nil }
-	packs := []pack.Pack{{Name: "local", Scanners: map[string]pack.Scanner{"env": scanner}, Deprecated: map[string]string{"env": "use dotenv"}}}
+	packs := []pack.Pack{{Name: "local", Scanners: map[string]pack.Scanner{"env": scanner}, DeprecatedScanners: map[string]string{"env": "use dotenv"}}}
 	warning := `scan "Env": scanner "env" is deprecated: use dotenv`
 
 	tests := []struct {
