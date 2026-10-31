@@ -305,9 +305,36 @@ var (
 // in the template name and the partials it calls, at its position. Extra says what to use instead of deprecated
 // functions that are not built in, such as a pack's.
 func (s *Set) Deprecations(name string, extra map[string]string) (diag.List, error) {
+	tmpl, err := s.parse(name)
+	if err != nil {
+		return nil, err
+	}
+	return deprecations(tmpl, name, extra, nodePos), nil
+}
+
+// TextDeprecations is Deprecations for a template written inline, such as a path in adder.yaml. Its warnings
+// have no position, since the text has none of its own.
+func (s *Set) TextDeprecations(text string, extra map[string]string) diag.List {
+	return InlineDeprecations(text, s.funcs, extra)
+}
+
+// InlineDeprecations is TextDeprecations for text that renders with funcs besides the built-in functions, outside
+// a set. Text that does not parse has none: rendering it reports the problem.
+func InlineDeprecations(text string, funcs template.FuncMap, extra map[string]string) diag.List {
+	const name = "inline"
+	tmpl, err := template.New(name).Funcs(Funcs()).Funcs(funcs).Parse(text)
+	if err != nil {
+		return nil
+	}
+	return deprecations(tmpl, name, extra, func(*parse.Tree, parse.Node) diag.Pos { return diag.Pos{} })
+}
+
+// deprecations walks the template name in tmpl, and the partials it calls, for deprecated functions and fields,
+// reporting each at the position at gives it.
+func deprecations(tmpl *template.Template, name string, extra map[string]string, at func(*parse.Tree, parse.Node) diag.Pos) diag.List {
 	var warnings diag.List
 	warn := func(tree *parse.Tree, node parse.Node, message, instead string) {
-		d := &diag.Diagnostic{Code: diag.Deprecated, Pos: nodePos(tree, node), Message: message + ": " + instead}
+		d := &diag.Diagnostic{Code: diag.Deprecated, Pos: at(tree, node), Message: message + ": " + instead}
 		warnings = append(warnings, d)
 	}
 	fields := func(tree *parse.Tree, node parse.Node, idents []string) {
@@ -317,7 +344,7 @@ func (s *Set) Deprecations(name string, extra map[string]string) (diag.List, err
 			}
 		}
 	}
-	err := s.inspect(name, func(tree *parse.Tree, node parse.Node) {
+	walk(tmpl, name, func(tree *parse.Tree, node parse.Node) {
 		switch n := node.(type) {
 		case *parse.IdentifierNode:
 			instead, ok := deprecatedFuncs[n.Ident]
@@ -335,7 +362,7 @@ func (s *Set) Deprecations(name string, extra map[string]string) (diag.List, err
 			fields(tree, node, n.Ident[1:])
 		}
 	})
-	return warnings, err
+	return warnings
 }
 
 // nodePos returns where node is in the file tree was parsed from.
@@ -366,27 +393,42 @@ func atoi(s string) int {
 // inspect parses the template name and calls fn with every node of it and of the partials it calls, once each,
 // with the tree the node belongs to.
 func (s *Set) inspect(name string, fn func(*parse.Tree, parse.Node)) error {
-	src, err := readTemplate(s.fsys, name)
+	tmpl, err := s.parse(name)
 	if err != nil {
 		return err
 	}
+	walk(tmpl, name, fn)
+	return nil
+}
+
+// parse parses the template name with the set's partials.
+func (s *Set) parse(name string) (*template.Template, error) {
+	src, err := readTemplate(s.fsys, name)
+	if err != nil {
+		return nil, err
+	}
 	tmpl, err := s.partials.Clone()
 	if err != nil {
-		return diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
+		return nil, diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
 	}
 	if tmpl, err = tmpl.New(name).Parse(src); err != nil {
-		return templateError(diag.TemplateSyntax, name, err, nil)
+		return nil, templateError(diag.TemplateSyntax, name, err, nil)
 	}
+	return tmpl, nil
+}
 
+// walk calls fn with every node of the template name in tmpl and of the templates it calls, once each, with the
+// tree the node belongs to.
+func walk(tmpl *template.Template, name string, fn func(*parse.Tree, parse.Node)) {
 	visited := make(map[string]bool)
-	var walk func(*parse.Tree, parse.Node)
+	var visit func(*parse.Tree, parse.Node)
 	walkTemplate := func(name string) {
 		if t := tmpl.Lookup(name); t != nil && t.Tree != nil && !visited[name] {
 			visited[name] = true
-			walk(t.Tree, t.Root)
+			visit(t.Tree, t.Root)
 		}
 	}
-	walk = func(tree *parse.Tree, node parse.Node) {
+	visit = func(tree *parse.Tree, node parse.Node) {
 		if node == nil || reflect.ValueOf(node).IsNil() {
 			return
 		}
@@ -394,37 +436,36 @@ func (s *Set) inspect(name string, fn func(*parse.Tree, parse.Node)) error {
 		switch n := node.(type) {
 		case *parse.ListNode:
 			for _, child := range n.Nodes {
-				walk(tree, child)
+				visit(tree, child)
 			}
 		case *parse.ActionNode:
-			walk(tree, n.Pipe)
+			visit(tree, n.Pipe)
 		case *parse.PipeNode:
 			for _, cmd := range n.Cmds {
-				walk(tree, cmd)
+				visit(tree, cmd)
 			}
 		case *parse.CommandNode:
 			for _, arg := range n.Args {
-				walk(tree, arg)
+				visit(tree, arg)
 			}
 		case *parse.ChainNode:
-			walk(tree, n.Node)
+			visit(tree, n.Node)
 		case *parse.IfNode:
-			walkBranch(tree, walk, &n.BranchNode)
+			walkBranch(tree, visit, &n.BranchNode)
 		case *parse.RangeNode:
-			walkBranch(tree, walk, &n.BranchNode)
+			walkBranch(tree, visit, &n.BranchNode)
 		case *parse.WithNode:
-			walkBranch(tree, walk, &n.BranchNode)
+			walkBranch(tree, visit, &n.BranchNode)
 		case *parse.TemplateNode:
-			walk(tree, n.Pipe)
+			visit(tree, n.Pipe)
 			walkTemplate(n.Name)
 		}
 	}
 	walkTemplate(name)
-	return nil
 }
 
-func walkBranch(tree *parse.Tree, walk func(*parse.Tree, parse.Node), b *parse.BranchNode) {
-	walk(tree, b.Pipe)
-	walk(tree, b.List)
-	walk(tree, b.ElseList)
+func walkBranch(tree *parse.Tree, visit func(*parse.Tree, parse.Node), b *parse.BranchNode) {
+	visit(tree, b.Pipe)
+	visit(tree, b.List)
+	visit(tree, b.ElseList)
 }

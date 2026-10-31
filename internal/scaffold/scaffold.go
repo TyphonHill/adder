@@ -92,6 +92,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 
 	res := &Result{Plan: p}
 	if gen.Message != "" {
+		diag.Warn(ctx, diag.Locate(set.TextDeprecations(gen.Message, src.Packs.DeprecatedFuncs()), "", gen.Pos)...)
 		msg, err := set.Text(gen.Message, data)
 		if err != nil {
 			problems = append(problems, diag.Prefix(err, gen.Pos, "message: ")...)
@@ -151,6 +152,7 @@ func newFile(ctx context.Context, cfg *config.Config, src derive.Sources, gen co
 	if warnings, err := set.Deprecations(f.Template, src.Packs.DeprecatedFuncs()); err == nil {
 		diag.Warn(ctx, locate(warnings)...)
 	}
+	diag.Warn(ctx, diag.Locate(set.TextDeprecations(f.Path, src.Packs.DeprecatedFuncs()), "", f.Pos)...)
 	_, err = fs.Stat(src.Repo, target)
 	switch {
 	case err == nil && f.IfExists == config.IfExistsSkip:

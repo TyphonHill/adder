@@ -33,6 +33,8 @@ type Packs interface {
 	HasScanner(name string) bool
 	// ScannerDeprecation says what to use instead of the scanner called name, or "" when it is not deprecated.
 	ScannerDeprecation(name string) string
+	// DeprecatedFuncs says what to use instead of each deprecated function the packs define, by name.
+	DeprecatedFuncs() map[string]string
 }
 
 // Use is one use of a pack, with the options it gives.
@@ -397,7 +399,7 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, packs Pa
 	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive, Generators: filled.Generators, Warnings: warnings}
 	pos := indexNode(PackFileName, pack, &root)
 	pos.overrides = overrides
-	if problems := cfg.renderPaths(values, packs.Funcs(), adder.at(at), pos); len(problems) > 0 {
+	if problems := cfg.renderPaths(values, packs, adder.at(at), pos); len(problems) > 0 {
 		return nil, nil, problems
 	}
 	cfg.normalize()
@@ -523,7 +525,7 @@ func valueNode(v any, line, column int) *yaml.Node {
 // renderPaths renders the paths of outputs without each, which may use .Options and the template functions.
 // Paths of outputs with each render for every item, with .Options too. A problem with the result is reported at
 // use.
-func (c *Config) renderPaths(values map[string]any, funcs template.FuncMap, use diag.Pos, pos positions) diag.List {
+func (c *Config) renderPaths(values map[string]any, packs Packs, use diag.Pos, pos positions) diag.List {
 	var errs diag.List
 	for i := range c.Derive.Outputs {
 		out := &c.Derive.Outputs[i]
@@ -531,7 +533,11 @@ func (c *Config) renderPaths(values map[string]any, funcs template.FuncMap, use 
 			continue
 		}
 		at := "derive.outputs." + strconv.Itoa(i) + ".path"
-		tmpl, err := template.New("path").Funcs(render.Funcs()).Funcs(funcs).Option("missingkey=error").Parse(out.Path)
+		for _, d := range render.InlineDeprecations(out.Path, packs.Funcs(), packs.DeprecatedFuncs()) {
+			d.Pos = pos.at(at)
+			c.Warnings = append(c.Warnings, d)
+		}
+		tmpl, err := template.New("path").Funcs(render.Funcs()).Funcs(packs.Funcs()).Option("missingkey=error").Parse(out.Path)
 		var b strings.Builder
 		if err == nil {
 			err = tmpl.Execute(&b, map[string]any{"Options": values})

@@ -140,6 +140,9 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 				r.data = u.data // a pack's template rendered with the configuration's own data
 			}
 			warnDeprecated(ctx, r, src, out.Template, out.Pos)
+			if out.Each != "" {
+				diag.Warn(ctx, r.locate(r.set.TextDeprecations(out.Path, src.Packs.DeprecatedFuncs()), out.Pos)...)
+			}
 			if out.Each == "" {
 				problems = append(problems, renderOutput(r, r.data, src, out, out.Path, &p)...)
 				continue

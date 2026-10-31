@@ -47,6 +47,11 @@ func TestPlanWarnings(t *testing.T) {
 			want:   []string{`each.go.tmpl:3:7: function "shout" is deprecated: use upper`},
 		},
 		{
+			name:   "in the path of an output with each",
+			config: "version: 1\nderive:\n" + scan + "  outputs:\n    - {template: plain.go.tmpl, each: Ctors, path: \"x/{{ shout .Item.Name }}.gen.go\"}\n",
+			want:   []string{`adder.yaml:6:7: function "shout" is deprecated: use upper`},
+		},
+		{
 			name:   "in a pack's template",
 			config: "version: 1\npacks:\n  lists: {pack: store}\n",
 			want:   []string{`pack store: list.go.tmpl:3:7: function "shout" is deprecated: use upper`},

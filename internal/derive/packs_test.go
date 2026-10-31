@@ -25,8 +25,9 @@ func (p testPacks) FS(name string) (fs.FS, bool) {
 
 func (testPacks) Funcs() template.FuncMap { return nil }
 
-func (testPacks) HasScanner(string) bool           { return false }
-func (testPacks) ScannerDeprecation(string) string { return "" }
+func (testPacks) HasScanner(string) bool             { return false }
+func (testPacks) ScannerDeprecation(string) string   { return "" }
+func (testPacks) DeprecatedFuncs() map[string]string { return nil }
 
 // storePack lists the functions of the directories each use names, with a registry and one file per function.
 var storePack = fstest.MapFS{

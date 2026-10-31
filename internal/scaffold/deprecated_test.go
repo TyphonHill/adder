@@ -24,6 +24,7 @@ func TestPlanWarnings(t *testing.T) {
 	generator := func(template string) string {
 		return "version: 1\ngenerators:\n  driver:\n    inputs: {name: {}}\n    files:\n      - {template: " + template + ", path: \"drivers/{{ .Inputs.name }}/x.go\"}\n"
 	}
+	inline := "version: 1\ngenerators:\n  driver:\n    inputs: {name: {}}\n    message: \"{{ shout .Inputs.name }} is ready\"\n    files:\n      - {template: plain.go.tmpl, path: \"drivers/{{ shout .Inputs.name }}/x.go\"}\n"
 	tests := []struct {
 		name   string
 		config string
@@ -31,6 +32,11 @@ func TestPlanWarnings(t *testing.T) {
 	}{
 		{name: "nothing deprecated", config: generator("plain.go.tmpl")},
 		{name: "in a file's template", config: generator("old.go.tmpl"), want: []string{`old.go.tmpl:3:7: function "shout" is deprecated: use upper`}},
+		{
+			name:   "in a file's path and the message",
+			config: inline,
+			want:   []string{`adder.yaml:7:9: function "shout" is deprecated: use upper`, `adder.yaml:3:3: function "shout" is deprecated: use upper`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

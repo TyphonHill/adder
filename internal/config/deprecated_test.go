@@ -3,6 +3,7 @@ package config
 import (
 	"io/fs"
 	"slices"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"text/template"
@@ -15,6 +16,7 @@ import (
 type deprecationPacks struct {
 	packs    map[string]string
 	scanners map[string]string
+	funcs    map[string]string // what to use instead of each function, "" for one that is not deprecated
 }
 
 func (p deprecationPacks) FS(name string) (fs.FS, bool) {
@@ -22,7 +24,13 @@ func (p deprecationPacks) FS(name string) (fs.FS, bool) {
 	return fstest.MapFS{PackFileName: {Data: []byte(content)}}, ok
 }
 
-func (deprecationPacks) Funcs() template.FuncMap { return nil }
+func (p deprecationPacks) Funcs() template.FuncMap {
+	funcs := template.FuncMap{}
+	for name := range p.funcs {
+		funcs[name] = strings.ToUpper
+	}
+	return funcs
+}
 
 func (p deprecationPacks) HasScanner(name string) bool {
 	_, ok := p.scanners[name]
@@ -30,6 +38,15 @@ func (p deprecationPacks) HasScanner(name string) bool {
 }
 
 func (p deprecationPacks) ScannerDeprecation(name string) string { return p.scanners[name] }
+func (p deprecationPacks) DeprecatedFuncs() map[string]string {
+	deprecated := map[string]string{}
+	for name, instead := range p.funcs {
+		if instead != "" {
+			deprecated[name] = instead
+		}
+	}
+	return deprecated
+}
 
 const registryPack = `version: 1
 options:
@@ -84,6 +101,12 @@ func TestWarnings(t *testing.T) {
 			config: "version: 1\npacks:\n  caches: {pack: registry, with: {dirs: [\"caches/*\"], out: caches}}\n  queues: {pack: registry, with: {dirs: [\"queues/*\"], dir: queues}}\n",
 			packs:  deprecationPacks{packs: map[string]string{"registry": registryPack}},
 			want:   []string{`adder.yaml:3:55: pack use "caches": option "out" is deprecated: use dir`},
+		},
+		{
+			name:   "a deprecated function in a pack's output path",
+			config: "version: 1\npacks:\n  caches: {pack: p, with: {out: caches}}\n",
+			packs:  deprecationPacks{packs: map[string]string{"p": "version: 1\noptions: {out: {}}\nderive:\n  outputs:\n    - {template: t.tmpl, path: \"{{ shout .Options.out }}/x.go\"}\n"}, funcs: map[string]string{"shout": "use upper"}},
+			want:   []string{`pack p: pack.yaml:5:26: function "shout" is deprecated: use upper`},
 		},
 		{
 			name:   "a deprecated scanner",

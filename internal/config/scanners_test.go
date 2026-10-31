@@ -13,10 +13,11 @@ import (
 // scannerPacks provides the scanners it lists, and no packs.
 type scannerPacks []string
 
-func (scannerPacks) FS(string) (fs.FS, bool)          { return nil, false }
-func (scannerPacks) Funcs() template.FuncMap          { return nil }
-func (p scannerPacks) HasScanner(name string) bool    { return slices.Contains(p, name) }
-func (scannerPacks) ScannerDeprecation(string) string { return "" }
+func (scannerPacks) FS(string) (fs.FS, bool)            { return nil, false }
+func (scannerPacks) Funcs() template.FuncMap            { return nil }
+func (p scannerPacks) HasScanner(name string) bool      { return slices.Contains(p, name) }
+func (scannerPacks) ScannerDeprecation(string) string   { return "" }
+func (scannerPacks) DeprecatedFuncs() map[string]string { return nil }
 
 func TestScannerScans(t *testing.T) {
 	tests := []struct {
