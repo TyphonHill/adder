@@ -1,0 +1,11 @@
+version: 1
+
+derive:
+  scans:
+    # Every exported function in handlers/ is a handler.
+    Handlers:
+      dirs: [handlers]
+      funcs: {exported: true, kind: func}
+  outputs:
+    - template: templates/names.go.tmpl
+      path: handlers/names.gen.go

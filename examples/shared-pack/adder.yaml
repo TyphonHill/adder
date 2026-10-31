@@ -1,0 +1,10 @@
+version: 1
+
+packs:
+  # The registry pack, used once for caches and once for queues.
+  caches:
+    pack: registry
+    with: {dirs: ["caches/*"], package: caches}
+  queues:
+    pack: registry
+    with: {dirs: ["queues/*"], package: queues}

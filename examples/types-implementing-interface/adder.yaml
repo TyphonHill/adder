@@ -1,0 +1,12 @@
+version: 1
+
+derive:
+  scans:
+    # Every type in checks/ that implements health.Checker, found by the type checker rather than by name.
+    Checks:
+      dirs: [checks]
+      typeCheck: true
+      types: {implements: example.com/types-implementing-interface/health.Checker}
+  outputs:
+    - template: templates/all.go.tmpl
+      path: checks/all.gen.go

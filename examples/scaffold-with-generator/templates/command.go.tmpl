@@ -1,0 +1,13 @@
+// Package {{ .Inputs.name }} is the {{ .Inputs.name }} command, which {{ .Inputs.summary }}.
+package {{ .Inputs.name }}
+
+import (
+	"fmt"
+	"io"
+)
+
+// Run runs the {{ .Inputs.name }} command with its arguments.
+func Run(w io.Writer, args []string) error {
+	_, err := fmt.Fprintln(w, "{{ .Inputs.name }}: not implemented")
+	return err
+}

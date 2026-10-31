@@ -1,0 +1,8 @@
+// The example uses adder from this checkout, so it always matches the adder it documents. A repository of
+// your own requires typhonhill.dev/adder in go.mod instead, as any dependency.
+go 1.26.0
+
+use (
+	.
+	../..
+)

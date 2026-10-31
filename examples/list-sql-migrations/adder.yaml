@@ -1,0 +1,11 @@
+version: 1
+
+derive:
+  scans:
+    # Every SQL file in migrations/, in name order.
+    Migrations:
+      dirs: [migrations]
+      files: {name: \.sql$}
+  outputs:
+    - template: templates/migrations.go.tmpl
+      path: migrations/migrations.gen.go

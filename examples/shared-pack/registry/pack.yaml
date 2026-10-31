@@ -1,0 +1,14 @@
+version: 1
+
+options:
+  dirs: {type: list, help: "Directories that each hold one package, such as caches/*"}
+  package: {help: Directory and package name of the registry, pattern: "[a-z][a-z0-9]*"}
+
+derive:
+  scans:
+    Entries:
+      dirs: {option: dirs}
+      funcs: {exported: true, name: ^New$}
+  outputs:
+    - template: templates/registry.go.tmpl
+      path: "{{ .Options.package }}/registry.gen.go"

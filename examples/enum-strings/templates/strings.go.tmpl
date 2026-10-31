@@ -1,0 +1,15 @@
+package order
+
+import "strconv"
+{{ range groupBy "Type" .Constants }}
+// String returns the name of v without its type, in snake case.
+func (v {{ .Key }}) String() string {
+	switch v {
+{{- range .Items }}
+	case {{ .Name }}:
+		return {{ trimPrefix .Type .Name | toSnakeCase | quote }}
+{{- end }}
+	}
+	return "{{ .Key }}(" + strconv.Itoa(int(v)) + ")"
+}
+{{ end -}}

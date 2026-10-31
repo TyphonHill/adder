@@ -1,0 +1,11 @@
+# {{ .Item.Name }}
+
+{{ .Item.Doc }}
+
+| Field | Type | Tag |
+| --- | --- | --- |
+{{- range .Item.Fields }}
+| `{{ .Name }}` | `{{ .Type }}` | `{{ .Tag }}` |
+{{- end }}
+
+Declared in `{{ .Item.File }}`.

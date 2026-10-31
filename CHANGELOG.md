@@ -4,6 +4,10 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- `examples/`: ten small repositories, each showing one thing adder does and named after it, from `registry-from-functions` and `enum-strings` to `scaffold-with-generator`, `shared-pack`, `custom-scanner`, and `monorepo`. Each README says what the example shows and how, and adder's tests check and build every example with adder from the same commit.
+
 ### Changed
 
 These changes settle names before v1.0 freezes them. Configurations that use an old name fail to load with `unknown-field` or `invalid-value`, naming the new one.

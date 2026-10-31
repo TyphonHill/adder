@@ -1,0 +1,8 @@
+package migrations
+
+// Names lists every migration, in the order they apply.
+var Names = []string{
+{{- range .Migrations }}
+	{{ quote .Name }},
+{{- end }}
+}

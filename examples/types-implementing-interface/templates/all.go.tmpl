@@ -1,0 +1,12 @@
+package checks
+
+import "example.com/types-implementing-interface/health"
+
+// All returns every health check.
+func All() []health.Checker {
+	return []health.Checker{
+{{- range .Checks }}
+		{{ if .Pointer }}&{{ end }}{{ .Name }}{},
+{{- end }}
+	}
+}

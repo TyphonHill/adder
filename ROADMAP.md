@@ -196,7 +196,7 @@ Status: ✅ available · 🔜 planned for the milestone shown, or for after v1.0
 | `SECURITY.md` with private vulnerability reporting | ✅ |
 | `CODE_OF_CONDUCT.md`, with a way to report problems that publishes no one's address, at the launch | 🔜 after v1.0 |
 | Issue and pull request templates | 🔜 after v1.0 |
-| Runnable `examples/` directory, tested in CI: a registry, HTTP handlers from directives, and a pack ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | 🔜 v1.0 |
+| Runnable `examples/` directory, tested in CI: ten single-capability examples, covering every scan kind, `each`, generators, packs, custom scanners, and a monorepo ([design 43](docs/design.md#43-reaching-v10-planned-v10)) | ✅ |
 | Documentation site: guides, configuration reference generated from the schema, function reference ([design 35](docs/design.md#35-documentation-and-examples-planned-after-v10)) | 🔜 after v1.0 |
 | Recipes: driver and plugin registries, HTTP routes, CLI commands, gRPC wiring, workflow engines | 🔜 after v1.0 |
 | Comparison page: adder versus `go generate`, stencil, plop, hygen, and hand-rolled generators | 🔜 after v1.0 |
