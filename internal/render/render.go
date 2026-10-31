@@ -162,7 +162,10 @@ func templateError(code diag.Code, name string, err error, data any) *diag.Diagn
 	if m := templatePos.FindStringSubmatch(err.Error()); m != nil {
 		d.Pos.File = m[1]
 		d.Pos.Line, _ = strconv.Atoi(m[2])
-		d.Pos.Column, _ = strconv.Atoi(m[3])
+		if m[3] != "" {
+			column, _ := strconv.Atoi(m[3])
+			d.Pos.Column = column + 1 // text/template counts columns from 0
+		}
 		d.Message = m[4]
 	}
 	if m := executingAt.FindStringSubmatch(d.Message); m != nil {
@@ -266,68 +269,20 @@ func PathPattern(text string) (*regexp.Regexp, string, error) {
 // .Drivers or $.Drivers, including in the partials it calls. Fields reached indirectly, such as through index,
 // are not found, and a field of an item with one of the names is counted too.
 func (s *Set) References(name string, names []string) ([]string, error) {
-	src, err := readTemplate(s.fsys, name)
-	if err != nil {
-		return nil, err
-	}
-	tmpl, err := s.partials.Clone()
-	if err != nil {
-		return nil, diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
-	}
-	if tmpl, err = tmpl.New(name).Parse(src); err != nil {
-		return nil, templateError(diag.TemplateSyntax, name, err, nil)
-	}
-
 	found := make(map[string]bool)
-	visited := make(map[string]bool)
-	var walk func(parse.Node)
-	walkTemplate := func(name string) {
-		if t := tmpl.Lookup(name); t != nil && t.Tree != nil && !visited[name] {
-			visited[name] = true
-			walk(t.Root)
-		}
-	}
-	walk = func(node parse.Node) {
+	err := s.inspect(name, func(_ *parse.Tree, node parse.Node) {
 		switch n := node.(type) {
-		case *parse.ListNode:
-			if n != nil {
-				for _, child := range n.Nodes {
-					walk(child)
-				}
-			}
-		case *parse.ActionNode:
-			walk(n.Pipe)
-		case *parse.PipeNode:
-			if n != nil {
-				for _, cmd := range n.Cmds {
-					walk(cmd)
-				}
-			}
-		case *parse.CommandNode:
-			for _, arg := range n.Args {
-				walk(arg)
-			}
-		case *parse.ChainNode:
-			walk(n.Node)
 		case *parse.FieldNode:
 			found[n.Ident[0]] = true
 		case *parse.VariableNode:
 			if len(n.Ident) > 1 && n.Ident[0] == "$" {
 				found[n.Ident[1]] = true
 			}
-		case *parse.IfNode:
-			walkBranch(walk, &n.BranchNode)
-		case *parse.RangeNode:
-			walkBranch(walk, &n.BranchNode)
-		case *parse.WithNode:
-			walkBranch(walk, &n.BranchNode)
-		case *parse.TemplateNode:
-			walk(n.Pipe)
-			walkTemplate(n.Name)
 		}
+	})
+	if err != nil {
+		return nil, err
 	}
-	walkTemplate(name)
-
 	var refs []string
 	for _, n := range names {
 		if found[n] {
@@ -338,8 +293,138 @@ func (s *Set) References(name string, names []string) ([]string, error) {
 	return refs, nil
 }
 
-func walkBranch(walk func(parse.Node), b *parse.BranchNode) {
-	walk(b.Pipe)
-	walk(b.List)
-	walk(b.ElseList)
+// deprecatedFuncs and deprecatedFields say what to use instead of each deprecated built-in template function and
+// data field, by name. They are empty until one is deprecated, as docs/compatibility.md describes, and tests add
+// to them.
+var (
+	deprecatedFuncs  = map[string]string{}
+	deprecatedFields = map[string]string{}
+)
+
+// Deprecations returns a warning for each call of a deprecated function and each use of a deprecated data field
+// in the template name and the partials it calls, at its position. Extra says what to use instead of deprecated
+// functions that are not built in, such as a pack's.
+func (s *Set) Deprecations(name string, extra map[string]string) (diag.List, error) {
+	var warnings diag.List
+	warn := func(tree *parse.Tree, node parse.Node, message, instead string) {
+		d := &diag.Diagnostic{Code: diag.Deprecated, Pos: nodePos(tree, node), Message: message + ": " + instead}
+		warnings = append(warnings, d)
+	}
+	fields := func(tree *parse.Tree, node parse.Node, idents []string) {
+		for _, ident := range idents {
+			if instead, ok := deprecatedFields[ident]; ok {
+				warn(tree, node, fmt.Sprintf("field %q is deprecated", ident), instead)
+			}
+		}
+	}
+	err := s.inspect(name, func(tree *parse.Tree, node parse.Node) {
+		switch n := node.(type) {
+		case *parse.IdentifierNode:
+			instead, ok := deprecatedFuncs[n.Ident]
+			if !ok {
+				instead, ok = extra[n.Ident]
+			}
+			if ok {
+				warn(tree, node, fmt.Sprintf("function %q is deprecated", n.Ident), instead)
+			}
+		case *parse.FieldNode:
+			fields(tree, node, n.Ident)
+		case *parse.ChainNode:
+			fields(tree, node, n.Field)
+		case *parse.VariableNode:
+			fields(tree, node, n.Ident[1:])
+		}
+	})
+	return warnings, err
+}
+
+// nodePos returns where node is in the file tree was parsed from.
+func nodePos(tree *parse.Tree, node parse.Node) diag.Pos {
+	location, _ := tree.ErrorContext(node)
+	file, line, column := location, 0, 0
+	if rest, col, ok := cutLast(location); ok {
+		if f, l, ok := cutLast(rest); ok {
+			file, line, column = f, atoi(l), atoi(col)+1 // text/template counts columns from 0
+		}
+	}
+	return diag.Pos{File: file, Line: line, Column: column}
+}
+
+func cutLast(s string) (before, after string, ok bool) {
+	i := strings.LastIndexByte(s, ':')
+	if i < 0 {
+		return s, "", false
+	}
+	return s[:i], s[i+1:], true
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
+// inspect parses the template name and calls fn with every node of it and of the partials it calls, once each,
+// with the tree the node belongs to.
+func (s *Set) inspect(name string, fn func(*parse.Tree, parse.Node)) error {
+	src, err := readTemplate(s.fsys, name)
+	if err != nil {
+		return err
+	}
+	tmpl, err := s.partials.Clone()
+	if err != nil {
+		return diag.Wrap(diag.TemplateSyntax, diag.Pos{File: name}, err)
+	}
+	if tmpl, err = tmpl.New(name).Parse(src); err != nil {
+		return templateError(diag.TemplateSyntax, name, err, nil)
+	}
+
+	visited := make(map[string]bool)
+	var walk func(*parse.Tree, parse.Node)
+	walkTemplate := func(name string) {
+		if t := tmpl.Lookup(name); t != nil && t.Tree != nil && !visited[name] {
+			visited[name] = true
+			walk(t.Tree, t.Root)
+		}
+	}
+	walk = func(tree *parse.Tree, node parse.Node) {
+		if node == nil || reflect.ValueOf(node).IsNil() {
+			return
+		}
+		fn(tree, node)
+		switch n := node.(type) {
+		case *parse.ListNode:
+			for _, child := range n.Nodes {
+				walk(tree, child)
+			}
+		case *parse.ActionNode:
+			walk(tree, n.Pipe)
+		case *parse.PipeNode:
+			for _, cmd := range n.Cmds {
+				walk(tree, cmd)
+			}
+		case *parse.CommandNode:
+			for _, arg := range n.Args {
+				walk(tree, arg)
+			}
+		case *parse.ChainNode:
+			walk(tree, n.Node)
+		case *parse.IfNode:
+			walkBranch(tree, walk, &n.BranchNode)
+		case *parse.RangeNode:
+			walkBranch(tree, walk, &n.BranchNode)
+		case *parse.WithNode:
+			walkBranch(tree, walk, &n.BranchNode)
+		case *parse.TemplateNode:
+			walk(tree, n.Pipe)
+			walkTemplate(n.Name)
+		}
+	}
+	walkTemplate(name)
+	return nil
+}
+
+func walkBranch(tree *parse.Tree, walk func(*parse.Tree, parse.Node), b *parse.BranchNode) {
+	walk(tree, b.Pipe)
+	walk(tree, b.List)
+	walk(tree, b.ElseList)
 }

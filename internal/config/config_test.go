@@ -385,7 +385,7 @@ func TestParseErrors(t *testing.T) {
 		{name: "when and unless", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {type: bool}}\n    files: [{template: t, path: p, when: a, unless: a}]", want: []want{{diag.InvalidValue, 6, 45}}},
 		{name: "when names a string input", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    inputs: {a: {}}\n    files: [{template: t, path: p, when: a}]", want: []want{{diag.InvalidValue, 6, 36}}, wantHint: "when and unless take an input name, such as when: cache"},
 		{name: "unknown ifExists", input: "version: 1\nderive: {scans: {S: {dirs: [a]}}}\ngenerators:\n  g:\n    files: [{template: t, path: p, ifExists: overwrite}]", want: []want{{diag.InvalidValue, 5, 36}}, wantHint: "ifExists is fail or skip; adder never overwrites a file people own"},
-		{name: "unknown generator field", input: "version: 1\ngenerators:\n  g: {fils: []}", want: []want{{diag.UnknownField, 3, 0}}, wantHint: "known fields: description, inputs, files, message, derive, tests"},
+		{name: "unknown generator field", input: "version: 1\ngenerators:\n  g: {fils: []}", want: []want{{diag.UnknownField, 3, 0}}, wantHint: "known fields: description, inputs, files, message, derive, tests, deprecated"},
 		{name: "scan without dirs", input: "version: 1\nderive:\n  scans:\n    A: {}", want: []want{{diag.MissingField, 4, 5}}},
 		{name: "dirs escape root", input: "version: 1\nderive:\n  scans:\n    A: {dirs: [../a]}", want: []want{{diag.UnsafePath, 4, 16}}},
 		{

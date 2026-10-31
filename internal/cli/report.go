@@ -14,14 +14,19 @@ import (
 
 // report is the result a command prints with --json.
 type report interface {
+	setWarnings(diag.List)
 	setProblems(diag.List)
 }
 
-// problems is embedded last in every report, so each one ends with the problems found, even when there are none.
+// problems is embedded last in every report, so each one ends with the warnings and problems found, even when
+// there are none.
 type problems struct {
+	// Warnings did not stop the command, such as uses of something deprecated.
+	Warnings diag.List `json:"warnings"`
 	Problems diag.List `json:"problems"`
 }
 
+func (p *problems) setWarnings(list diag.List) { p.Warnings = list }
 func (p *problems) setProblems(list diag.List) { p.Problems = list }
 
 // changeReport is one file in a plan.
@@ -68,15 +73,16 @@ func changesReport(changes []plan.Change, withDiff bool) []changeReport {
 	return list
 }
 
-// writeReport prints rep with the problems in err as one JSON object. A command that printed help instead of
-// running has no report, and nothing is printed.
-func writeReport(w io.Writer, rep report, err error) {
+// writeReport prints rep with warnings and the problems in err as one JSON object. A command that printed help
+// instead of running has no report, and nothing is printed.
+func writeReport(w io.Writer, rep report, warnings diag.List, err error) {
 	if rep == nil {
 		if err == nil {
 			return
 		}
 		rep = &problems{}
 	}
+	rep.setWarnings(warnings)
 	rep.setProblems(problemsFrom(err))
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

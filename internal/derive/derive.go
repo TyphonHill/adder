@@ -139,6 +139,7 @@ func Plan(ctx context.Context, cfg *config.Config, src Sources) (*plan.Plan, err
 				r = borrowed[out.Pack]
 				r.data = u.data // a pack's template rendered with the configuration's own data
 			}
+			warnDeprecated(ctx, r, src, out.Template, out.Pos)
 			if out.Each == "" {
 				problems = append(problems, renderOutput(r, r.data, src, out, out.Path, &p)...)
 				continue
@@ -383,6 +384,14 @@ func prepare(ctx context.Context, u unit, src Sources) (*render.Set, map[string]
 }
 
 // templates parses a unit's partials into the set its outputs render with.
+// warnDeprecated reports, through ctx, the deprecated functions and data fields that template uses. Problems
+// with the template itself are left to rendering, which reports them.
+func warnDeprecated(ctx context.Context, u prepared, src Sources, template string, decl diag.Pos) {
+	if warnings, err := u.set.Deprecations(template, src.Packs.DeprecatedFuncs()); err == nil {
+		diag.Warn(ctx, u.locate(warnings, decl)...)
+	}
+}
+
 func templates(u unit, src Sources) (*render.Set, error) {
 	var files []string
 	var problems diag.List

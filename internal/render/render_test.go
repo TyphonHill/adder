@@ -90,35 +90,35 @@ func TestFileErrors(t *testing.T) {
 			name:     "missing key",
 			fsys:     templates("ok\n  {{ .Nmes }}"),
 			outPath:  "x.txt",
-			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 2, Column: 5}, Message: `<.Nmes>: map has no entry for key "Nmes"`},
+			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 2, Column: 6}, Message: `<.Nmes>: map has no entry for key "Nmes"`},
 			wantHint: "available fields: Empty, Module, Names, Vars",
 		},
 		{
 			name:     "missing key in a nested map",
 			fsys:     templates("{{ .Vars.Licence }}"),
 			outPath:  "x.txt",
-			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 8}},
+			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 9}},
 			wantHint: "available fields: License",
 		},
 		{
 			name:     "missing key in an empty map",
 			fsys:     templates("{{ .Empty.X }}"),
 			outPath:  "x.txt",
-			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 9}},
+			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 10}},
 			wantHint: "no fields are available here",
 		},
 		{
 			name:     "missing key from the root",
 			fsys:     templates(`{{ range $k, $v := .Vars }}{{ $.Vars.Nope }}{{ end }}`),
 			outPath:  "x.txt",
-			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 31}},
+			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 32}},
 			wantHint: "available fields: License",
 		},
 		{
 			name:     "undefined template without partials",
 			fsys:     templates(`{{ template "license" }}`),
 			outPath:  "x.txt",
-			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 12}},
+			want:     diag.Diagnostic{Code: diag.TemplateExec, Pos: diag.Pos{File: "t.tmpl", Line: 1, Column: 13}},
 			wantHint: "no partials are defined; list templates with {{ define }} blocks under partials in adder.yaml",
 		},
 		{
@@ -287,7 +287,7 @@ func TestSetPartialErrors(t *testing.T) {
 			partials:  []string{"a.tmpl"},
 			template:  "uses-a.tmpl",
 			wantCodes: []diag.Code{diag.TemplateExec},
-			wantPos:   diag.Pos{File: "a.tmpl", Line: 1, Column: 51},
+			wantPos:   diag.Pos{File: "a.tmpl", Line: 1, Column: 52},
 			wantHint:  "no fields are available here",
 		},
 		{
@@ -295,7 +295,7 @@ func TestSetPartialErrors(t *testing.T) {
 			partials:  []string{"a.tmpl"},
 			template:  "uses-no.tmpl",
 			wantCodes: []diag.Code{diag.TemplateExec},
-			wantPos:   diag.Pos{File: "uses-no.tmpl", Line: 1, Column: 12},
+			wantPos:   diag.Pos{File: "uses-no.tmpl", Line: 1, Column: 13},
 			wantHint:  "defined templates: a, license",
 		},
 	}
@@ -602,6 +602,88 @@ func TestCheckFunc(t *testing.T) {
 			}
 			if got != tt.wantErr {
 				t.Errorf("CheckFunc(%q) = %q, want %q", tt.name, got, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDeprecations(t *testing.T) {
+	saved := [2]map[string]string{deprecatedFuncs, deprecatedFields}
+	deprecatedFuncs = map[string]string{"toLower": "use lower"}
+	deprecatedFields = map[string]string{"Old": "use .New"}
+	t.Cleanup(func() { deprecatedFuncs, deprecatedFields = saved[0], saved[1] })
+
+	fsys := fstest.MapFS{
+		"none.tmpl":     {Data: []byte(`{{ range .Items }}{{ toUpper .Name }}{{ .New }}{{ end }}`)},
+		"funcs.tmpl":    {Data: []byte("{{ toLower .Name }}\n{{ .Name | toLower }} {{ shout .Name }}")},
+		"fields.tmpl":   {Data: []byte(`{{ .Item.Old }}{{ (index .Items 0).Old }}{{ with $x := .Item }}{{ $x.Old }}{{ end }}`)},
+		"branches.tmpl": {Data: []byte(`{{ if .A }}{{ else }}{{ range .Items }}{{ .Old }}{{ end }}{{ end }}`)},
+		"partial.tmpl":  {Data: []byte(`{{ template "old" . }}`)},
+		"_old.tmpl":     {Data: []byte("{{ define \"old\" }}\n{{ toLower .Old }}{{ end }}{{ define \"unused\" }}{{ .Old }}{{ end }}")},
+		"broken.tmpl":   {Data: []byte(`{{ .X`)},
+	}
+	set, err := NewSet(fsys, []string{"_old.tmpl"}, template.FuncMap{"shout": strings.ToUpper})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name     string
+		template string
+		want     []string // each warning, as pos: message
+		wantCode diag.Code
+	}{
+		{name: "nothing deprecated", template: "none.tmpl"},
+		{
+			name:     "built-in and other functions, called and piped",
+			template: "funcs.tmpl",
+			want: []string{
+				`funcs.tmpl:1:4: function "toLower" is deprecated: use lower`,
+				`funcs.tmpl:2:12: function "toLower" is deprecated: use lower`,
+				`funcs.tmpl:2:26: function "shout" is deprecated: use yell`,
+			},
+		},
+		{
+			name:     "fields, chains, and variables",
+			template: "fields.tmpl",
+			want: []string{
+				`fields.tmpl:1:9: field "Old" is deprecated: use .New`,
+				`fields.tmpl:1:35: field "Old" is deprecated: use .New`,
+				`fields.tmpl:1:69: field "Old" is deprecated: use .New`,
+			},
+		},
+		{name: "inside branches", template: "branches.tmpl", want: []string{`branches.tmpl:1:43: field "Old" is deprecated: use .New`}},
+		{
+			name:     "in the partials a template calls, at their own positions",
+			template: "partial.tmpl",
+			want: []string{
+				`_old.tmpl:2:4: function "toLower" is deprecated: use lower`,
+				`_old.tmpl:2:12: field "Old" is deprecated: use .New`,
+			},
+		},
+		{name: "missing template", template: "missing.tmpl", wantCode: diag.IO},
+		{name: "invalid template", template: "broken.tmpl", wantCode: diag.TemplateSyntax},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			warnings, err := set.Deprecations(tt.template, map[string]string{"shout": "use yell"})
+			if tt.wantCode != "" {
+				if list := diag.From(err); len(list) != 1 || list[0].Code != tt.wantCode {
+					t.Errorf("Deprecations() error = %v, want %s", err, tt.wantCode)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, d := range warnings {
+				if d.Code != diag.Deprecated {
+					t.Errorf("warning %q has code %q, want %q", d.Message, d.Code, diag.Deprecated)
+				}
+				got = append(got, d.Error())
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Deprecations() = %q, want %q", got, tt.want)
 			}
 		})
 	}

@@ -51,6 +51,9 @@ type Config struct {
 	// pack name. They are set when the configuration loads.
 	PackTemplates map[string]PackTemplates `yaml:"-"`
 
+	// Warnings are the warnings found while loading the configuration and the packs it uses, such as uses of
+	// deprecated settings, options, and scanners.
+	Warnings diag.List `yaml:"-"`
 	// Dir is the directory holding the configuration file; template paths resolve against it.
 	Dir string `yaml:"-"`
 }
@@ -276,6 +279,10 @@ func Parse(file string, data []byte, packs Packs) (*Config, error) {
 	}
 
 	pos := indexPositions(file, data)
+	var root yaml.Node
+	if yaml.Unmarshal(data, &root) == nil {
+		cfg.Warnings = settingWarnings(file, "", &root)
+	}
 	cfg.normalize()
 	cfg.recordPositions(pos)
 	problems := diag.From(cfg.validate(pos))

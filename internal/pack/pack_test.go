@@ -2,6 +2,7 @@ package pack
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -113,6 +114,59 @@ func TestScanners(t *testing.T) {
 			}
 			if r != nil && r.HasScanner("missing") || (*Registry)(nil).HasScanner("routes") {
 				t.Error("HasScanner found a scanner no pack defines")
+			}
+		})
+	}
+}
+
+func TestDeprecated(t *testing.T) {
+	scanner := func(context.Context, ScanInput) ([]any, error) { return nil, nil }
+	tests := []struct {
+		name         string
+		packs        []Pack
+		wantFuncs    map[string]string
+		wantScanners map[string]string
+		wantErrs     []string
+	}{
+		{name: "nothing deprecated", packs: []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}}}, wantFuncs: map[string]string{}, wantScanners: map[string]string{}},
+		{
+			name:         "a function and a scanner",
+			packs:        []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}, Scanners: map[string]Scanner{"env": scanner}, Deprecated: map[string]string{"shout": "use upper", "env": "use dotenv"}}},
+			wantFuncs:    map[string]string{"shout": "use upper"},
+			wantScanners: map[string]string{"env": "use dotenv"},
+		},
+		{
+			name:         "a function and a scanner of one name",
+			packs:        []Pack{{Name: "a", Funcs: map[string]any{"env": strings.ToUpper}, Scanners: map[string]Scanner{"env": scanner}, Deprecated: map[string]string{"env": "use dotenv"}}},
+			wantFuncs:    map[string]string{"env": "use dotenv"},
+			wantScanners: map[string]string{"env": "use dotenv"},
+		},
+		{name: "a name the pack does not define", packs: []Pack{{Name: "a", Deprecated: map[string]string{"shout": "use upper"}}}, wantErrs: []string{`pack "a": Deprecated names "shout", which is not one of its functions or scanners`}},
+		{name: "without saying what to use instead", packs: []Pack{{Name: "a", Funcs: map[string]any{"shout": strings.ToUpper}, Deprecated: map[string]string{"shout": ""}}}, wantErrs: []string{`pack "a": Deprecated must say what to use instead of "shout"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := New(tt.packs)
+			var got []string
+			for _, d := range diag.From(err) {
+				got = append(got, d.Message)
+			}
+			if !slices.Equal(got, tt.wantErrs) {
+				t.Fatalf("New() problems = %q, want %q", got, tt.wantErrs)
+			}
+			if err != nil {
+				return
+			}
+			if !maps.Equal(r.DeprecatedFuncs(), tt.wantFuncs) {
+				t.Errorf("DeprecatedFuncs() = %v, want %v", r.DeprecatedFuncs(), tt.wantFuncs)
+			}
+			for _, name := range []string{"env", "shout", "other"} {
+				if got := r.ScannerDeprecation(name); got != tt.wantScanners[name] {
+					t.Errorf("ScannerDeprecation(%q) = %q, want %q", name, got, tt.wantScanners[name])
+				}
+			}
+			if (*Registry)(nil).ScannerDeprecation("env") != "" || (*Registry)(nil).DeprecatedFuncs() != nil {
+				t.Error("a nil registry has deprecations")
 			}
 		})
 	}

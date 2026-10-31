@@ -31,6 +31,8 @@ type Packs interface {
 	Funcs() template.FuncMap
 	// HasScanner reports whether a pack provides the scanner called name.
 	HasScanner(name string) bool
+	// ScannerDeprecation says what to use instead of the scanner called name, or "" when it is not deprecated.
+	ScannerDeprecation(name string) string
 }
 
 // Use is one use of a pack, with the options it gives.
@@ -77,6 +79,9 @@ type Option struct {
 	Pattern Pattern `yaml:"pattern"`
 	// Values lists the allowed values, or the values a list may hold.
 	Values []string `yaml:"values"`
+	// Deprecated marks the option as on its way out, saying what to use instead. Every use that gives it warns.
+	// A deprecated string or list option needs a default, so that leaving it out works.
+	Deprecated string `yaml:"deprecated"`
 
 	// Pos is where the option is declared.
 	Pos diag.Pos `yaml:"-"`
@@ -142,6 +147,9 @@ func (c *Config) loadPacks(packs Packs, pos positions) diag.List {
 			cfg, values, problems := loadPack(use.Pack, fsys, name, use.With, packs, at, pos)
 			errs = append(errs, problems...)
 			use.FS, use.Options, use.Config = fsys, values, cfg
+			if cfg != nil {
+				c.Warnings = append(c.Warnings, cfg.Warnings...)
+			}
 		}
 		c.Packs[name] = use
 	}
@@ -362,6 +370,12 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, packs Pa
 	if len(problems) > 0 {
 		return nil, nil, problems
 	}
+	warnings := settingWarnings(PackFileName, pack, &root)
+	for _, key := range slices.Sorted(maps.Keys(with)) {
+		if opt, ok := written.Options[key]; ok && opt.Deprecated != "" {
+			warnings = append(warnings, deprecation(adder.at(at+".with."+key), fmt.Sprintf("pack use %q: option %q is deprecated", use, key), opt.Deprecated))
+		}
+	}
 	values, problems := optionValues(use, written.Options, with, at, adder)
 	overrides := make(map[string]diag.Pos)
 	problems = append(problems, fillOptions(&root, "", written.Options, values, func(path, option string) {
@@ -380,7 +394,7 @@ func loadPack(pack string, fsys fs.FS, use string, with map[string]any, packs Pa
 	if problems := ownTemplates(filled, indexNode(PackFileName, pack, &root)); len(problems) > 0 {
 		return nil, nil, problems
 	}
-	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive, Generators: filled.Generators}
+	cfg := &Config{Version: filled.Version, Partials: filled.Partials, Derive: filled.Derive, Generators: filled.Generators, Warnings: warnings}
 	pos := indexNode(PackFileName, pack, &root)
 	pos.overrides = overrides
 	if problems := cfg.renderPaths(values, packs.Funcs(), adder.at(at), pos); len(problems) > 0 {
@@ -584,6 +598,14 @@ func validateOptions(options map[string]Option, pos positions) diag.List {
 				Hint:    "type is string, bool, or list",
 			})
 			continue
+		}
+		if opt.Deprecated != "" && opt.Default == nil && opt.Type != OptionBool {
+			errs = append(errs, &diag.Diagnostic{
+				Code:    diag.MissingField,
+				Pos:     pos.at(at + ".deprecated"),
+				Message: field + ": a deprecated option needs a default",
+				Hint:    "leaving a deprecated option out must keep working, so give it the default that matches what it did",
+			})
 		}
 		if opt.Default != nil {
 			if _, err := opt.value(opt.Default); err != nil {

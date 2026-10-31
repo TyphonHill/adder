@@ -23,6 +23,8 @@ type Generator struct {
 	Derive *bool `yaml:"derive"`
 	// Tests are sample inputs and the files the generator should create from them, for adder test.
 	Tests []GeneratorTest `yaml:"tests"`
+	// Deprecated marks the generator as on its way out, saying what to use instead. adder new warns when it runs.
+	Deprecated string `yaml:"deprecated"`
 
 	// Pos is where the generator is declared, for reporting problems found while generating.
 	Pos diag.Pos `yaml:"-"`
@@ -63,6 +65,9 @@ type Input struct {
 	ValuesFrom string `yaml:"valuesFrom"`
 	// Unique rejects values a scan already has, written as Scan.Field.
 	Unique string `yaml:"unique"`
+	// Deprecated marks the input as on its way out, saying what to use instead. adder new warns when it is given.
+	// A deprecated string input needs a default, so that leaving it out works.
+	Deprecated string `yaml:"deprecated"`
 
 	// Pos is where the input is declared, for reporting problems with its settings.
 	Pos diag.Pos `yaml:"-"`
@@ -255,6 +260,14 @@ func (c *Config) validateInput(gen, name string, in Input, at string, pos positi
 		})
 	}
 
+	if in.Deprecated != "" && in.Default == nil {
+		errs = append(errs, &diag.Diagnostic{
+			Code:    diag.MissingField,
+			Pos:     pos.at(at + ".deprecated"),
+			Message: field + ": a deprecated input needs a default",
+			Hint:    "leaving a deprecated input out must keep working, so give it the default that matches what it did",
+		})
+	}
 	if in.Values != nil && in.ValuesFrom != "" {
 		errs = append(errs, diag.Errorf(diag.InvalidValue, pos.at(at+".valuesFrom"), "%s: use values or valuesFrom, not both", field))
 	}

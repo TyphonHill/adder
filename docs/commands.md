@@ -63,6 +63,12 @@ config/defaults.env:2: want KEY=value [scanner]
 | `2` | adder was invoked incorrectly, such as with an unknown flag or an invalid input. |
 | `3` | `adder check` found derived files that are out of date. |
 
+Warnings, such as the use of something [deprecated](compatibility.md#deprecation), are printed the same way with `warning:` before them, and never change the exit code:
+
+```text
+adder.yaml:3:3: warning: generator "driver" is deprecated: use adder new store [deprecated]
+```
+
 The codes are listed in [design 4](design.md#4-structured-diagnostics).
 
 ## JSON output
@@ -95,6 +101,7 @@ $ adder new command --name report --with-test --dry-run --json
 | `test` | `tests`, each with `generator`, `name`, `passed`, and `changes`, then `problems` |
 
 - `changes` lists every file in the plan, with its `path` and a `status`: `unchanged`, `created`, `updated`, `skipped`, or `removed`. With `--diff`, a change that writes or removes a file has a `diff`.
+- `warnings` is always present, and empty when there are none. Warnings have the same fields as problems, and report something that did not stop the command, such as the use of something [deprecated](compatibility.md#deprecation), with the code `deprecated`.
 - `problems` is always present, and empty on success. Each has a `code` and a `message`, and when known, a `pos` with `file`, `line`, and `column`, and a `hint`.
 - With directory patterns, the object has `configs`, one entry per configuration with its `config` path and the command's fields, and `problems` for anything that concerns no one configuration.
 - `describe`'s `inputSchema` is a JSON Schema (draft 2020-12) for the object `--inputs` accepts, the shape MCP uses for tool inputs.

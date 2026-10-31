@@ -2,11 +2,13 @@
 package diag
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Code identifies a kind of problem. Codes are stable once released, so tools may match on them.
@@ -42,6 +44,9 @@ const (
 	UnknownPack        Code = "unknown-pack"
 	UnknownScanner     Code = "unknown-scanner"
 	Scanner            Code = "scanner"
+
+	// Deprecated is a warning: something deprecated was used, and still works.
+	Deprecated Code = "deprecated"
 )
 
 // Pos is a location in a file. Line and Column are 1-based, and zero means unknown.
@@ -175,4 +180,49 @@ func Locate(err error, dir string, decl Pos) List {
 		}
 	}
 	return list
+}
+
+// Warnings collects diagnostics that do not stop a command, such as uses of something deprecated. Each is kept
+// once, in the order it was first added. It is safe for concurrent use.
+type Warnings struct {
+	mu   sync.Mutex
+	list List
+	seen map[string]bool
+}
+
+// Add adds the diagnostics in list that w does not have yet.
+func (w *Warnings) Add(list ...*Diagnostic) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.seen == nil {
+		w.seen = make(map[string]bool)
+	}
+	for _, d := range list {
+		key := string(d.Code) + "\x00" + d.Error()
+		if !w.seen[key] {
+			w.seen[key] = true
+			w.list = append(w.list, d)
+		}
+	}
+}
+
+// List returns the warnings added so far, never nil.
+func (w *Warnings) List() List {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append(List{}, w.list...)
+}
+
+type warningsKey struct{}
+
+// WithWarnings returns a context that collects the warnings Warn reports into w.
+func WithWarnings(ctx context.Context, w *Warnings) context.Context {
+	return context.WithValue(ctx, warningsKey{}, w)
+}
+
+// Warn reports warnings to the collector in ctx, if it has one.
+func Warn(ctx context.Context, list ...*Diagnostic) {
+	if w, ok := ctx.Value(warningsKey{}).(*Warnings); ok && len(list) > 0 {
+		w.Add(list...)
+	}
 }

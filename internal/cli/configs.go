@@ -76,16 +76,23 @@ func runConfigs(cmd *cobra.Command, opts *globalOptions, patterns []string, newR
 		return err
 	}
 	outcome := &configsError{}
+	base := cmd.Context()
+	defer cmd.SetContext(base)
 	for _, file := range files {
 		rep := newReport()
+		warnings := &diag.Warnings{}
+		cmd.SetContext(diag.WithWarnings(base, warnings))
 		cfg, err := config.Load(file, opts.packs)
 		if err == nil {
+			warnings.Add(cfg.Warnings...)
 			prefix := filepath.ToSlash(filepath.Dir(file))
 			if prefix == "." {
 				prefix = ""
 			}
 			err = fn(configRun{cfg: cfg, root: filepath.Dir(file), prefix: prefix, several: true}, rep)
 		}
+		rep.setWarnings(warnings.List())
+		opts.configWarnings = append(opts.configWarnings, warnings.List()...)
 		rep.setProblems(problemsFrom(err))
 		encoded, marshalErr := json.Marshal(rep)
 		if marshalErr != nil {
