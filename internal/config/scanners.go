@@ -113,7 +113,13 @@ func (c *Config) checkScanners(packs Packs) diag.List {
 	var errs diag.List
 	for _, name := range slices.Sorted(maps.Keys(c.Derive.Scans)) {
 		s := c.Derive.Scans[name]
-		if s.Scanner == nil || s.Scanner.Name == "" || (packs != nil && packs.HasScanner(s.Scanner.Name)) {
+		if s.Scanner == nil || s.Scanner.Name == "" {
+			continue
+		}
+		if packs != nil && packs.HasScanner(s.Scanner.Name) {
+			if instead := packs.ScannerDeprecation(s.Scanner.Name); instead != "" {
+				c.Warnings = append(c.Warnings, deprecation(s.Scanner.Pos, fmt.Sprintf("scan %q: scanner %q is deprecated", name, s.Scanner.Name), instead))
+			}
 			continue
 		}
 		errs = append(errs, &diag.Diagnostic{

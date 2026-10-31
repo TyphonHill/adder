@@ -107,9 +107,13 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 	gen := cfg.Generators[name]
 	var dryRun, showDiff bool
 	var inputsFile string
+	short := gen.Description
+	if gen.Deprecated != "" {
+		short = strings.TrimSpace(short + " (deprecated: " + gen.Deprecated + ")")
+	}
 	cmd := &cobra.Command{
 		Use:   name,
-		Short: gen.Description,
+		Short: short,
 		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			dryRun = dryRun || showDiff
@@ -129,6 +133,7 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 					inputs[input] = flag.Value.String()
 				}
 			}
+			diag.Warn(cmd.Context(), generatorWarnings(name, gen, inputs)...)
 			if !opts.json && inputsFile != "-" && isTerminal(cmd.InOrStdin()) && isTerminal(cmd.ErrOrStderr()) {
 				if err := promptMissing(cmd, opts, cfg, root, name, inputs); err != nil {
 					return err
@@ -163,7 +168,7 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 		flag := config.Flag(input)
 		switch {
 		case in.Type == config.InputBool:
-			cmd.Flags().Bool(flag, false, in.Help)
+			cmd.Flags().Bool(flag, false, flagHelp(in))
 		case in.Default != nil:
 			cmd.Flags().String(flag, *in.Default, flagHelp(in))
 		default:
@@ -177,9 +182,27 @@ func generatorCommand(opts *globalOptions, cfg *config.Config, root, name string
 	return cmd
 }
 
-// flagHelp describes a string input for its flag's help.
+// generatorWarnings returns a warning when the generator called name is deprecated, and one for each deprecated
+// input among inputs.
+func generatorWarnings(name string, gen config.Generator, inputs map[string]any) diag.List {
+	var warnings diag.List
+	if gen.Deprecated != "" {
+		warnings = append(warnings, &diag.Diagnostic{Code: diag.Deprecated, Pos: gen.Pos, Message: fmt.Sprintf("generator %q is deprecated: %s", name, gen.Deprecated)})
+	}
+	for _, input := range slices.Sorted(maps.Keys(inputs)) {
+		if in, ok := gen.Inputs[input]; ok && in.Deprecated != "" {
+			warnings = append(warnings, &diag.Diagnostic{Code: diag.Deprecated, Pos: in.Pos, Message: fmt.Sprintf("generator %q: input %q is deprecated: %s", name, input, in.Deprecated)})
+		}
+	}
+	return warnings
+}
+
+// flagHelp describes an input for its flag's help.
 func flagHelp(in config.Input) string {
 	var notes []string
+	if in.Deprecated != "" {
+		notes = append(notes, "deprecated: "+in.Deprecated)
+	}
 	if in.Required() {
 		notes = append(notes, "required")
 	}

@@ -78,7 +78,7 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 		if !included(f, values) {
 			continue
 		}
-		change, err := newFile(cfg, src, gen, set, data, i, f, seen)
+		change, err := newFile(ctx, cfg, src, gen, set, data, i, f, seen)
 		if err != nil {
 			problems = append(problems, diag.From(err)...)
 			continue
@@ -104,8 +104,9 @@ func planFiles(ctx context.Context, cfg *config.Config, src derive.Sources, name
 	return res, created, nil
 }
 
-// newFile renders the file f of a generator. Seen holds the paths of the files planned so far.
-func newFile(cfg *config.Config, src derive.Sources, gen config.Generator, set *render.Set, data map[string]any, i int, f config.File, seen map[string]bool) (plan.Change, error) {
+// newFile renders the file f of a generator, reporting the deprecated functions and fields its template uses
+// through ctx. Seen holds the paths of the files planned so far.
+func newFile(ctx context.Context, cfg *config.Config, src derive.Sources, gen config.Generator, set *render.Set, data map[string]any, i int, f config.File, seen map[string]bool) (plan.Change, error) {
 	field := fmt.Sprintf("file %d: path %q", i, f.Path)
 	rendered, err := set.Text(f.Path, data)
 	if err != nil {
@@ -137,12 +138,18 @@ func newFile(cfg *config.Config, src derive.Sources, gen config.Generator, set *
 			return plan.Change{}, diag.InPack(err, pack, f.Pos)
 		}
 	}
+	locate := func(err error) diag.List {
+		if pack != "" {
+			return diag.InPack(err, pack, f.Pos)
+		}
+		return diag.Locate(err, src.TemplatesDir, f.Pos)
+	}
 	content, err := set.File(f.Template, target, data)
-	switch {
-	case err != nil && pack != "":
-		return plan.Change{}, diag.InPack(err, pack, f.Pos)
-	case err != nil:
-		return plan.Change{}, diag.Locate(err, src.TemplatesDir, f.Pos)
+	if err != nil {
+		return plan.Change{}, locate(err)
+	}
+	if warnings, err := set.Deprecations(f.Template, src.Packs.DeprecatedFuncs()); err == nil {
+		diag.Warn(ctx, locate(warnings)...)
 	}
 	_, err = fs.Stat(src.Repo, target)
 	switch {

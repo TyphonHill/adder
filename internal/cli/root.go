@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"typhonhill.dev/adder/internal/config"
 	"typhonhill.dev/adder/internal/derive"
@@ -58,6 +59,10 @@ type globalOptions struct {
 
 	packs  *pack.Registry
 	report report // set by a command when it starts running, for --json
+	// warnings collects the warnings that concern no one configuration, or the only one. configWarnings are those
+	// of each configuration a command with directory patterns ran over, which their reports carry.
+	warnings       *diag.Warnings
+	configWarnings diag.List
 }
 
 // open returns the sources for a configuration with the packs adder was built with.
@@ -88,6 +93,9 @@ func (o *globalOptions) loadFrom(dir string) (*config.Config, string, error) {
 		root = filepath.Dir(path)
 	}
 	cfg, err := config.Load(path, o.packs)
+	if cfg != nil && o.warnings != nil {
+		o.warnings.Add(cfg.Warnings...)
+	}
 	return cfg, root, err
 }
 
@@ -96,20 +104,29 @@ func (o *globalOptions) loadFrom(dir string) (*config.Config, string, error) {
 func Main(ctx context.Context, version string, packs []pack.Pack, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cmd, opts := newRoot(version)
 	opts.json = wantsJSON(args)
+	opts.warnings = &diag.Warnings{}
+	ctx = diag.WithWarnings(ctx, opts.warnings)
 	cmd.SetArgs(args)
 	cmd.SetIn(stdin)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 
 	registry, err := pack.New(packs)
+	var ran *cobra.Command
 	if err == nil {
 		opts.packs = registry
-		err = cmd.ExecuteContext(ctx)
+		ran, err = cmd.ExecuteContextC(ctx)
 	}
-	if opts.json {
-		writeReport(stdout, opts.report, err)
-	} else if err != nil {
-		printError(stderr, err, useColor(stderr))
+	switch {
+	case opts.json:
+		writeReport(stdout, opts.report, opts.warnings.List(), err)
+	case completing(ran):
+		// Warnings would interrupt the shell's completions.
+	default:
+		printWarnings(stderr, append(opts.warnings.List(), opts.configWarnings...), useColor(stderr))
+		if err != nil {
+			printError(stderr, err, useColor(stderr))
+		}
 	}
 	if err == nil {
 		return ExitOK
@@ -149,7 +166,7 @@ func newRoot(version string) (*cobra.Command, *globalOptions) {
 	opts := &globalOptions{}
 	cmd := &cobra.Command{
 		Use:   "adder",
-		Short: "Write the pattern once. adder adds the rest.",
+		Short: "Go boilerplate that maintains itself.",
 		Long: `adder generates and maintains the repeated pieces of a Go repository.
 
 Generators and derived files are declared in adder.yaml at the repository root.`,
@@ -164,7 +181,51 @@ Generators and derived files are declared in adder.yaml at the repository root.`
 	addGlobalFlags(cmd, opts)
 	cmd.AddCommand(newInitCommand(opts), newDeriveCommand(opts), newCheckCommand(opts), newNewCommand(opts),
 		newListCommand(opts), newDescribeCommand(opts), newExplainCommand(opts), newTestCommand(opts))
+	markDeprecated(cmd)
 	return cmd, opts
+}
+
+// deprecatedCommands and deprecatedFlags say what to use instead of each deprecated command, by its path such as
+// "adder list", and each deprecated flag, by its command's path and its name such as "adder derive --out". They
+// are empty until one is deprecated, as docs/compatibility.md describes, and tests add to them.
+var (
+	deprecatedCommands = map[string]string{}
+	deprecatedFlags    = map[string]string{}
+)
+
+// markDeprecated notes in the help of cmd and the commands below it which are deprecated, and which flags.
+func markDeprecated(cmd *cobra.Command) {
+	if instead, ok := deprecatedCommands[cmd.CommandPath()]; ok {
+		cmd.Short += " (deprecated: " + instead + ")"
+	}
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if instead, ok := deprecatedFlags[cmd.CommandPath()+" --"+f.Name]; ok {
+			f.Usage += " (deprecated: " + instead + ")"
+		}
+	})
+	for _, sub := range cmd.Commands() {
+		markDeprecated(sub)
+	}
+}
+
+// warnDeprecated reports, through the context of cmd, whether cmd or a flag it was given is deprecated.
+func warnDeprecated(cmd *cobra.Command) {
+	var warnings diag.List
+	if instead, ok := deprecatedCommands[cmd.CommandPath()]; ok {
+		warnings = append(warnings, &diag.Diagnostic{Code: diag.Deprecated, Message: fmt.Sprintf("command %q is deprecated: %s", cmd.CommandPath(), instead)})
+	}
+	cmd.Flags().Visit(func(f *pflag.Flag) {
+		if instead, ok := deprecatedFlags[cmd.CommandPath()+" --"+f.Name]; ok {
+			warnings = append(warnings, &diag.Diagnostic{Code: diag.Deprecated, Message: fmt.Sprintf("flag --%s of %q is deprecated: %s", f.Name, cmd.CommandPath(), instead)})
+		}
+	})
+	diag.Warn(cmd.Context(), warnings...)
+}
+
+// completing reports whether the command that ran is the hidden one through which cobra answers for shell
+// completions.
+func completing(ran *cobra.Command) bool {
+	return ran != nil && (ran.Name() == cobra.ShellCompRequestCmd || ran.Name() == cobra.ShellCompNoDescRequestCmd)
 }
 
 // addGlobalFlags defines the flags every subcommand shares and reports flag mistakes as usage errors.
@@ -183,7 +244,23 @@ func addGlobalFlags(cmd *cobra.Command, opts *globalOptions) {
 		if opts.quiet && opts.verbose {
 			return &usageError{errors.New("--quiet and --verbose cannot be combined"), c.CommandPath()}
 		}
+		warnDeprecated(c)
 		return nil
+	}
+}
+
+// printWarnings writes warnings for a person to read, one line per warning, as printError writes problems.
+func printWarnings(w io.Writer, warnings diag.List, color bool) {
+	p := &printer{w: w, color: color}
+	for _, d := range warnings {
+		prefix := "adder: "
+		if pos := d.Pos.String(); pos != "" {
+			prefix = pos + ": "
+		}
+		fmt.Fprintf(w, "%s%s %s %s\n", prefix, p.paint(yellow, "warning:"), d.Message, p.paint(yellow, "["+string(d.Code)+"]"))
+		if d.Hint != "" {
+			fmt.Fprintf(w, "\t%s %s\n", p.paint(dim, "hint:"), d.Hint)
+		}
 	}
 }
 

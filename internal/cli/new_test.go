@@ -56,7 +56,7 @@ func TestNew(t *testing.T) {
 			stdoutContains: []string{
 				`"generator": "driver",` + "\n" + `  "dryRun": false,`,
 				`"path": "drivers/gcs/gcs.go",` + "\n" + `      "status": "created"`,
-				`"message": "Next, implement New in drivers/gcs/gcs.go.",` + "\n" + `  "problems": []`,
+				`"message": "Next, implement New in drivers/gcs/gcs.go.",` + "\n" + `  "warnings": [],` + "\n" + `  "problems": []`,
 			},
 			stdoutExcludes: []string{"created    "},
 			wantFile:       gcs,

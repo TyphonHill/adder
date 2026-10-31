@@ -220,3 +220,45 @@ func TestPrefix(t *testing.T) {
 		})
 	}
 }
+
+func TestWarnings(t *testing.T) {
+	x := func() *Diagnostic {
+		return &Diagnostic{Code: Deprecated, Pos: Pos{File: "adder.yaml", Line: 3}, Message: "x is deprecated"}
+	}
+	y := &Diagnostic{Code: Deprecated, Message: "y is deprecated"}
+	tests := []struct {
+		name      string
+		calls     [][]*Diagnostic // each a call to Warn
+		collector bool            // the context has a collector
+		want      []string        // the warnings' messages, in order
+	}{
+		{name: "none", collector: true, want: []string{}},
+		{name: "in the order added", calls: [][]*Diagnostic{{x(), y}}, collector: true, want: []string{"x is deprecated", "y is deprecated"}},
+		{name: "each once", calls: [][]*Diagnostic{{x()}, {y}, {x()}}, collector: true, want: []string{"x is deprecated", "y is deprecated"}},
+		{name: "the same message at another position", calls: [][]*Diagnostic{{x(), {Code: Deprecated, Pos: Pos{File: "adder.yaml", Line: 4}, Message: "x is deprecated"}}}, collector: true, want: []string{"x is deprecated", "x is deprecated"}},
+		{name: "dropped without a collector", calls: [][]*Diagnostic{{x()}}, want: []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var w Warnings
+			ctx := t.Context()
+			if tt.collector {
+				ctx = WithWarnings(ctx, &w)
+			}
+			for _, call := range tt.calls {
+				Warn(ctx, call...)
+			}
+			got := w.List()
+			if got == nil {
+				t.Fatal("List() = nil, want a list")
+			}
+			var messages []string
+			for _, d := range got {
+				messages = append(messages, d.Message)
+			}
+			if !slices.Equal(append([]string{}, messages...), tt.want) {
+				t.Errorf("List() messages = %q, want %q", messages, tt.want)
+			}
+		})
+	}
+}

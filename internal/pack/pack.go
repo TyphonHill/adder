@@ -24,6 +24,8 @@ type Pack struct {
 	FS       fs.FS
 	Funcs    map[string]any
 	Scanners map[string]Scanner
+	// Deprecated says what to use instead of the deprecated functions and scanners, by name.
+	Deprecated map[string]string
 }
 
 // Scanner returns the items of a scan that uses it, as the root package's adder.Scanner does.
@@ -44,6 +46,8 @@ type Registry struct {
 	funcs    template.FuncMap
 	fs       map[string]fs.FS
 	scanners map[string]Scanner
+	// deprecatedFuncs and deprecatedScanners say what to use instead of each deprecated function and scanner.
+	deprecatedFuncs, deprecatedScanners map[string]string
 }
 
 // name is the form of a pack name, the same as a generator's.
@@ -51,7 +55,10 @@ var name = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
 
 // New checks packs and registers them, reporting every problem as an invalid-pack diagnostic.
 func New(packs []Pack) (*Registry, error) {
-	r := &Registry{funcs: template.FuncMap{}, fs: make(map[string]fs.FS), scanners: make(map[string]Scanner)}
+	r := &Registry{
+		funcs: template.FuncMap{}, fs: make(map[string]fs.FS), scanners: make(map[string]Scanner),
+		deprecatedFuncs: make(map[string]string), deprecatedScanners: make(map[string]string),
+	}
 	seen := make(map[string]bool)
 	funcFrom := make(map[string]string)
 	scannerFrom := make(map[string]string)
@@ -102,6 +109,23 @@ func New(packs []Pack) (*Registry, error) {
 				r.scanners[s] = p.Scanners[s]
 			}
 		}
+		for _, n := range slices.Sorted(maps.Keys(p.Deprecated)) {
+			_, isFunc := p.Funcs[n]
+			_, isScanner := p.Scanners[n]
+			switch instead := p.Deprecated[n]; {
+			case !isFunc && !isScanner:
+				invalid("pack %q: Deprecated names %q, which is not one of its functions or scanners", p.Name, n)
+			case instead == "":
+				invalid("pack %q: Deprecated must say what to use instead of %q", p.Name, n)
+			default:
+				if isFunc {
+					r.deprecatedFuncs[n] = instead
+				}
+				if isScanner {
+					r.deprecatedScanners[n] = instead
+				}
+			}
+		}
 	}
 	if err := problems.Err(); err != nil {
 		return nil, err
@@ -140,4 +164,20 @@ func (r *Registry) Funcs() template.FuncMap {
 		return nil
 	}
 	return r.funcs
+}
+
+// DeprecatedFuncs says what to use instead of each deprecated function the packs define, by name.
+func (r *Registry) DeprecatedFuncs() map[string]string {
+	if r == nil {
+		return nil
+	}
+	return r.deprecatedFuncs
+}
+
+// ScannerDeprecation says what to use instead of the scanner called name, or "" when it is not deprecated.
+func (r *Registry) ScannerDeprecation(name string) string {
+	if r == nil {
+		return ""
+	}
+	return r.deprecatedScanners[name]
 }

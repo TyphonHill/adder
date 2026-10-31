@@ -22,7 +22,8 @@ func (p testPacks) FS(name string) (fs.FS, bool) {
 
 func (testPacks) Funcs() template.FuncMap { return nil }
 
-func (testPacks) HasScanner(string) bool { return false }
+func (testPacks) HasScanner(string) bool           { return false }
+func (testPacks) ScannerDeprecation(string) string { return "" }
 
 func TestPlanPackGenerator(t *testing.T) {
 	pack := func(file string) fstest.MapFS {
@@ -56,7 +57,7 @@ generators:
 		wantMsg  string
 		wantErrs []string
 	}{
-		{name: "a problem in the pack's template", file: "{{ .Options.dir }}/{{ .Inputs.name }}/x.go", inputs: map[string]any{"name": "gcs"}, wantErrs: []string{"pack store: impl.go.tmpl:3:16 template-exec"}},
+		{name: "a problem in the pack's template", file: "{{ .Options.dir }}/{{ .Inputs.name }}/x.go", inputs: map[string]any{"name": "gcs"}, wantErrs: []string{"pack store: impl.go.tmpl:3:17 template-exec"}},
 		{name: "a file at a use's output", file: "{{ .Options.dir }}/registry.gen.go", inputs: map[string]any{"name": "gcs"}, wantErrs: []string{"pack store: pack.yaml:15:9 duplicate-path"}},
 		{name: "unique against the use's scan", file: "x.go", inputs: map[string]any{"name": "disk"}, wantErrs: []string{"invalid-input"}},
 	}
@@ -91,7 +92,7 @@ func TestPlanPackTemplateFile(t *testing.T) {
 		wantErrs []string
 	}{
 		{name: "the configuration's own data", template: "doc.tmpl", want: "// gcs for storage\npackage gcs\n"},
-		{name: "a problem in the pack's template", template: "bad.tmpl", wantErrs: []string{"pack store: bad.tmpl:1:3 template-exec"}},
+		{name: "a problem in the pack's template", template: "bad.tmpl", wantErrs: []string{"pack store: bad.tmpl:1:4 template-exec"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

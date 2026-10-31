@@ -362,6 +362,7 @@ func TestCLI(t *testing.T) {
       "status": "created"
     }
   ],
+  "warnings": [],
   "problems": []
 }
 `,
@@ -374,7 +375,7 @@ func TestCLI(t *testing.T) {
 			},
 			args:           func(root string) []string { return []string{"--root", root, "check", "--json"} },
 			wantCode:       ExitStale,
-			stdoutContains: `"status": "updated"` + "\n    }\n  ],\n" + `  "problems": []`,
+			stdoutContains: `"status": "updated"` + "\n    }\n  ],\n" + `  "warnings": [],` + "\n" + `  "problems": []`,
 			wantStderr:     func(string) string { return "" },
 		},
 		{
@@ -397,7 +398,7 @@ func TestCLI(t *testing.T) {
 				return []string{"--root", filepath.Join(root, "empty"), "derive", "--json"}
 			},
 			wantCode:       ExitError,
-			stdoutContains: `"changes": [],` + "\n" + `  "problems": [` + "\n    {\n" + `      "code": "io",`,
+			stdoutContains: `"changes": [],` + "\n" + `  "warnings": [],` + "\n" + `  "problems": [` + "\n    {\n" + `      "code": "io",`,
 			wantStderr:     func(string) string { return "" },
 		},
 		{

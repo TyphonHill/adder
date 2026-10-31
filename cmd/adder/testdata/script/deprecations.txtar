@@ -1,0 +1,80 @@
+# A deprecated generator and input still work, and adder new warns about each, at its place in adder.yaml.
+exec adder new driver --name gcs --cache memory
+stdout '^created    drivers/gcs/gcs.go$'
+cmp stderr new.err
+
+# Without the deprecated input, only the generator is reported.
+exec adder new driver --name s3 --dry-run
+stderr -count=1 'warning:'
+stderr 'generator "driver" is deprecated'
+
+# With --json, warnings are a list beside problems, and standard error stays empty.
+exec adder new driver --name r2 --cache disk --dry-run --json
+cmp stdout new.json
+! stderr .
+
+# list, describe, and help mark what is deprecated.
+exec adder list
+stdout '^  driver  Add a storage driver \(deprecated: use adder new store\)$'
+exec adder describe driver
+stdout '^deprecated: use adder new store$'
+stdout '--cache  string  Cache to put in front \(deprecated: caching moved to the store generator; default "none"\)'
+exec adder describe driver --json
+stdout '"deprecated": "use adder new store"'
+stdout '"deprecated": true'
+exec adder new driver --help
+stdout 'deprecated: caching moved to the store generator'
+
+-- adder.yaml --
+version: 1
+generators:
+  driver:
+    description: Add a storage driver
+    deprecated: use adder new store
+    inputs:
+      name: {help: Driver name}
+      cache:
+        help: Cache to put in front
+        default: none
+        deprecated: caching moved to the store generator
+    files:
+      - template: driver.go.tmpl
+        path: "drivers/{{ .Inputs.name }}/{{ .Inputs.name }}.go"
+-- driver.go.tmpl --
+package {{ .Inputs.name }}
+-- new.err --
+adder.yaml:3:3: warning: generator "driver" is deprecated: use adder new store [deprecated]
+adder.yaml:8:7: warning: generator "driver": input "cache" is deprecated: caching moved to the store generator [deprecated]
+-- new.json --
+{
+  "generator": "driver",
+  "dryRun": true,
+  "changes": [
+    {
+      "path": "drivers/r2/r2.go",
+      "status": "created"
+    }
+  ],
+  "message": "",
+  "warnings": [
+    {
+      "code": "deprecated",
+      "message": "generator \"driver\" is deprecated: use adder new store",
+      "pos": {
+        "file": "adder.yaml",
+        "line": 3,
+        "column": 3
+      }
+    },
+    {
+      "code": "deprecated",
+      "message": "generator \"driver\": input \"cache\" is deprecated: caching moved to the store generator",
+      "pos": {
+        "file": "adder.yaml",
+        "line": 8,
+        "column": 7
+      }
+    }
+  ],
+  "problems": []
+}

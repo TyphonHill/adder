@@ -30,11 +30,20 @@ Two additions can still affect an existing setup:
 
 ## Deprecation
 
-Within v1, nothing is removed. A setting, field, function, or code that is replaced is deprecated instead:
+Within v1, nothing is removed. A setting, value, default, field, function, command, flag, or code that is replaced is deprecated instead:
 
 1. It keeps working as before.
-2. The [changelog](../CHANGELOG.md) lists it under **Deprecated**, with what replaces it, and the documentation marks it.
-3. It is removed only with a new schema `version`, or in v2 of the Go module. `adder migrate` arrives with the first schema version that needs it, and upgrades a configuration from the version before.
+2. adder warns wherever it is used, at its place, and says what to use instead. The command still succeeds, with the same exit code.
+3. The [changelog](../CHANGELOG.md) lists it under **Deprecated**, with what replaces it, and the documentation marks it.
+4. It is removed only with a new schema `version`, or in v2 of the Go module. `adder migrate` arrives with the first schema version that needs it, and upgrades a configuration from the version before.
+
+```text
+adder.yaml:7:12: warning: derive.scans.Drivers.funcs.name is deprecated: use funcs.match [deprecated]
+```
+
+Diagnostic codes, exit codes, and JSON fields are read by scripts rather than used in a configuration, so nothing can warn about them: the changelog and the documentation say when one is deprecated, and a renamed JSON field is written under both names until v2.
+
+Repositories and packs deprecate what they define in the same way, so that their users are warned too: generators, inputs, and pack options with [`deprecated`](configuration.md#generators), and a pack's functions and scanners with [`adder.Pack.Deprecated`](extending.md#deprecating-what-a-pack-defines).
 
 ## Go versions
 

@@ -17,7 +17,9 @@ type Description struct {
 	Files       []DescribedFile  `json:"files"`
 	Message     string           `json:"message"` // the message template as written
 	Derive      bool             `json:"derive"`
-	InputSchema InputSchema      `json:"inputSchema"`
+	// Deprecated says what to use instead of the generator, when it is deprecated.
+	Deprecated  string      `json:"deprecated,omitempty"`
+	InputSchema InputSchema `json:"inputSchema"`
 
 	gen  config.Generator
 	data map[string]any // the scans, when an input refers to one
@@ -38,6 +40,8 @@ type DescribedInput struct {
 	Values []string `json:"values"`
 	// Existing are the values unique rejects. Nil means the input has no unique.
 	Existing []string `json:"existing"`
+	// Deprecated says what to use instead of the input, when it is deprecated.
+	Deprecated string `json:"deprecated,omitempty"`
 }
 
 // DescribedFile is one file a generator creates.
@@ -66,6 +70,7 @@ type Property struct {
 	Pattern     string    `json:"pattern,omitempty"`
 	Enum        []string  `json:"enum,omitzero"`
 	Not         *Property `json:"not,omitempty"`
+	Deprecated  bool      `json:"deprecated,omitempty"`
 }
 
 // Describe returns what the generator called name takes and creates. Values from valuesFrom and unique are
@@ -90,6 +95,7 @@ func Describe(ctx context.Context, cfg *config.Config, src derive.Sources, name 
 		Files:       []DescribedFile{},
 		Message:     gen.Message,
 		Derive:      gen.Derive == nil || *gen.Derive,
+		Deprecated:  gen.Deprecated,
 		gen:         gen,
 		data:        data,
 		InputSchema: InputSchema{
@@ -133,6 +139,7 @@ func describeInput(name string, in config.Input, data map[string]any) (Described
 		ValuesFrom: in.ValuesFrom,
 		Unique:     in.Unique,
 		Values:     in.Values,
+		Deprecated: in.Deprecated,
 	}
 	if in.Pattern.Regexp != nil {
 		d.Pattern = in.Pattern.String()
@@ -155,9 +162,9 @@ func describeInput(name string, in config.Input, data map[string]any) (Described
 
 func property(d DescribedInput, in config.Input) Property {
 	if in.Type == config.InputBool {
-		return Property{Type: "boolean", Description: d.Help, Default: false}
+		return Property{Type: "boolean", Description: d.Help, Default: false, Deprecated: in.Deprecated != ""}
 	}
-	p := Property{Type: "string", Description: d.Help, Pattern: in.Anchored(), Enum: d.Values}
+	p := Property{Type: "string", Description: d.Help, Pattern: in.Anchored(), Enum: d.Values, Deprecated: in.Deprecated != ""}
 	if d.Default != nil {
 		p.Default = *d.Default
 	}

@@ -121,6 +121,7 @@ Input names are lowerCamelCase. Each is a flag in kebab-case, `withTest` is `--w
 | `values` | The allowed values. |
 | `valuesFrom` | Takes the allowed values from a scan, written `Scan.Field`, such as `Drivers.Package`. |
 | `unique` | Rejects values a scan already has, written `Scan.Field`. |
+| `deprecated` | Marks the input as on its way out, saying what to use instead. A deprecated string input needs a `default`. |
 
 | File | Description |
 | --- | --- |
@@ -134,7 +135,14 @@ Input names are lowerCamelCase. Each is a flag in kebab-case, `withTest` is `--w
 | `description` | Shown in `adder new`. |
 | `message` | A template printed after the files are created, such as next steps. |
 | `derive` | `false` skips updating derived outputs. |
+| `deprecated` | Marks the generator as on its way out, saying what to use instead, such as `use adder new service`. |
 | `tests` | See [below](#testing-generators). |
+
+A deprecated generator or input keeps working. `adder new` warns when it runs one, or is given one, and `--help`, `adder list`, and `adder describe` mark them:
+
+```text
+adder.yaml:3:3: warning: generator "driver" is deprecated: use adder new store [deprecated]
+```
 
 Generator templates see `.Inputs`, `.Vars`, `.Module`, and every scan. Scans see the new files before they are written, so derived outputs include them in the same run. Go files are formatted but get no header, since people own them. See [`examples/scaffold-with-generator`](../examples/scaffold-with-generator).
 

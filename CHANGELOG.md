@@ -9,12 +9,14 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - `examples/`: ten small repositories, each showing one thing adder does and named after it, from `registry-from-functions` and `enum-strings` to `scaffold-with-generator`, `shared-pack`, `custom-scanner`, and `monorepo`. Each README says what the example shows and how, and adder's tests check and build every example with adder from the same commit.
 - `docs/`: the reference, moved from the README into one file per topic: getting started, configuration, templates, extending adder, and commands. `docs/migrating.md` explains how to move to adder from a generator of your own.
 - `docs/compatibility.md`: what v1.0 promises and what it does not, and the deprecation and Go version policies. Tests pin the lists it freezes: the file types that get a header, the initialisms, the template functions, and the reserved template fields.
+- Deprecation warnings: adder warns, at its place, wherever something deprecated is used, and says what to use instead, without failing the command or changing its exit code. Generators, inputs, and pack options take `deprecated`, and `adder.Pack` takes `Deprecated` for a pack's functions and scanners, so repositories and packs can retire what they define the same way. `--help`, `adder list`, and `adder describe` mark what is deprecated. A deprecated input or option needs a default.
 
 ### Changed
 
 - The README is a short introduction: what adder does, one example, its features, and links to `docs/` and `examples/`.
 - When `file-exists` blocks a file that another tool generated, its hint says so, and that deleting the file once lets adder generate it.
 - The `adder.yaml` that `adder init` writes links to `docs/configuration.md`.
+- Every JSON report has a `warnings` list beside `problems`, empty when there are none.
 
 These changes settle names before v1.0 freezes them. Configurations that use an old name fail to load with `unknown-field` or `invalid-value`, naming the new one.
 
@@ -24,6 +26,10 @@ These changes settle names before v1.0 freezes them. Configurations that use an 
 - `.Module` is always present, empty when the repository has no `go.mod`, as `.ImportPath` already was.
 - `adder explain --json` names the header's text `source`, which was `template`, since it names the pack and the use too and `output.template` is the template's path.
 - The Go case functions use staticcheck's ST1003 list of initialisms instead of golint's, so `toGoPascalCase "user_db"` is `UserDB`. It adds `DB`, `GID`, `SIP`, `RTP`, `AMQP`, and `TS`, and drops `LHS` and `RHS`. The list is frozen from v1.0.
+
+### Fixed
+
+- Positions in templates were one column to the left of the problem, since text/template counts columns from 0. They now count from 1, as every other position does.
 
 ## [0.6.0] - 2026-10-30
 

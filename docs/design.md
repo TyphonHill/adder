@@ -978,6 +978,34 @@ Everyone else gets adder's files by pulling. Where the old files were ignored by
 | Recognizing another tool's generated-code comment as adder's own | Any tool's generated file at an output's path would be replaced silently. |
 | Short flags for generator inputs, such as `-N` for `--name` | Long flags read better in scripts and documentation, agents pass inputs as JSON, and short ones would add a setting and reserved letters. They can be added later if people ask. |
 
+### 45. Deprecation warnings
+
+adder reports every use of something deprecated as a warning, the way a web framework marks an endpoint on its way out, so people learn about a replacement while the old way still works rather than when it is removed ([compatibility](compatibility.md#deprecation)).
+
+**Warnings.** A warning is a diagnostic with the code `deprecated`, at the position of the use, saying what to use instead. Warnings never stop a command or change its exit code. They are printed to standard error before any problems, as `file:line:column: warning: message [deprecated]`, and with `--json` every report has a `warnings` list beside `problems`; with directory patterns, each configuration's report has its own. Each warning is reported once per run, and none are printed while answering shell completions.
+
+**What warns.**
+
+| Deprecated | Reported at |
+| --- | --- |
+| A setting of `adder.yaml` or `pack.yaml`, a value of one, or relying on a setting's default | The setting, the value, or the mapping that leaves the setting out |
+| A template function or data field, built in or from a pack | Each use in a template, and in the partials it calls |
+| A command or flag | The run that uses it |
+| A generator or an input, with `deprecated` | `adder new` running it, or given it |
+| A pack option, with `deprecated` | The `with` line of each use that gives it |
+| A pack's function or scanner, in `adder.Pack.Deprecated` | Each call, and each scan naming the scanner |
+
+adder's own deprecations are tables in the code, empty until something is deprecated. A deprecated input or option must have a default, so that leaving it out keeps working, and `--help`, `adder list`, and `adder describe` mark what is deprecated, with `"deprecated": true` in the input schema.
+
+**Why:** a pack is shared by many repositories and upgraded with `go get`, so without warnings the first sign that an option is going away is a build that breaks when it is removed. Reporting at the place of each use, with the replacement, turns that into a change a person can make whenever it suits them.
+
+| Considered | Why not |
+| --- | --- |
+| Cobra's `Deprecated` fields for commands and flags | Cobra prints the notice to the command's output, which would break `--json`. |
+| Failing on warnings, as `adder check --strict` | Nothing is deprecated yet, and CI can already read `warnings` from `--json`. It can be added if people ask. |
+| Warning about generator tests that use a deprecated generator or input | A generator is still tested until it is removed, and its tests would warn on every run. |
+| Hiding deprecated flags from completion | Cobra hides only flags marked with its own `Deprecated`, which prints to the output. |
+
 ## Compatibility
 
 From v1.0, semantic versioning covers the `adder.yaml` and `pack.yaml` schemas, template data and functions, the generated-code header, commands and flags, diagnostic codes, exit codes, JSON output, and the root package's Go API. It does not cover the wording of messages or gofmt's formatting. [`compatibility.md`](compatibility.md) states each promise, its exceptions, and the deprecation and Go version policies, and tests named `TestFrozen...` pin the lists it freezes.

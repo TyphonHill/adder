@@ -25,7 +25,8 @@ func (p fakePacks) FS(name string) (fs.FS, bool) {
 
 func (fakePacks) Funcs() template.FuncMap { return nil }
 
-func (fakePacks) HasScanner(string) bool { return false }
+func (fakePacks) HasScanner(string) bool           { return false }
+func (fakePacks) ScannerDeprecation(string) string { return "" }
 
 const storePack = `version: 1
 options:

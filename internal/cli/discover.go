@@ -33,6 +33,8 @@ type generatorReport struct {
 	// Pack and Use name the pack and the use a generator comes from.
 	Pack string `json:"pack,omitempty"`
 	Use  string `json:"use,omitempty"`
+	// Deprecated says what to use instead of the generator, when it is deprecated.
+	Deprecated string `json:"deprecated,omitempty"`
 }
 
 // describeReport is what describe reports.
@@ -58,7 +60,7 @@ func newListCommand(opts *globalOptions) *cobra.Command {
 				rep := r.(*listReport)
 				for _, name := range slices.Sorted(maps.Keys(run.cfg.Generators)) {
 					gen := run.cfg.Generators[name]
-					rep.Generators = append(rep.Generators, generatorReport{Name: name, Description: gen.Description, Pos: gen.Pos, Pack: gen.Pack, Use: gen.Use})
+					rep.Generators = append(rep.Generators, generatorReport{Name: name, Description: gen.Description, Pos: gen.Pos, Pack: gen.Pack, Use: gen.Use, Deprecated: gen.Deprecated})
 				}
 				rep.Outputs = append(rep.Outputs, run.cfg.Outputs()...)
 				if !opts.json && !opts.quiet {
@@ -84,7 +86,10 @@ func printList(w io.Writer, rep *listReport) {
 		if gen.Use != "" {
 			from = fmt.Sprintf(" (pack %s for %s)", gen.Pack, gen.Use)
 		}
-		fmt.Fprintf(tw, "  %s\t%s%s\n", gen.Name, gen.Description, from)
+		if gen.Deprecated != "" {
+			from += " (deprecated: " + gen.Deprecated + ")"
+		}
+		fmt.Fprintf(tw, "  %s\t%s\n", gen.Name, strings.TrimSpace(gen.Description+from))
 	}
 	fmt.Fprintln(tw, "outputs")
 	if len(rep.Outputs) == 0 {
@@ -137,7 +142,11 @@ for the object adder new --inputs accepts.`,
 
 func printDescription(w io.Writer, d *scaffold.Description) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "%s: %s\n\ninputs\n", d.Name, d.Description)
+	fmt.Fprintf(tw, "%s: %s\n", d.Name, d.Description)
+	if d.Deprecated != "" {
+		fmt.Fprintf(tw, "deprecated: %s\n", d.Deprecated)
+	}
+	fmt.Fprint(tw, "\ninputs\n")
 	if len(d.Inputs) == 0 {
 		fmt.Fprintln(tw, "  none")
 	}
@@ -167,6 +176,9 @@ func printDescription(w io.Writer, d *scaffold.Description) {
 // inputNotes is an input's help followed by its restrictions, with the values its scans allow now.
 func inputNotes(in scaffold.DescribedInput) string {
 	var notes []string
+	if in.Deprecated != "" {
+		notes = append(notes, "deprecated: "+in.Deprecated)
+	}
 	switch {
 	case in.Required:
 		notes = append(notes, "required")
