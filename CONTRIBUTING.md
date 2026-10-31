@@ -55,7 +55,7 @@ func TestToSnakeCase(t *testing.T) {
 - Test logic against in-memory file systems (`fstest.MapFS`). Every pipeline step reads through `fs.FS` for this reason.
 - Test real files, paths, and permissions in `internal/derive` and `internal/cli`, which use the fixture repositories under `internal/derive/testdata`.
 - Generated output is compared with golden files. Run `go test ./internal/derive -update` to accept an intended change, and review the diff.
-- The README quick start is the `basic` fixture. Change both together.
+- The README's example comes from `examples/registry-from-functions` and `examples/scaffold-with-generator`, and its output was copied from running them. Change them together.
 
 ### Test the command line end to end
 
