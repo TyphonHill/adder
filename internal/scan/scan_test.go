@@ -798,14 +798,25 @@ func TestRunBoundaries(t *testing.T) {
 		"services/web/go.mod":     file("module example.com/web\n"),
 		"services/web/main.go":    file("package web\n\nfunc F() {}\n"),
 		"services/web/w/w.go":     file("package w\n\nfunc F() {}\n"),
+		// Markers that are links count as the files they lead to, as go counts a linked go.mod.
+		"shared/batch.mod":         file("module example.com/batch\n"),
+		"shared/cron.yaml":         file("version: 1\n"),
+		"services/batch/go.mod":    {Data: []byte("../../shared/batch.mod"), Mode: fs.ModeSymlink},
+		"services/batch/b/b.go":    file("package b\n\nfunc F() {}\n"),
+		"services/cron/adder.yaml": {Data: []byte("../../shared/cron.yaml"), Mode: fs.ModeSymlink},
+		"services/cron/c/c.go":     file("package c\n\nfunc F() {}\n"),
+		"services/broken/go.mod":   {Data: []byte("missing.mod"), Mode: fs.ModeSymlink},
+		"services/broken/x/x.go":   file("package x\n\nfunc F() {}\n"),
 	}
 	tests := []struct {
 		name string
 		dirs []string
 		want []string // "dir import-path"
 	}{
-		{name: "double star stops at nested configurations and modules", dirs: []string{"services/**"}, want: []string{"services/core example.com/m/services/core"}},
+		{name: "double star stops at nested configurations and modules", dirs: []string{"services/**"}, want: []string{"services/broken/x example.com/m/services/broken/x", "services/core example.com/m/services/core"}},
 		{name: "a wildcard stops there too", dirs: []string{"services/*"}, want: []string{"services/core example.com/m/services/core"}},
+		{name: "a package in a module whose go.mod is a link", dirs: []string{"services/batch/b"}, want: []string{"services/batch/b example.com/batch/b"}},
+		{name: "a link to nothing is no go.mod", dirs: []string{"services/broken/x"}, want: []string{"services/broken/x example.com/m/services/broken/x"}},
 		{name: "a nested module named outright", dirs: []string{"services/web"}, want: []string{"services/web example.com/web"}},
 		{name: "a package in a nested module", dirs: []string{"services/web/w"}, want: []string{"services/web/w example.com/web/w"}},
 		{name: "a nested configuration named outright", dirs: []string{"services/api/h"}, want: []string{"services/api/h example.com/m/services/api/h"}},

@@ -516,6 +516,7 @@ Outputs in languages other than Go get adder's header in their own comment synta
 - Scans skip symbolic links to files and directories alike, as `go` skips linked directories in `./...`. This also rules out loops.
 - adder never writes, creates, or removes a file through a symbolic link. An output or new file whose path, or any directory on it, is a link inside the root is an `unsafe-path` problem. `os.Root` already rejects links that lead outside the root.
 - Templates, partials, and `adder.yaml` may be links, since reading them cannot change anything.
+- A `go.mod` or `adder.yaml` that is a link counts as the file it leads to, as `go` treats a linked `go.mod`, so boundaries, `.ImportPath`, and `./...` agree ([decision 40](#40-multiple-configurations)). Scans read through `os.Root`, so there a link that leads outside the root counts as no file.
 
 **Why:** writing through a link changes a file somewhere else, which may be one that people own ([principle 4](../ROADMAP.md#principles)).
 

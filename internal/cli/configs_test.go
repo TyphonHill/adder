@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -217,6 +218,7 @@ func TestFindConfigs(t *testing.T) {
 	tests := []struct {
 		name     string
 		patterns []string
+		setup    func(t *testing.T) // runs in the monorepo, so cases after it see what it adds
 		want     []string
 		wantErr  bool
 	}{
@@ -225,9 +227,25 @@ func TestFindConfigs(t *testing.T) {
 		{name: "overlapping patterns", patterns: []string{"services/...", "./services/api"}, want: []string{"services/api/adder.yaml", "services/web/adder.yaml"}},
 		{name: "the current directory", patterns: []string{"."}, want: []string{"adder.yaml"}},
 		{name: "a missing directory", patterns: []string{"./missing/..."}, wantErr: true},
+		{
+			name:     "a configuration that is a link",
+			patterns: []string{"./linked/..."},
+			setup: func(t *testing.T) {
+				if err := os.MkdirAll("linked", 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join("..", "services", "web", "adder.yaml"), filepath.Join("linked", "adder.yaml")); err != nil {
+					t.Skipf("cannot create symbolic links here: %v", err)
+				}
+			},
+			want: []string{"linked/adder.yaml"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.setup != nil {
+				tt.setup(t)
+			}
 			files, err := findConfigs(tt.patterns)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("findConfigs() error = %v", err)

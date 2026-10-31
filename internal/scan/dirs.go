@@ -36,10 +36,22 @@ func (l *listing) read(dir string) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
-// has reports whether dir holds a regular file called name.
+// has reports whether dir holds a regular file called name, or a link to one, as go finds go.mod.
 func (l *listing) has(dir, name string) bool {
 	entries, err := l.read(dir)
-	return err == nil && slices.ContainsFunc(entries, func(e fs.DirEntry) bool { return e.Name() == name && e.Type().IsRegular() })
+	if err != nil {
+		return false
+	}
+	i := slices.IndexFunc(entries, func(e fs.DirEntry) bool { return e.Name() == name })
+	switch {
+	case i < 0:
+		return false
+	case entries[i].Type()&fs.ModeSymlink != 0:
+		info, err := fs.Stat(l.fsys, path.Join(dir, name))
+		return err == nil && info.Mode().IsRegular()
+	default:
+		return entries[i].Type().IsRegular()
+	}
 }
 
 func (l *listing) boundary(dir string) bool {

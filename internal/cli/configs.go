@@ -105,6 +105,15 @@ func runConfigs(cmd *cobra.Command, opts *globalOptions, patterns []string, newR
 	return outcome.err()
 }
 
+// isFile reports whether the entry d at name is a regular file, or a link to one.
+func isFile(name string, d fs.DirEntry) bool {
+	if d.Type()&fs.ModeSymlink == 0 {
+		return d.Type().IsRegular()
+	}
+	info, err := os.Stat(name)
+	return err == nil && info.Mode().IsRegular()
+}
+
 // findConfigs returns the configuration files the patterns name, as paths from the current directory. A pattern
 // ending in ... names every adder.yaml at or below its directory, skipping the directories wildcards skip.
 func findConfigs(patterns []string) ([]string, error) {
@@ -129,7 +138,7 @@ func findConfigs(patterns []string) ([]string, error) {
 				return err
 			case d.IsDir() && name != base && scan.Ignored(d.Name()):
 				return filepath.SkipDir
-			case !d.IsDir() && d.Name() == config.FileName && d.Type().IsRegular():
+			case !d.IsDir() && d.Name() == config.FileName && isFile(name, d):
 				files = append(files, name)
 				found++
 			}

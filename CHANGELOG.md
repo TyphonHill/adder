@@ -37,6 +37,7 @@ These changes settle names before v1.0 freezes them. Configurations that use an 
 
 ### Fixed
 
+- A `go.mod` or `adder.yaml` that is a symbolic link counts as the file it leads to, as `go` treats a linked `go.mod`. Wildcards stop at it, `.ImportPath` uses a linked `go.mod`'s module path instead of the root's, and `./...` finds a linked `adder.yaml`; before, only the stale-file search and finding the nearest `adder.yaml` followed the link.
 - `ScanInput.Decode` panicked on a `ScanInput` built by hand, as a scanner's tests build one. It now leaves the value as it is.
 - The help of a generator's command showed `--json`, `--quiet`, and `--verbose` with a default of `true` when they were given.
 - Positions in templates were one column to the left of the problem, since text/template counts columns from 0. They now count from 1, as every other position does.
