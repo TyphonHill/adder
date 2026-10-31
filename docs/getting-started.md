@@ -109,6 +109,8 @@ Run it in CI with `--diff`, so the log shows what is stale, and run the generato
 - run: go tool adder test
 ```
 
+[Integrations](integrations.md) has complete jobs for GitHub Actions and GitLab CI, with problems shown on the pull request, and hooks for `go generate` and pre-commit.
+
 ## Next
 
 - [Examples](../examples): ten small repositories, one feature each.

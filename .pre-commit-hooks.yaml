@@ -1,0 +1,17 @@
+# Hooks for pre-commit (https://pre-commit.com), built from source at the revision a repository pins. They run on
+# every commit, whatever changed, since a change anywhere can affect a scan. A repository with its own build of
+# adder, for packs, runs that build instead, as docs/integrations.md shows.
+- id: adder-check
+  name: adder check
+  description: Fail when a file adder derives is out of date.
+  entry: adder check
+  language: golang
+  pass_filenames: false
+  always_run: true
+- id: adder-derive
+  name: adder derive
+  description: Rebuild the files adder derives, failing the commit when one changed so that it can be added.
+  entry: adder derive
+  language: golang
+  pass_filenames: false
+  always_run: true

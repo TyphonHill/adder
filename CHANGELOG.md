@@ -12,6 +12,7 @@ All notable changes to adder are documented here. The format follows [Keep a Cha
 - Deprecation warnings: adder warns, at its place, wherever something deprecated is used, and says what to use instead, without failing the command or changing its exit code. Generators, inputs, and pack options take `deprecated`, and `adder.Pack` takes `Deprecated` for a pack's functions and scanners, so repositories and packs can retire what they define the same way. `--help`, `adder list`, and `adder describe` mark what is deprecated. A deprecated input or option needs a default.
 - JSON Schemas for `adder.yaml` and `pack.yaml`, in `schema/`, for completion and checking in editors. `adder init` and the examples point editors at them with a `yaml-language-server` line.
 - The roadmap's launch milestone: what adder needs before it is published as a public tool, after v1.0.
+- Integrations: `.pre-commit-hooks.yaml` with `adder-check` and `adder-derive`, and `docs/integrations.md` with `go generate`, pre-commit, and CI jobs for GitHub Actions and GitLab CI that show problems on the pull request. `docs/agents.md` describes how coding agents run generators, with an `AGENTS.md` section to copy.
 
 ### Changed
 
